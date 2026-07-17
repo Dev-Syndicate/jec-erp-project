@@ -1,0 +1,338 @@
+// JEC ERP — Prisma schema
+//
+// This is the Phase-1 structural spine described in CLAUDE.md's "Data model and
+// cross-cutting concerns". The non-negotiables baked in from day one:
+//   - Academic-year scoping   (AcademicYear/Term referenced by Enrollment etc.)
+//   - Configurable RBAC        (Role/Permission are DATA, composed in a UI)
+//   - Soft deletes             (isActive flags; never hard-delete people)
+//   - Audit logging            (AuditLog: actor, action, before/after, source)
+//   - Role != account          (User <-> Role is an assignment, revocable)
+//
+// Attendance / LeaveRequest / Timetable / Announcement bodies land in their own
+// phases; the enums + structural anchors they hang off live here so the later
+// phases are additive and nothing boxes them out.
+//
+// docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+// The event that a LeaveRequest moves through. Two-step approval: class teacher
+// then HOD. Attendance is only touched on final APPROVED (see PRD).
+enum LeaveStatus {
+  PENDING_TEACHER
+  PENDING_HOD
+  APPROVED
+  REJECTED
+}
+
+// Leave vs OD (On Duty) — determines whether approved dates auto-mark as
+// EXCUSED or OD in attendance.
+enum LeaveKind {
+  LEAVE
+  OD
+}
+
+// Attendance status. These map to the fixed, NON-brand-derived status colors in
+// globals.css (present/absent/od/excused) — they encode meaning, not theme.
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  OD
+  EXCUSED
+}
+
+// Where an audited action originated. The mobile (Flutter) and web clients both
+// hit the same API; source is recorded for the audit trail.
+enum AuditSource {
+  WEB
+  MOBILE
+  SYSTEM
+}
+
+// ---------------------------------------------------------------------------
+// Identity & RBAC
+//
+// Firebase owns identity (the uid); Neon owns authorization + all ERP data.
+// A User row LINKS a Firebase uid to roles, department, and assignments.
+// Role and Permission are data so admins compose custom roles in a UI; CASL
+// abilities are built in code from the UserRole -> Role -> Permission mapping.
+// ---------------------------------------------------------------------------
+
+model User {
+  id       String  @id @default(cuid())
+  // The Firebase Auth uid. This is the ONLY link between identity and our data.
+  firebaseUid String @unique
+  email       String @unique
+  displayName String
+
+  // Forces a password reset on first login (uniform onboarding: admin
+  // provisions -> temp password emailed -> mustChangePassword flips false).
+  mustChangePassword Boolean @default(true)
+
+  // Optional home department. Super Admin has none (no department filter);
+  // HOD/Teacher/Student are scoped by it in API guards.
+  departmentId String?
+  department   Department? @relation(fields: [departmentId], references: [id])
+
+  // Soft delete — staff/students are marked inactive, never hard-deleted.
+  isActive Boolean @default(true)
+
+  // Present only when this user IS a student. Staff-only users leave it null.
+  student Student?
+
+  roles     UserRole[]
+  auditLogs AuditLog[] @relation("AuditActor")
+  // Sections this user (as a staff teacher) is assigned to — gates attendance.
+  teacherAssignments TeacherAssignment[] @relation("TeacherAssignments")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([departmentId])
+}
+
+model Role {
+  id          String  @id @default(cuid())
+  name        String  @unique // e.g. "Super Admin", "HOD", "Teacher", "Student"
+  description String?
+  // System roles (seeded, e.g. Super Admin) can't be deleted via the UI.
+  isSystem    Boolean @default(false)
+
+  users       UserRole[]
+  permissions RolePermission[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Permission {
+  id     String @id @default(cuid())
+  // CASL-shaped: action + subject, e.g. action="manage" subject="Attendance".
+  action  String
+  subject String
+
+  roles RolePermission[]
+
+  @@unique([action, subject])
+}
+
+// A role ASSIGNMENT to a person. Revoking/reassigning (e.g. yearly HOD rotation)
+// deletes/creates rows here — the User account never changes. Historical audit
+// attribution survives because AuditLog references the User, not the assignment.
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+
+  assignedAt DateTime @default(now())
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role       Role       @relation(fields: [roleId], references: [id])
+  permission Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+}
+
+// ---------------------------------------------------------------------------
+// Academic-year scoping — "the single most important structural decision"
+//
+// A student's section membership is an Enrollment PER YEAR. This is what makes
+// yearly promotion and HOD/teacher rotation work without duplicating accounts.
+// All time-bound queries (attendance, timetable, future marks/fees) scope to
+// the active term.
+// ---------------------------------------------------------------------------
+
+model AcademicYear {
+  id       String  @id @default(cuid())
+  name     String  @unique // e.g. "2025-2026"
+  startDate DateTime
+  endDate   DateTime
+  isActive  Boolean @default(false) // exactly one active at a time (enforced in app)
+
+  terms              Term[]
+  enrollments        Enrollment[]
+  teacherAssignments TeacherAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Term {
+  id             String @id @default(cuid())
+  name           String // e.g. "Semester 1"
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([academicYearId])
+}
+
+// ---------------------------------------------------------------------------
+// Org structure: Department 1-∞ Class 1-∞ Section 1-∞ Enrollment ∞- Student
+// ---------------------------------------------------------------------------
+
+model Department {
+  id       String  @id @default(cuid())
+  name     String  @unique
+  code     String  @unique // e.g. "CSE"
+  isActive Boolean @default(true)
+
+  classes             Class[]
+  users               User[]
+  teacherAssignments  TeacherAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Class {
+  id           String @id @default(cuid())
+  name         String // e.g. "First Year", "II B.Tech"
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  sections Section[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, name])
+  @@index([departmentId])
+}
+
+model Section {
+  id      String @id @default(cuid())
+  name    String // e.g. "A", "B"
+  classId String
+  class   Class @relation(fields: [classId], references: [id])
+
+  enrollments        Enrollment[]
+  teacherAssignments TeacherAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([classId, name])
+  @@index([classId])
+}
+
+// ---------------------------------------------------------------------------
+// Student & Enrollment
+//
+// Student is the person (soft-deletable, backed by a User for auth). Which
+// section they sit in is an Enrollment scoped to an AcademicYear — promotion is
+// a new Enrollment, not a mutated row, so history stays intact.
+// ---------------------------------------------------------------------------
+
+model Student {
+  id            String  @id @default(cuid())
+  // Roll number is the student-facing login handle (roll number + password),
+  // but the account is backed by a real email = the Firebase identity.
+  rollNumber    String  @unique
+  admissionNumber String @unique
+  dateOfBirth   DateTime
+
+  // Every student is backed by exactly one User (their Firebase-linked account).
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id])
+
+  isActive Boolean @default(true)
+
+  enrollments Enrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Enrollment {
+  id             String @id @default(cuid())
+  studentId      String
+  student        Student @relation(fields: [studentId], references: [id])
+  sectionId      String
+  section        Section @relation(fields: [sectionId], references: [id])
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // A student sits in exactly one section per academic year.
+  @@unique([studentId, academicYearId])
+  @@index([sectionId])
+  @@index([academicYearId])
+}
+
+// ---------------------------------------------------------------------------
+// TeacherAssignment — gates who may mark attendance.
+//
+// Attendance permission is DERIVED from this (+ Timetable), not granted
+// directly. A teacher marking a section not in their assignment must be denied.
+// ---------------------------------------------------------------------------
+
+model TeacherAssignment {
+  id           String @id @default(cuid())
+  teacherId    String // -> User.id (a staff user)
+  teacher      User   @relation(fields: [teacherId], references: [id], name: "TeacherAssignments")
+  sectionId    String
+  section      Section @relation(fields: [sectionId], references: [id])
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  // Assignments are per-year too (teacher rotation).
+  academicYearId String
+  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([teacherId, sectionId, academicYearId])
+  @@index([sectionId])
+  @@index([departmentId])
+  @@index([academicYearId])
+}
+
+// ---------------------------------------------------------------------------
+// Audit log — actor, action, entity, before/after, timestamp, source.
+// Covers attendance, leave, roles, announcements (append-only in practice).
+// ---------------------------------------------------------------------------
+
+model AuditLog {
+  id       String @id @default(cuid())
+  actorId  String
+  actor    User   @relation(fields: [actorId], references: [id], name: "AuditActor")
+  action   String // e.g. "attendance.mark", "role.revoke"
+  entity   String // e.g. "Attendance", "UserRole"
+  entityId String?
+  before   Json?
+  after    Json?
+  source   AuditSource @default(WEB)
+
+  createdAt DateTime @default(now())
+
+  @@index([actorId])
+  @@index([entity, entityId])
+  @@index([createdAt])
+}

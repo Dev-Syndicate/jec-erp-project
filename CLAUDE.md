@@ -10,13 +10,15 @@ The Next.js app is scaffolded **at the repository root** (not in a `web/` subfol
 
 shadcn/ui is initialized (`components.json`, `src/components/ui/`). **This shadcn version is built on Base UI, not Radix** — the install pulled `@base-ui/react` and there are no `@radix-ui/*` packages. Snippets from most shadcn tutorials import from `@radix-ui/react-*` and will not resolve; read the generated component source instead of trusting recalled examples. Add components with `npx shadcn@latest add <name>`.
 
-Nothing from the PRD's data layer exists yet: no Prisma schema, no Neon connection, no Firebase wiring, no CASL, no Flutter project.
+The data layer is now partly wired: Prisma schema + Neon connection + Firebase Admin + a seeded Super Admin exist (see "Database & Prisma" below). Still absent: CASL abilities, the auth flow/API routes, and the Flutter project.
+
+**This repo is pnpm-managed** (`pnpm-lock.yaml`, `node_modules/.pnpm/`). Use `pnpm`, not `npm` — a stray `package-lock.json` was removed to keep the lockfiles from disagreeing.
 
 ```bash
-npm run dev      # dev server (Turbopack)
-npm run build
-npm run start
-npm run lint     # eslint
+pnpm dev      # dev server (Turbopack)
+pnpm build
+pnpm start
+pnpm lint     # eslint
 ```
 
 There is no test runner yet — add one and document the single-test invocation here when you do. The PRD's `mobile/` Flutter project also has no equivalent yet.
@@ -52,6 +54,18 @@ All color lives in [src/app/globals.css](src/app/globals.css). `--brand-hue` (cu
 
 [src/app/page.tsx](src/app/page.tsx) is a temporary theme preview (brand swatches, status pills, chart ramp, dark toggle) — useful for eyeballing a hue change; delete once real dashboards land.
 
+## Frontend design — use the `frontend-design` skill
+
+**Invoke the `frontend-design` skill before building or reshaping any user-facing UI** (dashboards, admin console, login, reports views). It's installed user-globally (`~/.claude/skills/frontend-design`); it drives deliberate, non-templated choices about layout, typography, and signature elements instead of defaulting to generic AI-design patterns. Its process — brainstorm a token/type/layout plan, critique it against the brief, then build — is the expected workflow for UI work here, not an afterthought.
+
+It operates *within* this project's hard constraints, which override any skill suggestion that conflicts:
+- **Theming is the single-hue system above.** The skill picks the aesthetic direction; the palette still flows from `--brand-hue` and the semantic tokens. Never hardcode a color to satisfy a design idea — express it through the token system (add a token if needed).
+- **Components are Base-UI shadcn**, not Radix — read generated component source, don't trust recalled examples.
+- **Attendance status colors stay fixed** (green/red/amber) and paired with a label/icon — design may not override meaning-encoding colors.
+- Quality floor is non-negotiable: responsive to mobile, visible keyboard focus, reduced-motion respected.
+
+Note: skills load at session start — after installing it, a new session is needed before it appears in the Skill tool.
+
 ## The security boundary (non-negotiable)
 
 This is the single most important constraint in the project, and the PRD is emphatic about it:
@@ -74,9 +88,27 @@ Next.js ─┘
 - Separation of concerns: **Firebase = identity. Our API + Neon = authorization + all ERP data.** A `User` row in Neon links a Firebase `uid` to role, department, and class assignments.
 - Every API route follows the same shape: verify Firebase token → build CASL ability from the user's role → check permission and apply dept/class scoping → Prisma query. Do not write a route that skips a step.
 
+## Database & Prisma (wired — learned the hard way, don't re-derive)
+
+Prisma **7** (`prisma-client` generator, not `prisma-client-js`) generating to `src/generated/prisma` (gitignored — run `pnpm exec prisma generate` after a fresh clone). Config lives in [prisma.config.ts](prisma.config.ts) (v7 has no `generator`/`datasource` blocks driving the CLI the old way; the config file does). Schema in [prisma/schema.prisma](prisma/schema.prisma). Read the installed docs before editing — v7's config file, generator, and adapter API differ from older Prisma.
+
+**Two connection strings, two jobs** (both server-side, never `NEXT_PUBLIC_`):
+- `DATABASE_URL` — **pooled** endpoint, used by the app at runtime.
+- `DIRECT_URL` — **unpooled**, used by `prisma migrate` / seed only (Migrate can't run through the pooler). Wired via `prisma.config.ts` `datasource.url`. On this Neon project the two hosts happen to be identical; they differ only in query flags.
+
+**The runtime client is the WebSocket adapter, NOT HTTP** — [src/lib/db.ts](src/lib/db.ts), a `server-only` singleton. CLAUDE.md's stack originally said "HTTP driver"; that was changed because **Neon's HTTP mode cannot run transactions**, and `upsert`/`$transaction` and the core flows (leave/OD approval must atomically mark attendance; a rejection must leave it untouched; bulk attendance/promote) all need them. Neon bills by compute time not connections, so WS costs no more. `ws` is a runtime dependency for this reason.
+
+Two non-obvious gotchas already handled in `db.ts` — keep them:
+- **`channel_binding=require` breaks the WS handshake.** It's stripped from the connection string in code. Fine for HTTP, fatal for WS. (It's still present on `DATABASE_URL` in `.env` for that reason — don't "fix" it there.)
+- **Cold-start transactions.** Neon free-tier compute scales to zero; the *first* transaction after idle blows past Prisma's default `maxWait` of 2000ms and 500s the request. `db.ts` sets `transactionOptions: { maxWait: 15s, timeout: 20s }` so cold starts wait instead of failing. Verified: a genuinely cold first request returns 200.
+
+**Seeding** — `pnpm exec prisma db seed` runs [prisma/seed.ts](prisma/seed.ts) (via `tsx`; it runs outside Next so it can't import the `server-only` libs and builds its own WS client over `DIRECT_URL`). It's idempotent (upserts) and does two things: plants the RBAC baseline (a `manage:all` permission + the four system roles Super Admin/HOD/Teacher/Student, `isSystem=true`) and **bootstraps the Super Admin** in both Firebase and Neon (`SUPER_ADMIN_*` env vars). The Super Admin gets `mustChangePassword=true` and `departmentId=null` (no dept filter). This is the "seeded once via a protected script" path — no higher role exists to create it.
+
+`src/lib/firebase-admin.ts` is the `server-only` Admin SDK singleton: `verifyIdToken` (step one of every route) and `adminAuth` for provisioning.
+
 ## Tech stack (decided — see PRD "Explicitly Rejected Approaches" before proposing alternatives)
 
-Firebase Auth (email/password only, no SMS OTP) · FCM · Next.js API routes as the backend · Neon Postgres · Prisma with the Neon serverless HTTP driver · CASL for RBAC · Cloudinary for images · Tailwind + shadcn/ui + TanStack Query on web · Flutter with flutter_bloc, dio, get_it, go_router, flutter_secure_storage on mobile.
+Firebase Auth (email/password only, no SMS OTP) · FCM · Next.js API routes as the backend · Neon Postgres · Prisma with the Neon serverless driver (WebSocket adapter at runtime — see "Database & Prisma" for why not HTTP) · CASL for RBAC · Cloudinary for images · Tailwind + shadcn/ui + TanStack Query on web · Flutter with flutter_bloc, dio, get_it, go_router, flutter_secure_storage on mobile.
 
 Two decisions worth knowing before you touch infrastructure:
 

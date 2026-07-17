@@ -1,16 +1,56 @@
+@AGENTS.md
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: greenfield
+## Status
 
-The repository currently contains only [PRD.md](PRD.md) — no code, no `package.json`, no Prisma schema, no Flutter project, and it is not yet a git repository. There are no build, lint, or test commands yet because nothing has been scaffolded.
+The Next.js app is scaffolded **at the repository root** (not in a `web/` subfolder as the PRD's folder tree suggests — the backend API routes and web frontend live in `src/app/` here). Next.js 16 + React 19 + TypeScript + Tailwind v4 + ESLint, App Router, `src/` dir, `@/*` import alias, Turbopack.
 
-When scaffolding begins, the PRD specifies two projects side by side:
-- `web/` — Next.js (App Router) + TypeScript. Contains **both** the web frontend and the serverless backend (`src/app/api/`).
-- `mobile/` — Flutter + Bloc (student view, teacher attendance marker).
+shadcn/ui is initialized (`components.json`, `src/components/ui/`). **This shadcn version is built on Base UI, not Radix** — the install pulled `@base-ui/react` and there are no `@radix-ui/*` packages. Snippets from most shadcn tutorials import from `@radix-ui/react-*` and will not resolve; read the generated component source instead of trusting recalled examples. Add components with `npx shadcn@latest add <name>`.
 
-Update this file with the real commands (dev server, Prisma migrate, test runner, single-test invocation) once those projects exist.
+Nothing from the PRD's data layer exists yet: no Prisma schema, no Neon connection, no Firebase wiring, no CASL, no Flutter project.
+
+```bash
+npm run dev      # dev server (Turbopack)
+npm run build
+npm run start
+npm run lint     # eslint
+```
+
+There is no test runner yet — add one and document the single-test invocation here when you do. The PRD's `mobile/` Flutter project also has no equivalent yet.
+
+## Feature-folder architecture
+
+Code is organized **by feature, not by layer**. `src/features/<feature>/` exists for all nine PRD features (auth, attendance, leave, timetable, departments, students, roles, announcements, reports), each with the same internal contract:
+
+```
+src/features/<feature>/
+├── components/   # UI used only by this feature
+├── hooks/        # TanStack Query hooks — the feature's data access
+├── api/          # typed client-side fetchers hitting /api/<feature>
+└── types.ts      # types owned by this feature
+```
+
+Rules that keep this from rotting:
+
+- **Features must not import from each other.** If two features need the same thing, it belongs in `src/components/ui/` (shadcn primitives), `src/lib/` (cross-cutting: db, firebase-admin, rbac, cloudinary), or `src/types/` (shared DTOs).
+- **`src/app/` stays thin.** Route files compose feature components and own routing/layout only — no business logic or data fetching in the page.
+- **`src/app/api/` is the backend** and is exempt from feature imports in the other direction: server code never imports from `src/features/` (that's client code).
+- Folders are currently skeletal (`.gitkeep` + a stub `types.ts`). Fill them in as phases land; don't relocate the structure.
+
+## Theming — one hue drives the whole site
+
+All color lives in [src/app/globals.css](src/app/globals.css). `--brand-hue` (currently `185`, teal) is declared once in `:root` and is **the single source of truth**; `--primary`, `--ring`, `--accent`, `--sidebar-*`, and `--chart-*` all derive from it via `oklch(L C var(--brand-hue))`. Changing that one number re-skins the site in both light and dark mode.
+
+- **`.dark` deliberately does not redeclare `--brand-hue`** — it inherits it through the cascade and only lifts lightness. Redeclaring it there breaks the single-source property. (Note: shadcn's stock theme *inverts* primary in dark mode to near-white; that was replaced on purpose.)
+- **Never hardcode a color in a component** — no `bg-teal-600`, no `text-zinc-900`, no hex. Use the semantic tokens (`bg-primary`, `text-muted-foreground`, `border-border`, `bg-accent`). A hardcoded color is a surface that won't follow the brand, which defeats the whole setup. The stock `create-next-app` page was rewritten for exactly this reason.
+- **Attendance status colors are intentionally NOT brand-derived.** `--status-present|absent|od|excused` use fixed hues because they encode meaning — they must stay green/red/amber even if the brand becomes green. Never use color as the only signal; pair with a label or icon (colorblind users, printed reports).
+- **Tailwind scans source text**, so computed class names like `` `bg-${status}` `` are never generated. Map to full literal class strings.
+- To add a token: define the variable in both `:root` and `.dark`, then map it under `@theme inline` as `--color-<name>` to get the `bg-<name>`/`text-<name>` utilities.
+
+[src/app/page.tsx](src/app/page.tsx) is a temporary theme preview (brand swatches, status pills, chart ramp, dark toggle) — useful for eyeballing a hue change; delete once real dashboards land.
 
 ## The security boundary (non-negotiable)
 

@@ -31,7 +31,16 @@ function FullScreenState({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function AuthGate({ children }: { children: React.ReactNode }) {
+export function AuthGate({
+  children,
+  requireRole,
+}: {
+  children: React.ReactNode;
+  // If set, the user must hold at least one of these roles. Lacking it isn't a
+  // "sign in" problem, so we don't redirect — we show a clear denied state (the
+  // API enforces the same rule regardless; this is UX).
+  requireRole?: string[];
+}) {
   const router = useRouter();
   const { firebaseUser, loading } = useFirebaseUser();
   const signedIn = !!firebaseUser;
@@ -52,5 +61,23 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (blocked) {
     return <FullScreenState>Redirecting to sign in…</FullScreenState>;
   }
+
+  // Authenticated but lacking the required role — deny in place, don't bounce.
+  if (requireRole && !requireRole.some((r) => me.data?.roles.includes(r))) {
+    return (
+      <div className="flex min-h-full flex-1 items-center justify-center p-6">
+        <div className="flex max-w-sm flex-col items-center gap-2 text-center">
+          <h1 className="font-heading text-lg font-semibold text-foreground">
+            You don’t have access to this page
+          </h1>
+          <p className="text-sm text-muted-foreground">
+            This area is for {requireRole.join(" / ")}. If that’s a mistake, ask an administrator to
+            review your role.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return <>{children}</>;
 }

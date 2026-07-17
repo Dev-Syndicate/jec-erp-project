@@ -1,36 +1,10 @@
-// Typed client-side fetchers for the auth feature. Every call attaches the
-// current Firebase ID token as `Authorization: Bearer <token>` — the single
-// credential the client holds (CLAUDE.md boundary). Same model on Flutter later.
+// Typed client-side fetchers for the auth feature. All authenticated calls use
+// apiFetch from src/lib (attaches the Firebase Bearer token — CLAUDE.md
+// boundary). resolve-roll is the one unauthenticated call (pre-sign-in).
 "use client";
 
-import { auth } from "@/lib/firebase";
+import { apiFetch } from "@/lib/api-client";
 import type { AuthUser } from "@/features/auth/types";
-
-/** Current user's fresh ID token, or throw if not signed in. */
-async function requireIdToken(): Promise<string> {
-  const user = auth.currentUser;
-  if (!user) throw new Error("Not signed in.");
-  // getIdToken() refreshes automatically if the token is near expiry.
-  return user.getIdToken();
-}
-
-/** Authenticated fetch against our API — injects the Bearer token. */
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = await requireIdToken();
-  const res = await fetch(path, {
-    ...init,
-    headers: {
-      ...(init?.headers ?? {}),
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? `Request failed (${res.status}).`);
-  }
-  return res.json() as Promise<T>;
-}
 
 export function fetchMe(): Promise<AuthUser> {
   return apiFetch<AuthUser>("/api/auth/me");

@@ -4,6 +4,7 @@
 // sign out; real feature dashboards replace this in a later phase.
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,12 @@ export function DashboardHome() {
         <InfoCard label="Account" value={profile ? "Active" : "…"} />
       </section>
 
-      <div>
+      <div className="flex flex-wrap items-center gap-3">
+        {profile?.roles.includes("Super Admin") && (
+          <Button size="lg" className="h-11" render={<Link href="/admin" />}>
+            Open admin console
+          </Button>
+        )}
         <Button
           variant="outline"
           size="lg"

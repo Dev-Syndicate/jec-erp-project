@@ -60,6 +60,74 @@ enum AuditSource {
   SYSTEM
 }
 
+// Student gender — an enum (not free text) so reports/filters stay consistent.
+enum Gender {
+  MALE
+  FEMALE
+  OTHER
+}
+
+// --- Admission wizard enums ---
+
+// Whether a student's admission record is still being filled (save-per-step) or
+// has been completed and submitted.
+enum AdmissionStatus {
+  DRAFT
+  SUBMITTED
+}
+
+// Seat allotment channel (Basic Info).
+enum SeatType {
+  CONVENER
+  MANAGEMENT
+}
+
+// Where the student stays (Basic Info).
+enum Accommodation {
+  DAY_SCHOLAR
+  HOSTEL
+}
+
+// Address slot — a student may have a present and/or permanent address.
+enum AddressKind {
+  PRESENT
+  PERMANENT
+}
+
+// Parent/guardian slot.
+enum GuardianRelation {
+  FATHER
+  MOTHER
+  GUARDIAN
+}
+
+// Level of an education record — school, college, or an entrance exam.
+enum EducationLevel {
+  SCHOOL
+  COLLEGE
+  ENTRANCE
+}
+
+// The kinds of documents a student uploads (Documents step). Files live in
+// Cloudinary; the row stores the URL + which slot it fills.
+enum DocumentType {
+  PHOTO
+  SIGNATURE
+  AADHAAR
+  PAN
+  TENTH
+  ELEVENTH
+  TWELFTH
+  INTER
+  TC
+  EAMCET
+  RANK_CARD
+  BIRTH_CERTIFICATE
+  COMMUNITY_CERTIFICATE
+  INCOME_CERTIFICATE
+  FIRST_GRADUATE_CERTIFICATE
+}
+
 // ---------------------------------------------------------------------------
 // Identity & RBAC
 //
@@ -251,10 +319,23 @@ model Section {
 model Student {
   id            String  @id @default(cuid())
   // Roll number is the student-facing login handle (roll number + password),
-  // but the account is backed by a real email = the Firebase identity.
+  // given by the college; but the account is backed by a real email = the
+  // Firebase identity.
   rollNumber    String  @unique
-  admissionNumber String @unique
+  // Register number is the official Anna University identifier. Optional at
+  // provisioning time (it may be assigned later by the university), but unique
+  // when present. rollNumber is the required, college-given handle.
+  registerNumber String? @unique
   dateOfBirth   DateTime
+
+  phone        String
+  gender       Gender?
+
+  // Admission wizard is saved step-by-step: a Student can exist as a DRAFT with
+  // only Basic Info filled, and be completed (SUBMITTED) later. Because of this,
+  // most admission fields (on the related tables below) are nullable until their
+  // step is saved — required-ness is enforced per-step in the API, not the DB.
+  admissionStatus AdmissionStatus @default(DRAFT)
 
   // Every student is backed by exactly one User (their Firebase-linked account).
   userId String @unique
@@ -263,6 +344,15 @@ model Student {
   isActive Boolean @default(true)
 
   enrollments Enrollment[]
+
+  // Admission wizard data (all optional at the row level; see AdmissionStatus).
+  profile   StudentProfile?
+  fee       StudentFee?
+  addresses StudentAddress[]
+  guardians Guardian[]
+  education EducationRecord[]
+  banks     BankAccount[]
+  documents StudentDocument[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -335,4 +425,227 @@ model AuditLog {
   @@index([actorId])
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+// ===========================================================================
+// Student admission wizard — see docs/student-admission-schema.md.
+//
+// Saved step-by-step (Student.admissionStatus tracks DRAFT/SUBMITTED). Most
+// fields are nullable at the DB level; required-ness is enforced per-step in the
+// API. The existing Student is the anchor; each table below hangs off it 1:1 or
+// 1:∞ and is deleted with the student (onDelete: Cascade).
+// ===========================================================================
+
+// 01 — Single-value personal/admission fields (Basic + Personal Info). 1:1.
+model StudentProfile {
+  id        String @id @default(cuid())
+  studentId String @unique
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  fullNameSSC      String  // block letters, as per SSC records
+  region           String?
+  alternatePhone   String?
+  seatTypeCategory SeatType
+  aadhaarNumber    String?
+  nationality      String?
+  scholarshipType  String?
+  accommodation    Accommodation
+
+  // Optional lookup FKs (dropdowns).
+  religionId String?
+  religion   Religion? @relation(fields: [religionId], references: [id])
+  categoryId String?
+  category   Category? @relation(fields: [categoryId], references: [id])
+  casteId    String?
+  caste      Caste? @relation(fields: [casteId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([religionId])
+  @@index([categoryId])
+  @@index([casteId])
+}
+
+// 02 — Fee information (4 years). 1:1, optional step. All amounts nullable.
+model StudentFee {
+  id        String @id @default(cuid())
+  studentId String @unique
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  totalFee      Decimal?
+  firstYearFee  Decimal?
+  secondYearFee Decimal?
+  thirdYearFee  Decimal?
+  fourthYearFee Decimal?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 03 — Present / permanent address. Up to 2 rows per student, tagged by kind.
+model StudentAddress {
+  id        String @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  kind AddressKind
+
+  countryId  String
+  country    Country @relation(fields: [countryId], references: [id])
+  stateId    String
+  state      State @relation(fields: [stateId], references: [id])
+  districtId String
+  district   District @relation(fields: [districtId], references: [id])
+
+  pincode      String
+  type         String // Home / Office / …
+  addressLine1 String
+  addressLine2 String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One present + one permanent per student.
+  @@unique([studentId, kind])
+  @@index([countryId])
+  @@index([stateId])
+  @@index([districtId])
+}
+
+// 04 — Father / mother / guardian. Up to 3 rows, tagged by relation.
+model Guardian {
+  id        String @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  relation     GuardianRelation
+  fullName     String
+  email        String?
+  mobile       String?
+  occupation   String?
+  annualIncome String? // income band, e.g. "Below 1 Lac"
+  address      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, relation])
+}
+
+// 05 — School / college / entrance records. Many rows, tagged by level.
+model EducationRecord {
+  id        String @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  level         EducationLevel
+  instituteName String
+  board         String?
+  yearOfPassing Int?
+  hallTicketNo  String?
+  marks         String?
+  percentage    Decimal?
+  gpa           Decimal?
+  totalMPC      Int? // college only
+  obtainedMPC   Int? // college only
+  rank          Int? // entrance only
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+}
+
+// 06 — Bank accounts. Many rows.
+model BankAccount {
+  id        String @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  bankName      String
+  accountHolder String
+  accountNo     String
+  ifscCode      String
+  type          String?
+  branch        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+}
+
+// 07 — Uploaded documents. File lives in Cloudinary; row stores URL + slot.
+model StudentDocument {
+  id        String @id @default(cuid())
+  studentId String
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  docType    DocumentType
+  url        String // Cloudinary secure URL
+  fileName   String?
+  uploadedAt DateTime @default(now())
+
+  // One file per slot per student (re-upload replaces).
+  @@unique([studentId, docType])
+  @@index([studentId])
+}
+
+// ---------------------------------------------------------------------------
+// Lookups — reference data seeded once.
+// ---------------------------------------------------------------------------
+
+// Cascading geo lookups for the address dropdowns (India-only to start).
+model Country {
+  id    String @id @default(cuid())
+  name  String @unique
+  code  String @unique // ISO, e.g. "IN"
+
+  states    State[]
+  addresses StudentAddress[]
+}
+
+model State {
+  id        String @id @default(cuid())
+  name      String
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id])
+
+  districts District[]
+  addresses StudentAddress[]
+
+  @@unique([countryId, name])
+  @@index([countryId])
+}
+
+model District {
+  id      String @id @default(cuid())
+  name    String
+  stateId String
+  state   State @relation(fields: [stateId], references: [id])
+
+  addresses StudentAddress[]
+
+  @@unique([stateId, name])
+  @@index([stateId])
+}
+
+// Small optional-dropdown lookups (Basic/Personal Info).
+model Religion {
+  id       String @id @default(cuid())
+  name     String @unique
+  profiles StudentProfile[]
+}
+
+model Category {
+  id       String @id @default(cuid())
+  name     String @unique // General / OBC / SC / ST / …
+  profiles StudentProfile[]
+}
+
+model Caste {
+  id       String @id @default(cuid())
+  name     String @unique
+  profiles StudentProfile[]
 }

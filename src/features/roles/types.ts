@@ -12,16 +12,23 @@ export type ProvisionStaffInput = {
   departmentId: string;
 };
 
-// Students onboard with extra identity fields (roll number is their login
-// handle; admission number + DOB back the self-activation fallback). The email
-// is still the Firebase identity and password-delivery channel.
+// Students onboard with extra identity fields: rollNumber is the college login
+// handle; registerNumber is the official Anna University ID (register + DOB back
+// the self-activation fallback). The email is still the Firebase identity and
+// password-delivery channel.
+export type Gender = "MALE" | "FEMALE" | "OTHER";
+
+// Provisioning creates the student ANCHOR (identity + login handle). The full
+// admission record is filled in later via the admission wizard.
 export type ProvisionStudentInput = {
   email: string;
   displayName: string;
   departmentId: string;
   rollNumber: string;
-  admissionNumber: string;
+  registerNumber?: string; // optional — assigned later by the university
   dateOfBirth: string; // ISO yyyy-mm-dd
+  phone: string; // required
+  gender?: Gender;
 };
 
 // What /api/users returns on success. tempPassword is shown once so the admin

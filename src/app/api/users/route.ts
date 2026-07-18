@@ -31,10 +31,12 @@ type Body = {
   displayName?: string;
   role?: string;
   departmentId?: string | null;
-  // Student-only fields:
+  // Student anchor fields (the rest of the admission record is the wizard's job):
   rollNumber?: string;
-  admissionNumber?: string;
+  registerNumber?: string;
   dateOfBirth?: string; // ISO date
+  phone?: string;
+  gender?: "MALE" | "FEMALE" | "OTHER";
 };
 
 export async function POST(req: Request) {
@@ -88,9 +90,11 @@ export async function POST(req: Request) {
     // Student-specific required fields.
     const isStudent = provisionRole === "Student";
     if (isStudent) {
-      if (!body.rollNumber || !body.admissionNumber || !body.dateOfBirth) {
+      // registerNumber is optional (assigned later by the university); roll,
+      // DOB, and phone are required.
+      if (!body.rollNumber || !body.dateOfBirth || !body.phone) {
         return Response.json(
-          { error: "rollNumber, admissionNumber, and dateOfBirth are required for students." },
+          { error: "rollNumber, dateOfBirth, and phone are required for students." },
           { status: 400 },
         );
       }
@@ -126,10 +130,18 @@ export async function POST(req: Request) {
             roles: { create: { roleId: roleRow.id } },
             ...(isStudent && {
               student: {
+                // Create the Student ANCHOR only (identity + login handle). The
+                // rich admission record (profile, address, guardians, etc.) is
+                // filled in via the admission wizard, which saves per step; the
+                // student starts as a DRAFT until submitted.
                 create: {
                   rollNumber: body.rollNumber!,
-                  admissionNumber: body.admissionNumber!,
+                  // Optional; store null (not empty string) when not provided,
+                  // so the unique constraint allows many students without one.
+                  registerNumber: body.registerNumber?.trim() || null,
                   dateOfBirth: new Date(body.dateOfBirth!),
+                  phone: body.phone!,
+                  gender: body.gender ?? null,
                 },
               },
             }),

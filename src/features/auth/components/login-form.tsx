@@ -199,7 +199,7 @@ function SignInStep() {
   const signIn = useSignIn();
   const [mode, setMode] = useState<SignInMode>("staff");
   const [email, setEmail] = useState("");
-  const [rollNumber, setRollNumber] = useState("");
+  const [registerNumber, setRegisterNumber] = useState("");
   const [password, setPassword] = useState("");
 
   const isStudent = mode === "student";
@@ -211,7 +211,7 @@ function SignInStep() {
         title="Sign in to JEC ERP"
         hint={
           isStudent
-            ? "Use your roll number and the password sent to your college email."
+            ? "Use your register number and the password sent to your college email."
             : "Use the college email your account was created with."
         }
       />
@@ -228,23 +228,23 @@ function SignInStep() {
           e.preventDefault();
           signIn.mutate(
             isStudent
-              ? { kind: "roll", rollNumber, password }
+              ? { kind: "register", registerNumber, password }
               : { kind: "email", email, password },
           );
         }}
       >
         {isStudent ? (
-          <Field label="Roll number" htmlFor="roll">
+          <Field label="Register number" htmlFor="register">
             <Input
-              id="roll"
+              id="register"
               type="text"
               inputMode="text"
               autoComplete="username"
               autoCapitalize="characters"
-              value={rollNumber}
-              onChange={(e) => setRollNumber(e.target.value)}
+              value={registerNumber}
+              onChange={(e) => setRegisterNumber(e.target.value)}
               required
-              placeholder="e.g. 21CS042"
+              placeholder="e.g. 422021104042"
               className="h-10"
             />
           </Field>

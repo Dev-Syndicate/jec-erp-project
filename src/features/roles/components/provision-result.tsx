@@ -25,7 +25,7 @@ export function ProvisionResult({
           </p>
           <p className="mt-1 text-sm text-foreground">
             {user.displayName} · {user.role}
-            {user.rollNumber ? ` · ${user.rollNumber}` : ""} · {user.email}
+            {user.registerNumber ? ` · ${user.registerNumber}` : ""} · {user.email}
           </p>
         </div>
         <Button variant="ghost" size="sm" onClick={onDismiss}>

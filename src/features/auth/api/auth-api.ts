@@ -11,20 +11,20 @@ export function fetchMe(): Promise<AuthUser> {
 }
 
 /**
- * Resolve a student roll number to the email Firebase authenticates against.
+ * Resolve a student register number to the email Firebase authenticates against.
  * Unauthenticated (the student isn't signed in yet), so this uses a plain fetch
  * rather than apiFetch — there's no token to attach. The password is still
  * required for the subsequent Firebase sign-in.
  */
-export async function resolveRollToEmail(rollNumber: string): Promise<string> {
+export async function resolveRegisterToEmail(registerNumber: string): Promise<string> {
   const res = await fetch("/api/auth/resolve-roll", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ rollNumber }),
+    body: JSON.stringify({ registerNumber }),
   });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(body?.error ?? "Couldn't look up that roll number.");
+    throw new Error(body?.error ?? "Couldn't look up that register number.");
   }
   const { email } = (await res.json()) as { email: string };
   return email;

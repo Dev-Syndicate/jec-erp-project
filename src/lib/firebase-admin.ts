@@ -69,3 +69,14 @@ export async function createFirebaseUser(args: {
 export async function deleteFirebaseUser(uid: string): Promise<void> {
   await adminAuth.deleteUser(uid);
 }
+
+/**
+ * Reset a Firebase user's password to a new value. Used when regenerating a
+ * temporary password (results file lost, or one-off reset) — the caller pairs
+ * this with re-setting mustChangePassword=true so first login forces a reset
+ * again. Only ever called for accounts still on their temp password. We never
+ * store the plaintext; it's revealed once to the admin and discarded.
+ */
+export async function resetFirebasePassword(uid: string, password: string): Promise<void> {
+  await adminAuth.updateUser(uid, { password });
+}

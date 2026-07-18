@@ -20,12 +20,15 @@ async function requireIdToken(): Promise<string> {
 /** Authenticated fetch against our API — injects the Bearer token. */
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await requireIdToken();
+  // For FormData bodies (file uploads) the browser must set Content-Type itself
+  // so it can include the multipart boundary — never force JSON there.
+  const isFormData = init?.body instanceof FormData;
   const res = await fetch(path, {
     ...init,
     headers: {
       ...(init?.headers ?? {}),
       Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
     },
   });
   if (!res.ok) {

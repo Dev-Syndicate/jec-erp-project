@@ -16,7 +16,7 @@ import { auth } from "@/lib/firebase";
 import {
   clearMustChangePassword,
   fetchMe,
-  resolveRollToEmail,
+  resolveRegisterToEmail,
 } from "@/features/auth/api/auth-api";
 
 /** Tracks the raw Firebase sign-in state (independent of our profile). */
@@ -44,19 +44,21 @@ export function useMe(enabled: boolean) {
 
 /**
  * Sign in either way the PRD allows: staff use their email directly; students
- * type a roll number, which we first resolve to their real email (the Firebase
- * identity) before signing in. Both paths end at the same Firebase credential.
+ * type their register number, which we first resolve to their real email (the
+ * Firebase identity) before signing in. Both paths end at the same credential.
  */
 type SignInInput =
   | { kind: "email"; email: string; password: string }
-  | { kind: "roll"; rollNumber: string; password: string };
+  | { kind: "register"; registerNumber: string; password: string };
 
 export function useSignIn() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: SignInInput) => {
       const email =
-        input.kind === "roll" ? await resolveRollToEmail(input.rollNumber) : input.email;
+        input.kind === "register"
+          ? await resolveRegisterToEmail(input.registerNumber)
+          : input.email;
       return signInWithEmailAndPassword(auth, email, input.password);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "me"] }),

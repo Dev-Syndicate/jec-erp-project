@@ -12,10 +12,10 @@ export type ProvisionStaffInput = {
   departmentId: string;
 };
 
-// Students onboard with extra identity fields: rollNumber is the college login
-// handle; registerNumber is the official Anna University ID (register + DOB back
-// the self-activation fallback). The email is still the Firebase identity and
-// password-delivery channel.
+// Students onboard with extra identity fields: registerNumber is the official
+// Anna University ID and the LOGIN HANDLE (register + password); rollNumber is
+// the college-given handle, optional. The email is still the Firebase identity
+// and password-delivery channel.
 export type Gender = "MALE" | "FEMALE" | "OTHER";
 
 // Provisioning creates the student ANCHOR (identity + login handle). The full
@@ -24,8 +24,8 @@ export type ProvisionStudentInput = {
   email: string;
   displayName: string;
   departmentId: string;
-  rollNumber: string;
-  registerNumber?: string; // optional — assigned later by the university
+  registerNumber: string; // required — the login handle
+  rollNumber?: string; // optional — college-given, may not exist yet
   dateOfBirth: string; // ISO yyyy-mm-dd
   phone: string; // required
   gender?: Gender;
@@ -35,10 +35,13 @@ export type ProvisionStudentInput = {
 // can relay it until email delivery is wired (see the route's note).
 export type ProvisionedUser = {
   id: string;
+  // Present only for students — the admission wizard continues from this id.
+  studentId: string | null;
   email: string;
   displayName: string;
   role: string;
   departmentId: string | null;
+  registerNumber: string | null;
   rollNumber: string | null;
   tempPassword: string;
 };

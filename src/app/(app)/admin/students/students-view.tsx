@@ -1,27 +1,33 @@
-// Students page composition — bridges the departments query into the student
-// provisioning panel (so the roles feature never imports the departments
-// feature). Client component because it reads the department list for the
-// picker.
+// Students list page (/admin/students) — browse students and open a student's
+// admission form. "Add student" lives on its own page (/admin/students/new),
+// reachable from the sidebar and the button here.
 "use client";
 
-import { useDepartments } from "@/features/departments/hooks/use-departments";
-import { ProvisionStudentPanel } from "@/features/roles/components/provision-student-panel";
+import Link from "next/link";
+import { UserPlus } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { StudentsList } from "@/features/students/components/students-list";
 import { PageHeader } from "@/app/(app)/page-header";
 
 export function StudentsView() {
-  const departments = useDepartments();
-  const options = (departments.data ?? [])
-    .filter((d) => d.isActive)
-    .map((d) => ({ id: d.id, name: d.name, code: d.code }));
-
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
       <PageHeader
-        eyebrow="Manage"
-        title="Students"
-        description="Add student accounts. They sign in with their roll number and reset the temporary password on first login."
+        eyebrow="Manage · Students"
+        title="All students"
+        description="Open a student to complete their admission form. They sign in with their roll number."
       />
-      <ProvisionStudentPanel departments={options} />
+
+      <section className="flex flex-col gap-4">
+        <div className="flex items-center justify-end">
+          <Button size="sm" nativeButton={false} render={<Link href="/admin/students/new" />}>
+            <UserPlus className="size-4" />
+            Add student
+          </Button>
+        </div>
+        <StudentsList />
+      </section>
     </main>
   );
 }

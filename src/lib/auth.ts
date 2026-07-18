@@ -25,6 +25,51 @@ export class AuthError extends Error {
 // The authenticated context a route gets after auth succeeds.
 export type AuthContext = Awaited<ReturnType<typeof authenticate>>;
 
+// --- short-lived user cache ------------------------------------------------
+// Every authenticated request resolves the Neon User (with roles) from the
+// verified firebaseUid. On Neon's free tier that's a cross-region round-trip
+// (~400ms warm) paid on EVERY request. Cache the resolved user briefly, keyed
+// by uid, so back-to-back requests skip the DB lookup.
+//
+// TTL is deliberately short: role/department/active changes (e.g. HOD rotation,
+// deactivation) must take effect quickly. 30s bounds the staleness window —
+// worst case, a revoked role keeps working for up to 30s. For anything that
+// must revoke instantly, call invalidateAuthUser(uid) after the mutation.
+type CachedUser = NonNullable<Awaited<ReturnType<typeof loadUser>>>;
+const USER_CACHE_TTL_MS = 30_000;
+const userCache = new Map<string, { user: CachedUser; expires: number }>();
+
+function loadUser(uid: string) {
+  return db.user.findUnique({
+    where: { firebaseUid: uid },
+    include: { roles: { include: { role: true } } },
+  });
+}
+
+async function resolveUser(uid: string): Promise<CachedUser | null> {
+  const now = Date.now();
+  const hit = userCache.get(uid);
+  if (hit && hit.expires > now) return hit.user;
+
+  const user = await loadUser(uid);
+  if (user) {
+    userCache.set(uid, { user, expires: now + USER_CACHE_TTL_MS });
+  } else {
+    // Don't cache misses — a just-provisioned account should work immediately.
+    userCache.delete(uid);
+  }
+  return user;
+}
+
+/**
+ * Drop a user from the auth cache so their next request re-reads Neon. Call
+ * after a mutation that must take effect immediately (role change, department
+ * move, deactivation) instead of waiting out the TTL.
+ */
+export function invalidateAuthUser(uid: string): void {
+  userCache.delete(uid);
+}
+
 function extractBearer(req: Request): string {
   const header = req.headers.get("authorization") ?? req.headers.get("Authorization");
   if (!header?.startsWith("Bearer ")) {
@@ -50,10 +95,7 @@ export async function authenticate(req: Request) {
     throw new AuthError(401, "Invalid or expired token.");
   }
 
-  const user = await db.user.findUnique({
-    where: { firebaseUid: uid },
-    include: { roles: { include: { role: true } } },
-  });
+  const user = await resolveUser(uid);
 
   if (!user) throw new AuthError(403, "No account is provisioned for this identity.");
   if (!user.isActive) throw new AuthError(403, "This account is inactive.");

@@ -4,6 +4,7 @@
 // mirror the API's authorization, so the UI never offers a link that would 403.
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -12,6 +13,7 @@ import {
   Users,
   GraduationCap,
   ChevronsUpDown,
+  ChevronRight,
   LogOut,
 } from "lucide-react";
 
@@ -26,10 +28,18 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
   SidebarProvider,
   SidebarRail,
   SidebarTrigger,
 } from "@/components/ui/sidebar";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,12 +59,16 @@ import {
 import { useFirebaseUser, useMe, useSignOut } from "@/features/auth/hooks/use-auth";
 import type { AuthUser } from "@/features/auth/types";
 
+type NavChild = { title: string; href: string };
+
 type NavItem = {
   title: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   // Roles allowed to see this item; undefined = everyone signed in.
   roles?: string[];
+  // If present, the item is a collapsible parent revealing these sub-links.
+  children?: NavChild[];
 };
 
 type NavGroup = { label: string; items: NavItem[] };
@@ -69,7 +83,17 @@ const NAV: NavGroup[] = [
     items: [
       { title: "Departments", href: "/admin/departments", icon: Building2, roles: ["Super Admin"] },
       { title: "Faculty", href: "/admin/faculty", icon: Users, roles: ["Super Admin", "HOD"] },
-      { title: "Students", href: "/admin/students", icon: GraduationCap, roles: ["Super Admin", "HOD"] },
+      {
+        title: "Students",
+        href: "/admin/students",
+        icon: GraduationCap,
+        roles: ["Super Admin", "HOD"],
+        children: [
+          { title: "List students", href: "/admin/students" },
+          { title: "Add student", href: "/admin/students/new" },
+          { title: "Bulk import", href: "/admin/students/import" },
+        ],
+      },
     ],
   },
 ];
@@ -141,6 +165,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                       ? pathname === item.href
                       : pathname === item.href || pathname.startsWith(`${item.href}/`);
                   const Icon = item.icon;
+
+                  // Collapsible parent (e.g. Students → List / Add).
+                  if (item.children?.length) {
+                    return (
+                      <CollapsibleNavItem
+                        key={item.title}
+                        item={item}
+                        active={active}
+                        pathname={pathname}
+                      />
+                    );
+                  }
+
                   return (
                     <SidebarMenuItem key={item.title}>
                       <SidebarMenuButton
@@ -196,6 +233,58 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <div className="flex flex-1 flex-col">{children}</div>
       </SidebarInset>
     </SidebarProvider>
+  );
+}
+
+// A collapsible nav parent (e.g. Students → List / Add / Import). Controlled so
+// Base UI doesn't warn about a changing default-open: it's open whenever one of
+// its routes is active OR the user has expanded it, and collapses when the user
+// closes it (unless a route keeps it active). (An uncontrolled
+// `defaultOpen={active}` warns because `active` flips false→true after the first
+// render, once the route resolves.)
+function CollapsibleNavItem({
+  item,
+  active,
+  pathname,
+}: {
+  item: NavItem;
+  active: boolean;
+  pathname: string;
+}) {
+  // Track only the user's manual intent; the open state is derived from it +
+  // whether a route is active — no setState-in-effect needed.
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  const open = userOpen ?? active;
+
+  const Icon = item.icon;
+  return (
+    <Collapsible open={open} onOpenChange={setUserOpen} className="group/collapsible">
+      <SidebarMenuItem>
+        <CollapsibleTrigger
+          render={
+            <SidebarMenuButton isActive={active} tooltip={item.title}>
+              <Icon className="size-4" />
+              <span>{item.title}</span>
+              <ChevronRight className="ml-auto size-4 transition-transform group-data-open/collapsible:rotate-90" />
+            </SidebarMenuButton>
+          }
+        />
+        <CollapsibleContent>
+          <SidebarMenuSub>
+            {item.children!.map((child) => (
+              <SidebarMenuSubItem key={child.href}>
+                <SidebarMenuSubButton
+                  isActive={pathname === child.href}
+                  render={<Link href={child.href} />}
+                >
+                  <span>{child.title}</span>
+                </SidebarMenuSubButton>
+              </SidebarMenuSubItem>
+            ))}
+          </SidebarMenuSub>
+        </CollapsibleContent>
+      </SidebarMenuItem>
+    </Collapsible>
   );
 }
 

@@ -16,7 +16,7 @@
 // writes run in one transaction (WS adapter) so a User with no role can't persist.
 import { authenticate, requireRole, assertDeptScope, toAuthResponse } from "@/lib/auth";
 import { createFirebaseUser, deleteFirebaseUser } from "@/lib/firebase-admin";
-import { generateTempPassword } from "@/lib/provisioning";
+import { generateTempPassword, provisionStudentAccount } from "@/lib/provisioning";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -90,11 +90,11 @@ export async function POST(req: Request) {
     // Student-specific required fields.
     const isStudent = provisionRole === "Student";
     if (isStudent) {
-      // registerNumber is optional (assigned later by the university); roll,
-      // DOB, and phone are required.
-      if (!body.rollNumber || !body.dateOfBirth || !body.phone) {
+      // registerNumber is the login handle and required; rollNumber is optional
+      // (college-given, may not exist yet). DOB and phone are required too.
+      if (!body.registerNumber || !body.dateOfBirth || !body.phone) {
         return Response.json(
-          { error: "rollNumber, dateOfBirth, and phone are required for students." },
+          { error: "registerNumber, dateOfBirth, and phone are required for students." },
           { status: 400 },
         );
       }
@@ -106,21 +106,62 @@ export async function POST(req: Request) {
       throw new Error(`Role "${provisionRole}" is not seeded.`);
     }
 
-    // --- create Firebase identity first ------------------------------------
+    // --- students go through the shared provisioning helper ----------------
+    // (Firebase create + Neon User+Student in a transaction + rollback on fail).
+    // The bulk importer uses the SAME helper, so both paths stay identical.
+    if (isStudent) {
+      try {
+        const { userId, studentId, tempPassword } = await provisionStudentAccount({
+          email,
+          displayName,
+          departmentId,
+          roleId: roleRow.id,
+          registerNumber: body.registerNumber!,
+          rollNumber: body.rollNumber,
+          dateOfBirth: body.dateOfBirth!,
+          phone: body.phone!,
+          gender: body.gender ?? null,
+        });
+        return Response.json(
+          {
+            id: userId,
+            // The Student row id — the admission wizard continues from here.
+            studentId,
+            email,
+            displayName,
+            role: provisionRole,
+            departmentId,
+            registerNumber: body.registerNumber!,
+            rollNumber: body.rollNumber ?? null,
+            // Returned ONCE for delivery to the user's inbox (results file /
+            // email later). Not stored.
+            tempPassword,
+          },
+          { status: 201 },
+        );
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Could not save the account.";
+        const status = /unique|constraint|already exists/i.test(msg) ? 409 : 500;
+        return Response.json(
+          { error: status === 409 ? "That email or register number is already in use." : "Could not save the account." },
+          { status },
+        );
+      }
+    }
+
+    // --- staff (HOD / Teacher): no Student row --------------------------------
     const tempPassword = generateTempPassword();
     let firebaseUid: string;
     try {
       firebaseUid = await createFirebaseUser({ email, password: tempPassword, displayName });
     } catch (e) {
-      // Most common: email already in use.
       const msg = e instanceof Error ? e.message : "Could not create the account.";
       return Response.json({ error: msg }, { status: 409 });
     }
 
-    // --- create the Neon rows in one transaction, rolling back Firebase on fail
     try {
-      const created = await db.$transaction(async (tx) => {
-        const user = await tx.user.create({
+      const created = await db.$transaction(async (tx) =>
+        tx.user.create({
           data: {
             firebaseUid,
             email,
@@ -128,54 +169,32 @@ export async function POST(req: Request) {
             departmentId,
             mustChangePassword: true,
             roles: { create: { roleId: roleRow.id } },
-            ...(isStudent && {
-              student: {
-                // Create the Student ANCHOR only (identity + login handle). The
-                // rich admission record (profile, address, guardians, etc.) is
-                // filled in via the admission wizard, which saves per step; the
-                // student starts as a DRAFT until submitted.
-                create: {
-                  rollNumber: body.rollNumber!,
-                  // Optional; store null (not empty string) when not provided,
-                  // so the unique constraint allows many students without one.
-                  registerNumber: body.registerNumber?.trim() || null,
-                  dateOfBirth: new Date(body.dateOfBirth!),
-                  phone: body.phone!,
-                  gender: body.gender ?? null,
-                },
-              },
-            }),
           },
-          include: { student: true },
-        });
-        return user;
-      });
+        }),
+      );
 
       return Response.json(
         {
           id: created.id,
+          studentId: null,
           email: created.email,
           displayName: created.displayName,
           role: provisionRole,
           departmentId: created.departmentId,
-          rollNumber: created.student?.rollNumber ?? null,
-          // Returned ONCE so the caller can deliver it to the user's inbox. In a
-          // later phase this becomes an email send and is not returned in the body.
+          registerNumber: null,
+          rollNumber: null,
           tempPassword,
         },
         { status: 201 },
       );
     } catch (e) {
-      // Neon write failed (e.g. duplicate rollNumber/email) — undo the Firebase
-      // user so the operation is all-or-nothing and a retry won't collide.
       await deleteFirebaseUser(firebaseUid).catch((cleanupErr) =>
         console.error("Failed to roll back Firebase user after Neon error:", cleanupErr),
       );
       const msg = e instanceof Error ? e.message : "Could not save the account.";
-      // A unique-constraint violation is the user's fault (duplicate); surface 409.
       const status = /unique|constraint|already exists/i.test(msg) ? 409 : 500;
       return Response.json(
-        { error: status === 409 ? "That email or roll number is already in use." : "Could not save the account." },
+        { error: status === 409 ? "That email is already in use." : "Could not save the account." },
         { status },
       );
     }

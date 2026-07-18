@@ -163,6 +163,8 @@ model User {
   auditLogs AuditLog[] @relation("AuditActor")
   // Sections this user (as a staff teacher) is assigned to — gates attendance.
   teacherAssignments TeacherAssignment[] @relation("TeacherAssignments")
+  // Bulk imports this user ran (as an admin).
+  importBatches ImportBatch[] @relation("ImportCreator")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -272,6 +274,7 @@ model Department {
   classes             Class[]
   users               User[]
   teacherAssignments  TeacherAssignment[]
+  importBatches       ImportBatch[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -318,14 +321,13 @@ model Section {
 
 model Student {
   id            String  @id @default(cuid())
-  // Roll number is the student-facing login handle (roll number + password),
-  // given by the college; but the account is backed by a real email = the
-  // Firebase identity.
-  rollNumber    String  @unique
-  // Register number is the official Anna University identifier. Optional at
-  // provisioning time (it may be assigned later by the university), but unique
-  // when present. rollNumber is the required, college-given handle.
-  registerNumber String? @unique
+  // Register number is the official Anna University identifier and the STUDENT
+  // LOGIN HANDLE (register number + password). It's the required, unique anchor;
+  // the account is backed by a real email = the Firebase identity.
+  registerNumber String @unique
+  // Roll number is the college-given handle. Optional (not every student has one
+  // at provisioning time), unique when present. Not used for login.
+  rollNumber    String? @unique
   dateOfBirth   DateTime
 
   phone        String
@@ -353,6 +355,9 @@ model Student {
   education EducationRecord[]
   banks     BankAccount[]
   documents StudentDocument[]
+
+  // Bulk-import batches this student was created by (usually one).
+  importMembers ImportBatchMember[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -425,6 +430,58 @@ model AuditLog {
   @@index([actorId])
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+// ===========================================================================
+// Bulk student import — see docs/bulk-student-import.md.
+//
+// A college uploads a CSV/Excel of students; each valid row provisions an
+// account. The batch records WHAT happened (counts + per-row outcome) so the
+// admin can re-open it to regenerate temp passwords if the results file is lost.
+// It NEVER stores passwords — regeneration resets Firebase + reveals once.
+// ===========================================================================
+
+model ImportBatch {
+  id           String @id @default(cuid())
+  // The admin (User) who ran the import.
+  createdById  String
+  createdBy    User   @relation(fields: [createdById], references: [id], name: "ImportCreator")
+  // Department all rows were provisioned into (chosen once per upload).
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+  fileName     String? // original upload name, for the admin's reference
+
+  totalRows    Int
+  createdCount Int
+  skippedCount Int
+  errorCount   Int
+
+  members ImportBatchMember[]
+
+  createdAt DateTime @default(now())
+
+  @@index([createdById])
+  @@index([departmentId])
+  @@index([createdAt])
+}
+
+model ImportBatchMember {
+  id      String @id @default(cuid())
+  batchId String
+  batch   ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  // The created student (null for skipped/error rows where nothing was created).
+  studentId String?
+  student   Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
+
+  // Register number (the student login handle) for this row — kept even for
+  // error rows so a failed import is legible.
+  registerNumber String
+  status         String  // created / skipped / error
+  reason         String? // why, for skipped/error rows
+
+  @@index([batchId])
+  @@index([studentId])
 }
 
 // ===========================================================================

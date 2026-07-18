@@ -132,11 +132,74 @@ async function seedSuperAdmin(superAdminRoleId: string) {
   console.log(`  Linked Neon User ${user.id} and granted Super Admin role.`);
 }
 
+// --- Admission lookups -----------------------------------------------------
+
+// Small optional dropdowns (Basic/Personal Info). Idempotent upserts.
+const RELIGIONS = ["Hindu", "Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Parsi", "Other"];
+const CATEGORIES = ["General", "OBC", "BC", "MBC", "SC", "ST", "EWS", "Other"];
+const CASTES: string[] = []; // caste list is institution-specific; left empty to fill later
+
+async function seedLookups() {
+  for (const name of RELIGIONS) {
+    await db.religion.upsert({ where: { name }, update: {}, create: { name } });
+  }
+  for (const name of CATEGORIES) {
+    await db.category.upsert({ where: { name }, update: {}, create: { name } });
+  }
+  for (const name of CASTES) {
+    await db.caste.upsert({ where: { name }, update: {}, create: { name } });
+  }
+  console.log(`  Lookups: ${RELIGIONS.length} religions, ${CATEGORIES.length} categories.`);
+}
+
+// --- India geo (Country → State → District) --------------------------------
+// Reads the bundled dataset (prisma/data/india-states-districts.json) so the
+// seed has no runtime API dependency. Idempotent.
+
+async function seedIndiaGeo() {
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const path = await import("node:path");
+  const here = path.dirname(fileURLToPath(import.meta.url));
+  const raw = readFileSync(path.join(here, "data", "india-states-districts.json"), "utf8");
+  const data = JSON.parse(raw) as { states: Array<{ state: string; districts: string[] }> };
+
+  const india = await db.country.upsert({
+    where: { code: "IN" },
+    update: {},
+    create: { name: "India", code: "IN" },
+  });
+
+  let stateCount = 0;
+  let districtCount = 0;
+  for (const s of data.states) {
+    const state = await db.state.upsert({
+      where: { countryId_name: { countryId: india.id, name: s.state } },
+      update: {},
+      create: { name: s.state, countryId: india.id },
+    });
+    stateCount++;
+    for (const d of s.districts) {
+      await db.district.upsert({
+        where: { stateId_name: { stateId: state.id, name: d } },
+        update: {},
+        create: { name: d, stateId: state.id },
+      });
+      districtCount++;
+    }
+  }
+  console.log(`  India geo: ${stateCount} states, ${districtCount} districts.`);
+}
+
 async function main() {
   console.log("Seeding RBAC baseline…");
   const { superAdminRole } = await seedRbac();
   console.log("Bootstrapping Super Admin…");
   await seedSuperAdmin(superAdminRole.id);
+  console.log("Seeding admission lookups…");
+  await seedLookups();
+  console.log("Seeding India geo (states & districts)…");
+  await seedIndiaGeo();
   console.log("Seed complete.");
 }
 

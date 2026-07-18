@@ -4,11 +4,22 @@
 "use client";
 
 import { apiFetch } from "@/lib/api-client";
-import type { ProvisionStaffInput, ProvisionedUser } from "@/features/roles/types";
+import type {
+  ProvisionStaffInput,
+  ProvisionStudentInput,
+  ProvisionedUser,
+} from "@/features/roles/types";
 
 export async function provisionStaff(input: ProvisionStaffInput): Promise<ProvisionedUser> {
   return apiFetch<ProvisionedUser>("/api/users", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+export async function provisionStudent(input: ProvisionStudentInput): Promise<ProvisionedUser> {
+  return apiFetch<ProvisionedUser>("/api/users", {
+    method: "POST",
+    body: JSON.stringify({ ...input, role: "Student" }),
   });
 }

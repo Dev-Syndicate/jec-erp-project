@@ -1,0 +1,255 @@
+// The authenticated app shell: brand rail + a breadcrumb bar that reflects the
+// current page (Group / Page), derived from the nav config so it's always
+// accurate. Every authenticated page renders inside it. Nav is role-filtered to
+// mirror the API's authorization, so the UI never offers a link that would 403.
+"use client";
+
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import {
+  LayoutDashboard,
+  Building2,
+  Users,
+  GraduationCap,
+  ChevronsUpDown,
+  LogOut,
+} from "lucide-react";
+
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarInset,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarRail,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { useFirebaseUser, useMe, useSignOut } from "@/features/auth/hooks/use-auth";
+import type { AuthUser } from "@/features/auth/types";
+
+type NavItem = {
+  title: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  // Roles allowed to see this item; undefined = everyone signed in.
+  roles?: string[];
+};
+
+type NavGroup = { label: string; items: NavItem[] };
+
+const NAV: NavGroup[] = [
+  {
+    label: "Today",
+    items: [{ title: "Overview", href: "/dashboard", icon: LayoutDashboard }],
+  },
+  {
+    label: "Manage",
+    items: [
+      { title: "Departments", href: "/admin/departments", icon: Building2, roles: ["Super Admin"] },
+      { title: "Faculty", href: "/admin/faculty", icon: Users, roles: ["Super Admin", "HOD"] },
+      { title: "Students", href: "/admin/students", icon: GraduationCap, roles: ["Super Admin", "HOD"] },
+    ],
+  },
+];
+
+function visibleGroups(roles: string[]): NavGroup[] {
+  return NAV.map((g) => ({
+    ...g,
+    items: g.items.filter((i) => !i.roles || i.roles.some((r) => roles.includes(r))),
+  })).filter((g) => g.items.length > 0);
+}
+
+// Resolve the current path to a breadcrumb trail (Group / Page), derived from
+// the nav config so it always matches the real navigation. Falls back to the
+// last path segment for pages not in the nav (e.g. a future detail route).
+function useBreadcrumbs(pathname: string): Array<{ label: string; href?: string }> {
+  for (const group of NAV) {
+    const item = group.items.find(
+      (i) => pathname === i.href || pathname.startsWith(`${i.href}/`),
+    );
+    if (item) {
+      // The "Today" group is a single overview; don't prefix it with its label.
+      return group.label === "Today"
+        ? [{ label: item.title }]
+        : [{ label: group.label }, { label: item.title, href: item.href }];
+    }
+  }
+  const last = pathname.split("/").filter(Boolean).at(-1) ?? "";
+  return [{ label: last.charAt(0).toUpperCase() + last.slice(1) }];
+}
+
+export function AppShell({ children }: { children: React.ReactNode }) {
+  const { firebaseUser } = useFirebaseUser();
+  const me = useMe(!!firebaseUser);
+  const profile = me.data;
+  const roles = profile?.roles ?? [];
+  const pathname = usePathname();
+  const crumbs = useBreadcrumbs(pathname);
+
+  return (
+    <SidebarProvider>
+      <Sidebar collapsible="icon">
+        <SidebarHeader>
+          <div className="flex items-center gap-2.5 px-1 py-1.5">
+            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary font-heading text-xs font-semibold text-primary-foreground">
+              JE
+            </span>
+            <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
+              <span className="font-heading text-sm font-semibold text-sidebar-foreground">
+                JEC ERP
+              </span>
+              <span className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-muted-foreground">
+                System of record
+              </span>
+            </div>
+          </div>
+        </SidebarHeader>
+
+        <SidebarContent>
+          {visibleGroups(roles).map((group) => (
+            <SidebarGroup key={group.label}>
+              <SidebarGroupLabel className="font-mono text-[0.65rem] uppercase tracking-[0.18em]">
+                {group.label}
+              </SidebarGroupLabel>
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  // Overview is exact; section pages also match their sub-routes.
+                  const active =
+                    item.href === "/dashboard"
+                      ? pathname === item.href
+                      : pathname === item.href || pathname.startsWith(`${item.href}/`);
+                  const Icon = item.icon;
+                  return (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        isActive={active}
+                        tooltip={item.title}
+                        render={<Link href={item.href} />}
+                      >
+                        <Icon className="size-4" />
+                        <span>{item.title}</span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  );
+                })}
+              </SidebarMenu>
+            </SidebarGroup>
+          ))}
+        </SidebarContent>
+
+        <SidebarFooter>
+          <UserMenu profile={profile} />
+        </SidebarFooter>
+        <SidebarRail />
+      </Sidebar>
+
+      <SidebarInset>
+        {/* Breadcrumb bar — reflects the current page (Group / Page), derived
+            from the nav so it's always accurate. Matches the shadcn reference. */}
+        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+          <SidebarTrigger className="-ml-1" />
+          <Breadcrumb>
+            <BreadcrumbList>
+              {crumbs.map((crumb, i) => {
+                const last = i === crumbs.length - 1;
+                return (
+                  <span key={`${crumb.label}-${i}`} className="contents">
+                    <BreadcrumbItem>
+                      {last || !crumb.href ? (
+                        <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                      ) : (
+                        <BreadcrumbLink render={<Link href={crumb.href} />}>
+                          {crumb.label}
+                        </BreadcrumbLink>
+                      )}
+                    </BreadcrumbItem>
+                    {!last && <BreadcrumbSeparator />}
+                  </span>
+                );
+              })}
+            </BreadcrumbList>
+          </Breadcrumb>
+        </header>
+
+        <div className="flex flex-1 flex-col">{children}</div>
+      </SidebarInset>
+    </SidebarProvider>
+  );
+}
+
+function UserMenu({ profile }: { profile: AuthUser | undefined }) {
+  const router = useRouter();
+  const signOut = useSignOut();
+  const initials = (profile?.displayName ?? "· ·")
+    .split(" ")
+    .map((p) => p[0])
+    .slice(0, 2)
+    .join("")
+    .toUpperCase();
+
+  return (
+    <SidebarMenu>
+      <SidebarMenuItem>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <SidebarMenuButton size="lg" className="gap-2.5">
+                <span className="grid size-7 shrink-0 place-items-center rounded-md bg-sidebar-accent font-mono text-[0.65rem] font-semibold text-sidebar-accent-foreground">
+                  {initials}
+                </span>
+                <span className="flex flex-1 flex-col overflow-hidden text-left leading-tight group-data-[collapsible=icon]:hidden">
+                  <span className="truncate text-sm font-medium text-sidebar-foreground">
+                    {profile?.displayName ?? "…"}
+                  </span>
+                  <span className="truncate font-mono text-[0.65rem] text-muted-foreground">
+                    {profile?.roles[0] ?? "No role"}
+                  </span>
+                </span>
+                <ChevronsUpDown className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
+              </SidebarMenuButton>
+            }
+          />
+          <DropdownMenuContent side="top" align="start" className="w-56">
+            <DropdownMenuLabel className="flex flex-col gap-0.5">
+              <span className="truncate text-sm">{profile?.email ?? "…"}</span>
+              <span className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                {profile?.roles.join(" · ") || "No roles"}
+              </span>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() =>
+                signOut.mutate(undefined, { onSuccess: () => router.replace("/login") })
+              }
+            >
+              <LogOut className="size-4" />
+              Sign out
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </SidebarMenuItem>
+    </SidebarMenu>
+  );
+}

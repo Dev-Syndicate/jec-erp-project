@@ -3,11 +3,17 @@
 
 import { useMutation } from "@tanstack/react-query";
 
-import { provisionStaff } from "@/features/roles/api/provisioning-api";
-import type { ProvisionStaffInput } from "@/features/roles/types";
+import { provisionStaff, provisionStudent } from "@/features/roles/api/provisioning-api";
+import type { ProvisionStaffInput, ProvisionStudentInput } from "@/features/roles/types";
 
 export function useProvisionStaff() {
   return useMutation({
     mutationFn: (input: ProvisionStaffInput) => provisionStaff(input),
+  });
+}
+
+export function useProvisionStudent() {
+  return useMutation({
+    mutationFn: (input: ProvisionStudentInput) => provisionStudent(input),
   });
 }

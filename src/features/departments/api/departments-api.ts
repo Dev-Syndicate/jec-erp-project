@@ -26,3 +26,22 @@ export async function createDepartment(input: CreateDepartmentInput): Promise<De
   });
   return department;
 }
+
+export async function updateDepartment(
+  id: string,
+  input: Partial<CreateDepartmentInput> & { isActive?: boolean },
+): Promise<Department> {
+  const { department } = await apiFetch<{ department: Department }>(`/api/departments/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+  return department;
+}
+
+/** Soft delete — deactivates the department (isActive:false); keeps the row. */
+export async function deactivateDepartment(id: string): Promise<Department> {
+  const { department } = await apiFetch<{ department: Department }>(`/api/departments/${id}`, {
+    method: "DELETE",
+  });
+  return department;
+}

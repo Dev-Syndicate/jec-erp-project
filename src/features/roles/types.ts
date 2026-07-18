@@ -12,6 +12,18 @@ export type ProvisionStaffInput = {
   departmentId: string;
 };
 
+// Students onboard with extra identity fields (roll number is their login
+// handle; admission number + DOB back the self-activation fallback). The email
+// is still the Firebase identity and password-delivery channel.
+export type ProvisionStudentInput = {
+  email: string;
+  displayName: string;
+  departmentId: string;
+  rollNumber: string;
+  admissionNumber: string;
+  dateOfBirth: string; // ISO yyyy-mm-dd
+};
+
 // What /api/users returns on success. tempPassword is shown once so the admin
 // can relay it until email delivery is wired (see the route's note).
 export type ProvisionedUser = {

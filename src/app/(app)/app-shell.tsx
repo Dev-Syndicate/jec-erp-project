@@ -82,7 +82,16 @@ const NAV: NavGroup[] = [
     label: "Manage",
     items: [
       { title: "Departments", href: "/admin/departments", icon: Building2, roles: ["Super Admin"] },
-      { title: "Faculty", href: "/admin/faculty", icon: Users, roles: ["Super Admin", "HOD"] },
+      {
+        title: "Faculty",
+        href: "/admin/faculty",
+        icon: Users,
+        roles: ["Super Admin", "HOD"],
+        children: [
+          { title: "List faculty", href: "/admin/faculty" },
+          { title: "Add faculty", href: "/admin/faculty/new" },
+        ],
+      },
       {
         title: "Students",
         href: "/admin/students",

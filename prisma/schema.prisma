@@ -82,6 +82,13 @@ enum SeatType {
   MANAGEMENT
 }
 
+// Marital status on a faculty profile.
+enum MaritalStatus {
+  SINGLE
+  MARRIED
+  OTHER
+}
+
 // Where the student stays (Basic Info).
 enum Accommodation {
   DAY_SCHOLAR
@@ -158,6 +165,9 @@ model User {
 
   // Present only when this user IS a student. Staff-only users leave it null.
   student Student?
+  // Present only when this user IS staff (HOD/Teacher). Filled via the faculty
+  // profile form; students leave it null.
+  facultyProfile FacultyProfile?
 
   roles     UserRole[]
   auditLogs AuditLog[] @relation("AuditActor")
@@ -430,6 +440,38 @@ model AuditLog {
   @@index([actorId])
   @@index([entity, entityId])
   @@index([createdAt])
+}
+
+// ===========================================================================
+// Faculty profile — see docs/faculty-profile-schema.md.
+//
+// The rich profile for a staff member (HOD/Teacher), 1:1 with their User (which
+// holds identity + auth: email, name, role, department). Mirrors StudentProfile.
+// All fields nullable at the DB level except where the form requires them; a
+// staff account can exist before the profile is filled.
+// ===========================================================================
+
+model FacultyProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Faculty Details. "designation" is the HR title (e.g. "Asst. Professor") and
+  // is distinct from the login role on User. staffId is the college-assigned id.
+  designation String
+  staffId     String @unique
+
+  // Personal Details.
+  phone          String
+  emergencyPhone String?
+  gender         Gender?
+  dateOfBirth    DateTime?
+  maritalStatus  MaritalStatus?
+  fatherName     String?
+  motherName     String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // ===========================================================================

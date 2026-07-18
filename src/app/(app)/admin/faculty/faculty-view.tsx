@@ -1,27 +1,33 @@
-// Faculty page composition — bridges the departments query into the staff
-// provisioning panel (so the roles feature never imports the departments
-// feature). Client component because it reads the department list for the
-// picker.
+// Faculty list page (/admin/faculty) — browse staff and open a member's
+// profile. "Add faculty" lives on its own page (/admin/faculty/new), reachable
+// from the sidebar and the button here.
 "use client";
 
-import { useDepartments } from "@/features/departments/hooks/use-departments";
-import { ProvisionStaffPanel } from "@/features/roles/components/provision-staff-panel";
+import Link from "next/link";
+import { UserPlus } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { FacultyList } from "@/features/faculty/components/faculty-list";
 import { PageHeader } from "@/app/(app)/page-header";
 
 export function FacultyView() {
-  const departments = useDepartments();
-  const options = (departments.data ?? [])
-    .filter((d) => d.isActive)
-    .map((d) => ({ id: d.id, name: d.name, code: d.code }));
-
   return (
     <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
       <PageHeader
-        eyebrow="Manage"
-        title="Faculty"
-        description="Provision HOD and teacher accounts. Each gets a temporary password and resets it on first login."
+        eyebrow="Manage · Faculty"
+        title="All faculty"
+        description="Open a staff member to complete their profile. Each signs in with their college email."
       />
-      <ProvisionStaffPanel departments={options} />
+
+      <section className="flex flex-col gap-4">
+        <div className="flex items-center justify-end">
+          <Button size="sm" nativeButton={false} render={<Link href="/admin/faculty/new" />}>
+            <UserPlus className="size-4" />
+            Add faculty
+          </Button>
+        </div>
+        <FacultyList />
+      </section>
     </main>
   );
 }

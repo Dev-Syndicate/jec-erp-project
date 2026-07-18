@@ -13,7 +13,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useLookups, useStudent } from "@/features/students/hooks/use-students";
-import { TempPasswordBanner } from "@/features/students/components/temp-password-banner";
+import { TempPasswordBanner } from "@/components/temp-password-banner";
 import { RegeneratePasswordButton } from "@/features/students/components/regenerate-password-button";
 import { BasicInfoStep } from "@/features/students/components/steps/basic-info-step";
 import { PersonalInfoStep } from "@/features/students/components/steps/personal-info-step";
@@ -68,7 +68,7 @@ export function AdmissionWizard({ studentId }: { studentId: string }) {
       {tempPassword && student.data && (
         <TempPasswordBanner
           name={student.data.name}
-          registerNumber={student.data.registerNumber}
+          identifier={student.data.registerNumber}
           email={student.data.email}
           tempPassword={tempPassword}
           headline={

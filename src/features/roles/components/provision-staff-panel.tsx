@@ -26,7 +26,23 @@ import type { DepartmentOption, ProvisionedUser } from "@/features/roles/types";
 
 type StaffRole = "HOD" | "Teacher";
 
-export function ProvisionStaffPanel({ departments }: { departments: DepartmentOption[] }) {
+export function ProvisionStaffPanel({
+  departments,
+  departmentsLoading = false,
+  showHeading = true,
+  onCreated,
+}: {
+  departments: DepartmentOption[];
+  // While departments load, show a loading state — not "create a department
+  // first" (that's the truly-empty state).
+  departmentsLoading?: boolean;
+  // The composing page may already render an "Add faculty" header; hide the
+  // panel's own heading then to avoid a duplicate.
+  showHeading?: boolean;
+  // Called once the account is created. The faculty page uses it to jump
+  // straight into the new member's profile.
+  onCreated?: (user: ProvisionedUser) => void;
+}) {
   const provision = useProvisionStaff();
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -41,9 +57,12 @@ export function ProvisionStaffPanel({ departments }: { departments: DepartmentOp
       { email, displayName, role, departmentId },
       {
         onSuccess: (user) => {
-          setResult(user);
           setEmail("");
           setDisplayName("");
+          // Hand off to the profile if the caller wants it; else show the temp
+          // password result inline.
+          if (onCreated) onCreated(user);
+          else setResult(user);
         },
       },
     );
@@ -51,16 +70,23 @@ export function ProvisionStaffPanel({ departments }: { departments: DepartmentOp
 
   return (
     <section className="flex flex-col gap-4">
-      <div>
-        <h2 className="font-heading text-lg font-semibold text-foreground">Provision staff</h2>
-        <p className="text-sm text-muted-foreground">
-          Create an HOD or teacher account. They’ll get a temporary password and reset it on first
-          login.
-        </p>
-      </div>
+      {showHeading && (
+        <div>
+          <h2 className="font-heading text-lg font-semibold text-foreground">Provision staff</h2>
+          <p className="text-sm text-muted-foreground">
+            Create an HOD or teacher account. They’ll get a temporary password and reset it on first
+            login.
+          </p>
+        </div>
+      )}
 
       <div className="rounded-lg border border-border p-4">
-        {departments.length === 0 ? (
+        {departmentsLoading ? (
+          <p className="flex items-center justify-center gap-2 py-6 text-center text-sm text-muted-foreground">
+            <span className="size-1.5 animate-pulse rounded-full bg-primary" />
+            Loading departments…
+          </p>
+        ) : departments.length === 0 ? (
           <p className="py-6 text-center text-sm text-muted-foreground">
             Create a department first — every staff account belongs to one.
           </p>

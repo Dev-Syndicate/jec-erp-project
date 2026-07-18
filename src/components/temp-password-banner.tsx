@@ -1,8 +1,8 @@
-// One-time temp-password banner, shown at the top of the admission wizard right
-// after a student is created (the Add-student flow redirects here with the
-// password in the URL). It's sensitive and not retrievable again, so the admin
+// One-time temp-password banner — shown after an account is created or its
+// password regenerated (student admission or faculty profile), with the password
+// passed in via the URL. It's sensitive and not retrievable again, so the admin
 // copies/relays it, then dismisses — which also strips it from the URL so a
-// refresh or shared link won't leak it.
+// refresh or shared link won't leak it. Cross-feature, so it lives in components/.
 "use client";
 
 import { useState } from "react";
@@ -13,13 +13,15 @@ import { Button } from "@/components/ui/button";
 
 export function TempPasswordBanner({
   name,
-  registerNumber,
+  identifier,
   email,
   tempPassword,
   headline = "Account created — continue the admission below",
 }: {
   name: string;
-  registerNumber: string;
+  // Optional secondary id shown between name and email (e.g. a student's
+  // register number). Faculty have none, so it's omitted.
+  identifier?: string;
   email: string;
   tempPassword: string;
   headline?: string;
@@ -48,7 +50,8 @@ export function TempPasswordBanner({
               {headline}
             </p>
             <p className="mt-1 text-sm text-foreground">
-              {name} · {registerNumber} · {email}
+              {name}
+              {identifier ? ` · ${identifier}` : ""} · {email}
             </p>
           </div>
         </div>

@@ -1,0 +1,521 @@
+<title>JEC ERP — Core Data Model</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<style>
+  :root {
+    --ground: #f7f9f9;
+    --panel: #ffffff;
+    --ink: #16201f;
+    --muted: #5d6d6b;
+    --faint: #849693;
+    --line: #e2e9e8;
+    --line-strong: #cdd8d6;
+    --teal: #0d857f;
+    --teal-ink: #0a615c;
+    --teal-soft: #e7f4f2;
+    /* entity-group hues — restrained, used only as chips + left rails */
+    --g-struct: #0d857f;  --g-struct-soft: #e7f4f2;
+    --g-people: #3f5bab;  --g-people-soft: #eceff9;
+    --g-time:   #a8710f;  --g-time-soft:   #f7f0e2;
+    --g-place:  #8451c7;  --g-place-soft:  #f1eafa;
+    --g-rec:    #c0435f;  --g-rec-soft:    #fbe9ee;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 48px 24px 96px; }
+  .mono { font-family: ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, monospace; }
+
+  /* ---- header ---- */
+  .eyebrow {
+    font-family: ui-monospace, Menlo, Consolas, monospace;
+    font-size: 0.7rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--teal-ink); font-weight: 600;
+  }
+  h1 {
+    font-size: clamp(1.9rem, 4vw, 2.7rem); line-height: 1.08; letter-spacing: -0.02em;
+    margin: 12px 0 0; text-wrap: balance; font-weight: 680;
+  }
+  .lede { font-size: 1.06rem; color: var(--muted); max-width: 64ch; margin: 16px 0 0; }
+
+  /* ---- jobs strip ---- */
+  .jobs { display: flex; flex-wrap: wrap; gap: 10px; margin: 26px 0 0; }
+  .job {
+    display: flex; align-items: center; gap: 9px;
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 999px; padding: 8px 15px 8px 12px; font-weight: 550; font-size: 0.92rem;
+  }
+  .job .n {
+    display: grid; place-items: center; width: 22px; height: 22px; border-radius: 999px;
+    background: var(--teal); color: #fff; font-size: 0.72rem; font-weight: 700;
+    font-family: ui-monospace, monospace;
+  }
+  .job small { color: var(--muted); font-weight: 500; }
+
+  /* ---- callout ---- */
+  .callout {
+    margin: 30px 0 0; border: 1px solid var(--line); border-left: 3px solid var(--teal);
+    background: linear-gradient(180deg, var(--teal-soft), #fff 82%);
+    border-radius: 12px; padding: 20px 22px;
+  }
+  .callout h3 { margin: 0 0 6px; font-size: 1.02rem; letter-spacing: -0.01em; }
+  .callout p { margin: 0; color: var(--muted); font-size: 0.96rem; }
+  .callout b { color: var(--ink); }
+
+  /* ---- section headings ---- */
+  .sec { margin: 52px 0 0; }
+  .sec > h2 {
+    font-size: 1.28rem; letter-spacing: -0.015em; margin: 0 0 4px;
+    display: flex; align-items: baseline; gap: 12px;
+  }
+  .sec > h2 .k { font-family: ui-monospace, monospace; font-size: 0.72rem; color: var(--faint); font-weight: 600; }
+  .sec > .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.96rem; }
+
+  /* ---- map ---- */
+  .map {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px; overflow-x: auto;
+  }
+  .map-grid { display: grid; gap: 14px; min-width: 640px; }
+  .lane { display: grid; grid-template-columns: 116px 1fr; gap: 14px; align-items: center; }
+  .lane + .lane { border-top: 1px dashed var(--line); padding-top: 14px; }
+  .lane-label {
+    font-family: ui-monospace, monospace; font-size: 0.68rem; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); font-weight: 600;
+  }
+  .flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .node {
+    display: inline-flex; align-items: center; gap: 7px; background: #fff;
+    border: 1px solid var(--line-strong); border-radius: 9px; padding: 7px 11px;
+    font-weight: 600; font-size: 0.9rem; white-space: nowrap;
+  }
+  .node .dot { width: 8px; height: 8px; border-radius: 999px; }
+  .node.soft { border-style: dashed; font-weight: 500; color: var(--muted); }
+  .arrow { color: var(--faint); font-size: 1.05rem; }
+  .arrow .lbl { font-size: 0.7rem; color: var(--muted); display: block; text-align: center; margin-top: -3px; }
+  .plus { color: var(--faint); font-weight: 700; }
+
+  .c-struct .dot { background: var(--g-struct); }
+  .c-people .dot { background: var(--g-people); }
+  .c-time   .dot { background: var(--g-time); }
+  .c-place  .dot { background: var(--g-place); }
+  .c-rec    .dot { background: var(--g-rec); }
+
+  /* ---- entity cards ---- */
+  .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    border-left: 3px solid var(--rail, var(--teal)); overflow: hidden;
+  }
+  .card > header { padding: 14px 16px 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .card h4 { margin: 0; font-family: ui-monospace, monospace; font-size: 0.98rem; letter-spacing: -0.01em; }
+  .chip {
+    font-family: ui-monospace, monospace; font-size: 0.6rem; letter-spacing: 0.12em; text-transform: uppercase;
+    font-weight: 700; padding: 3px 8px; border-radius: 999px;
+  }
+  .card .note { color: var(--muted); font-size: 0.85rem; padding: 0 16px 12px; margin: 0; }
+  table.fields { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  table.fields td { padding: 5px 16px; border-top: 1px solid var(--line); vertical-align: baseline; }
+  table.fields tr td:first-child { font-family: ui-monospace, monospace; color: var(--ink); white-space: nowrap; width: 42%; }
+  table.fields td .ty { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.78rem; }
+  table.fields td .req { color: var(--g-rec); font-weight: 700; }
+  table.fields td em { color: var(--muted); font-style: normal; font-size: 0.8rem; }
+  .fk { color: var(--teal-ink); }
+
+  .rail-struct { --rail: var(--g-struct); } .bg-struct { background: var(--g-struct-soft); color: var(--g-struct); }
+  .rail-people { --rail: var(--g-people); } .bg-people { background: var(--g-people-soft); color: var(--g-people); }
+  .rail-time   { --rail: var(--g-time); }   .bg-time   { background: var(--g-time-soft);   color: var(--g-time); }
+  .rail-place  { --rail: var(--g-place); }   .bg-place  { background: var(--g-place-soft);  color: var(--g-place); }
+  .rail-rec    { --rail: var(--g-rec); }     .bg-rec    { background: var(--g-rec-soft);    color: var(--g-rec); }
+
+  /* ---- workflow flows ---- */
+  .flows { display: grid; gap: 14px; }
+  .flowcard {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px;
+    display: grid; grid-template-columns: 150px 1fr; gap: 16px; align-items: center;
+  }
+  .flowcard .title { font-weight: 640; font-size: 0.98rem; }
+  .flowcard .title small { display: block; color: var(--muted); font-weight: 500; font-size: 0.82rem; margin-top: 2px; }
+  .steps { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; overflow-x: auto; }
+  .step { background:#fff; border:1px solid var(--line-strong); border-radius: 8px; padding: 6px 10px; font-size: 0.84rem; white-space: nowrap; }
+  .step b { font-family: ui-monospace, monospace; font-weight: 600; }
+
+  /* ---- derive box ---- */
+  .derive {
+    margin-top: 16px; background: #10201e; color: #d7e6e3; border-radius: 12px; padding: 18px 20px;
+    font-family: ui-monospace, monospace; font-size: 0.86rem; overflow-x: auto;
+  }
+  .derive .cm { color: #6f8f8a; }
+  .derive .hl { color: #59d3c7; }
+
+  footer.end { margin-top: 56px; border-top: 1px solid var(--line); padding-top: 22px; color: var(--muted); font-size: 0.92rem; }
+  footer.end b { color: var(--ink); }
+
+  @media (max-width: 620px) {
+    .lane { grid-template-columns: 1fr; gap: 8px; }
+    .flowcard { grid-template-columns: 1fr; gap: 10px; }
+  }
+</style>
+
+<div class="wrap">
+  <p class="eyebrow">JEC ERP · Core data model · design for review</p>
+  <h1>The backbone, designed around the four daily jobs</h1>
+  <p class="lede">
+    Everything below exists to serve what the college actually does every day. We lock this shape
+    <em>before</em> writing model code — so the foundation stops shifting.
+  </p>
+
+  <div class="jobs">
+    <span class="job"><span class="n">1</span> Attendance <small>· semester-wise</small></span>
+    <span class="job"><span class="n">2</span> Student records</span>
+    <span class="job"><span class="n">3</span> Faculty records</span>
+    <span class="job"><span class="n">4</span> Internal marks <small>· per semester</small></span>
+  </div>
+
+  <div class="callout">
+    <h3>The one idea that shapes everything</h3>
+    <p>
+      Attendance and marks are <b>per semester</b> (Odd / Even within a year). So the <b>Semester</b> is
+      the hub — every time-bound record points at it. And a student's year+section is a <b>yearly
+      sticker</b> (an Enrollment), not a fixed field — which is what makes <b>promotion</b> and history work.
+    </p>
+  </div>
+
+  <!-- ============ THE MAP ============ -->
+  <div class="sec">
+    <h2>How it fits together <span class="k">the map</span></h2>
+    <p class="sub">Read each lane left to right. Colours mark the five groups used throughout.</p>
+    <div class="map">
+      <div class="map-grid">
+
+        <div class="lane">
+          <span class="lane-label">Structure</span>
+          <div class="flow c-struct">
+            <span class="node"><span class="dot"></span>Degree</span>
+            <span class="plus">×</span>
+            <span class="node"><span class="dot"></span>Branch</span>
+            <span class="arrow">→</span>
+            <span class="node"><span class="dot"></span>Program</span>
+            <span class="arrow">→</span>
+            <span class="node"><span class="dot"></span>Section <em style="font-weight:500;color:var(--muted)">(has a year)</em></span>
+          </div>
+        </div>
+
+        <div class="lane">
+          <span class="lane-label">People</span>
+          <div class="flow c-people">
+            <span class="node"><span class="dot"></span>User <em style="font-weight:500;color:var(--muted)">(account)</em></span>
+            <span class="arrow">→</span>
+            <span class="node"><span class="dot"></span>Student</span>
+            <span class="node soft">or</span>
+            <span class="node"><span class="dot"></span>Faculty</span>
+            <span class="arrow">→<span class="lbl">belongs to</span></span>
+            <span class="node c-struct"><span class="dot"></span>Program</span>
+          </div>
+        </div>
+
+        <div class="lane">
+          <span class="lane-label">Time</span>
+          <div class="flow c-time">
+            <span class="node"><span class="dot"></span>Academic Year</span>
+            <span class="arrow">→</span>
+            <span class="node"><span class="dot"></span>Semester <em style="font-weight:500;color:var(--muted)">(Odd / Even)</em></span>
+          </div>
+        </div>
+
+        <div class="lane">
+          <span class="lane-label">Placement</span>
+          <div class="flow c-place">
+            <span class="node"><span class="dot"></span>Student</span>
+            <span class="arrow">→</span>
+            <span class="node"><span class="dot"></span>Enrollment <em style="font-weight:500;color:var(--muted)">(per year)</em></span>
+            <span class="arrow">→</span>
+            <span class="node c-struct"><span class="dot"></span>Section</span>
+          </div>
+        </div>
+
+        <div class="lane">
+          <span class="lane-label">Curriculum</span>
+          <div class="flow c-struct">
+            <span class="node"><span class="dot"></span>Subject <em style="font-weight:500;color:var(--muted)">(sem 1–8)</em></span>
+            <span class="arrow">→</span>
+            <span class="node c-people"><span class="dot"></span>Teacher Assignment</span>
+            <span class="arrow">→<span class="lbl">authorises</span></span>
+            <span class="node c-rec"><span class="dot"></span>marking</span>
+          </div>
+        </div>
+
+        <div class="lane">
+          <span class="lane-label">Records</span>
+          <div class="flow c-rec">
+            <span class="node"><span class="dot"></span>Attendance</span>
+            <span class="node"><span class="dot"></span>Internal Mark</span>
+            <span class="arrow">→<span class="lbl">scoped to</span></span>
+            <span class="node c-time"><span class="dot"></span>Semester</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ STRUCTURE ============ -->
+  <div class="sec">
+    <h2>Structure <span class="k">set up once by the admin</span></h2>
+    <p class="sub">The word “department” is gone. A <b>Program</b> is a Degree × Branch pairing — the unit everyone belongs to.</p>
+    <div class="cards">
+
+      <div class="card rail-struct">
+        <header><h4>Degree</h4><span class="chip bg-struct">configurable</span></header>
+        <table class="fields">
+          <tr><td>name</td><td><span class="ty">string</span> · <em>“Bachelor of Engineering”</em></td></tr>
+          <tr><td>code</td><td><span class="ty">string</span> · <em>“B.E”</em></td></tr>
+          <tr><td>durationYears</td><td><span class="ty">int</span> · <em>4 → drives the Year list</em></td></tr>
+          <tr><td>isActive</td><td><span class="ty">bool</span></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-struct">
+        <header><h4>Branch</h4><span class="chip bg-struct">configurable</span></header>
+        <table class="fields">
+          <tr><td>name</td><td><span class="ty">string</span> · <em>“Computer Science…”</em></td></tr>
+          <tr><td>code</td><td><span class="ty">string</span> · <em>“CSE”</em></td></tr>
+          <tr><td>isActive</td><td><span class="ty">bool</span></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-struct">
+        <header><h4>Program</h4><span class="chip bg-struct">= Degree × Branch</span></header>
+        <p class="note">Replaces “department”. <span class="mono">programId</span> is the scoping key (HOD sees their program only).</p>
+        <table class="fields">
+          <tr><td class="fk">degreeId</td><td><span class="ty">→ Degree</span></td></tr>
+          <tr><td class="fk">branchId</td><td><span class="ty">→ Branch</span></td></tr>
+          <tr><td>isActive</td><td><span class="ty">bool</span> · <em>unique(degree, branch)</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-struct">
+        <header><h4>Section</h4><span class="chip bg-struct">program + year</span></header>
+        <p class="note">A “class” is just all sections sharing a program + year — no separate table.</p>
+        <table class="fields">
+          <tr><td class="fk">programId</td><td><span class="ty">→ Program</span></td></tr>
+          <tr><td>year</td><td><span class="ty">int</span> · <em>1…duration (I–IV)</em></td></tr>
+          <tr><td>name</td><td><span class="ty">string</span> · <em>“A”…“H”</em></td></tr>
+          <tr><td>isActive</td><td><span class="ty">bool</span> · <em>unique(program, year, name)</em></td></tr>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ PEOPLE ============ -->
+  <div class="sec">
+    <h2>People <span class="k">records — jobs 2 & 3</span></h2>
+    <p class="sub">One permanent account per person. A Student and a Faculty are both a User + their own detail record.</p>
+    <div class="cards">
+
+      <div class="card rail-people">
+        <header><h4>User</h4><span class="chip bg-people">account</span></header>
+        <p class="note">Firebase identity + role. <span class="mono">programId</span> is the scoping key (Super Admin has none).</p>
+        <table class="fields">
+          <tr><td>firebaseUid</td><td><span class="ty">string</span></td></tr>
+          <tr><td>email</td><td><span class="ty">string</span></td></tr>
+          <tr><td>displayName</td><td><span class="ty">string</span></td></tr>
+          <tr><td class="fk">programId</td><td><span class="ty">→ Program?</span></td></tr>
+          <tr><td>roles</td><td><span class="ty">→ Role[]</span> · <em>Super Admin / HOD / Teacher / Student</em></td></tr>
+          <tr><td>mustChangePassword</td><td><span class="ty">bool</span></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-people">
+        <header><h4>Student</h4><span class="chip bg-people">job 2</span></header>
+        <p class="note">Login = register number. Degree+Branch come from the account’s Program; year+section from Enrollment.</p>
+        <table class="fields">
+          <tr><td>registerNumber</td><td><span class="ty">string</span> <span class="req">*</span> · <em>login handle, unique</em></td></tr>
+          <tr><td>rollNumber</td><td><span class="ty">string?</span> · <em>optional, unique</em></td></tr>
+          <tr><td>dateOfBirth</td><td><span class="ty">date</span></td></tr>
+          <tr><td>phone</td><td><span class="ty">string</span></td></tr>
+          <tr><td>gender</td><td><span class="ty">enum?</span></td></tr>
+          <tr><td class="fk">userId</td><td><span class="ty">→ User</span></td></tr>
+          <tr><td>+ admission</td><td><em>profile · guardians · address · education · banks · documents</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-people">
+        <header><h4>FacultyProfile</h4><span class="chip bg-people">job 3</span></header>
+        <p class="note">The staff record. The Program comes from the account.</p>
+        <table class="fields">
+          <tr><td class="fk">userId</td><td><span class="ty">→ User</span></td></tr>
+          <tr><td>designation</td><td><span class="ty">string</span> <span class="req">*</span> · <em>“Asst. Professor”</em></td></tr>
+          <tr><td>staffId</td><td><span class="ty">string</span> <span class="req">*</span> · <em>unique</em></td></tr>
+          <tr><td>phone</td><td><span class="ty">string</span> <span class="req">*</span></td></tr>
+          <tr><td>… </td><td><em>emergency phone · gender · DOB · marital · parents</em></td></tr>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ TIME + PLACEMENT ============ -->
+  <div class="sec">
+    <h2>Time &amp; placement <span class="k">what makes “semester-wise” work</span></h2>
+    <p class="sub">The Semester is the hub for attendance + marks. Enrollment is the yearly sticker that drives promotion.</p>
+    <div class="cards">
+
+      <div class="card rail-time">
+        <header><h4>AcademicYear</h4><span class="chip bg-time">time</span></header>
+        <table class="fields">
+          <tr><td>name</td><td><span class="ty">string</span> · <em>“2025-2026”</em></td></tr>
+          <tr><td>startDate / endDate</td><td><span class="ty">date</span></td></tr>
+          <tr><td>isActive</td><td><span class="ty">bool</span> · <em>one active</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-time">
+        <header><h4>Semester</h4><span class="chip bg-time">the hub</span></header>
+        <p class="note">Odd or Even within a year. Everything time-bound points here.</p>
+        <table class="fields">
+          <tr><td class="fk">academicYearId</td><td><span class="ty">→ AcademicYear</span></td></tr>
+          <tr><td>kind</td><td><span class="ty">enum</span> · <em>ODD / EVEN</em></td></tr>
+          <tr><td>startDate / endDate</td><td><span class="ty">date</span></td></tr>
+          <tr><td>isActive</td><td><span class="ty">bool</span> · <em>one active</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-place">
+        <header><h4>Enrollment</h4><span class="chip bg-place">yearly sticker</span></header>
+        <p class="note">Where a student sits <em>this year</em>. Promotion = a new row next year; old rows stay as history.</p>
+        <table class="fields">
+          <tr><td class="fk">studentId</td><td><span class="ty">→ Student</span></td></tr>
+          <tr><td class="fk">sectionId</td><td><span class="ty">→ Section</span> · <em>year comes from here</em></td></tr>
+          <tr><td class="fk">academicYearId</td><td><span class="ty">→ AcademicYear</span> · <em>unique(student, year)</em></td></tr>
+        </table>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ============ CURRICULUM + RECORDS ============ -->
+  <div class="sec">
+    <h2>Curriculum &amp; the daily records <span class="k">jobs 1 &amp; 4</span></h2>
+    <p class="sub">Subjects are a reusable catalog. Assignment says who may mark. Attendance &amp; marks are the output.</p>
+    <div class="cards">
+
+      <div class="card rail-struct">
+        <header><h4>Subject</h4><span class="chip bg-struct">catalog</span></header>
+        <p class="note">Per program, tagged by curriculum semester (1–8). Reused every batch; deactivate on syllabus change.</p>
+        <table class="fields">
+          <tr><td class="fk">programId</td><td><span class="ty">→ Program</span></td></tr>
+          <tr><td>name / code</td><td><span class="ty">string</span> · <em>“Data Structures / CS201”</em></td></tr>
+          <tr><td>semesterNumber</td><td><span class="ty">int</span> · <em>1…8</em></td></tr>
+          <tr><td>isActive</td><td><span class="ty">bool</span></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-people">
+        <header><h4>TeacherAssignment</h4><span class="chip bg-people">gate</span></header>
+        <p class="note">Who teaches what, to which section, this semester. Attendance permission derives from this.</p>
+        <table class="fields">
+          <tr><td class="fk">teacherId</td><td><span class="ty">→ User</span></td></tr>
+          <tr><td class="fk">subjectId</td><td><span class="ty">→ Subject</span></td></tr>
+          <tr><td class="fk">sectionId</td><td><span class="ty">→ Section</span></td></tr>
+          <tr><td class="fk">semesterId</td><td><span class="ty">→ Semester</span> · <em>unique(all four)</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-rec">
+        <header><h4>Attendance</h4><span class="chip bg-rec">job 1</span></header>
+        <p class="note">One row per student, per subject, per day. Semester-scoped for reports.</p>
+        <table class="fields">
+          <tr><td class="fk">studentId</td><td><span class="ty">→ Student</span></td></tr>
+          <tr><td class="fk">subjectId</td><td><span class="ty">→ Subject</span></td></tr>
+          <tr><td class="fk">sectionId</td><td><span class="ty">→ Section</span></td></tr>
+          <tr><td class="fk">semesterId</td><td><span class="ty">→ Semester</span></td></tr>
+          <tr><td>date</td><td><span class="ty">date</span></td></tr>
+          <tr><td>status</td><td><span class="ty">enum</span> · <em>PRESENT / ABSENT / OD / EXCUSED</em></td></tr>
+          <tr><td class="fk">markedById</td><td><span class="ty">→ User</span> · <em>unique(student, subject, date)</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-rec">
+        <header><h4>InternalMark</h4><span class="chip bg-rec">job 4</span></header>
+        <p class="note">Per student, per subject, per semester, per assessment.</p>
+        <table class="fields">
+          <tr><td class="fk">studentId</td><td><span class="ty">→ Student</span></td></tr>
+          <tr><td class="fk">subjectId</td><td><span class="ty">→ Subject</span></td></tr>
+          <tr><td class="fk">semesterId</td><td><span class="ty">→ Semester</span></td></tr>
+          <tr><td>assessment</td><td><span class="ty">enum</span> · <em>IA1 / IA2 / MODEL / ASSIGNMENT</em></td></tr>
+          <tr><td>maxMark / obtained</td><td><span class="ty">number</span> · <em>unique(student, subject, sem, assessment)</em></td></tr>
+        </table>
+      </div>
+
+    </div>
+
+    <div class="derive">
+      <span class="cm"># the semester a section studies is DERIVED — no duplicate data</span><br />
+      semesterNumber = (<span class="hl">year</span> − 1) × 2 + (<span class="hl">kind</span> == ODD ? 1 : 2)<br />
+      <span class="cm"># e.g. Section in year 2, Odd semester → subjects where semesterNumber = 3</span>
+    </div>
+  </div>
+
+  <!-- ============ WORKFLOWS ============ -->
+  <div class="sec">
+    <h2>The four jobs, flowing through it</h2>
+    <p class="sub">Every daily action is a short path across the boxes above.</p>
+    <div class="flows">
+
+      <div class="flowcard">
+        <div class="title">Mark attendance<small>job 1 · daily</small></div>
+        <div class="steps">
+          <span class="step">Teacher opens <b>their assignment</b></span><span class="arrow">→</span>
+          <span class="step"><b>Section</b> + <b>Subject</b> + date</span><span class="arrow">→</span>
+          <span class="step">tap present / absent</span><span class="arrow">→</span>
+          <span class="step"><b>Attendance</b> rows @ active <b>Semester</b></span>
+        </div>
+      </div>
+
+      <div class="flowcard">
+        <div class="title">Enter internal marks<small>job 4 · per assessment</small></div>
+        <div class="steps">
+          <span class="step">Teacher picks <b>Section</b> + <b>Subject</b></span><span class="arrow">→</span>
+          <span class="step">choose <b>IA1 / IA2 / Model</b></span><span class="arrow">→</span>
+          <span class="step">enter each student's mark</span><span class="arrow">→</span>
+          <span class="step"><b>InternalMark</b> rows @ active <b>Semester</b></span>
+        </div>
+      </div>
+
+      <div class="flowcard">
+        <div class="title">Add a student<small>job 2 · any year</small></div>
+        <div class="steps">
+          <span class="step">account: name, register no…</span><span class="arrow">→</span>
+          <span class="step">pick <b>Degree + Branch</b> (= Program)</span><span class="arrow">→</span>
+          <span class="step">optional: put in <b>Section</b> III·A</span><span class="arrow">→</span>
+          <span class="step"><b>Enrollment</b> @ active year</span>
+        </div>
+      </div>
+
+      <div class="flowcard">
+        <div class="title">Promote at year-end<small>rollover</small></div>
+        <div class="steps">
+          <span class="step">select <b>Section</b> II·A</span><span class="arrow">→</span>
+          <span class="step">“promote to III·A”</span><span class="arrow">→</span>
+          <span class="step">new <b>Enrollment</b> per student, next year</span><span class="arrow">→</span>
+          <span class="step">last year untouched = history</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <footer class="end">
+    <p><b>What changes from today:</b> “department” becomes <b>Program</b> (Degree × Branch, <span class="mono">programId</span>);
+    Class collapses into <b>Section</b> (with a year); Term becomes <b>Semester</b>; and two new tables —
+    <b>Attendance</b> and <b>InternalMark</b> — land the two daily jobs we don't have yet.</p>
+    <p style="margin-top:10px"><b>Your move:</b> mark up anything wrong on this map. Once it's right, I build it in one clean pass and we don't touch the backbone again.</p>
+  </footer>
+</div>

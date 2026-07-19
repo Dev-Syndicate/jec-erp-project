@@ -1,7 +1,7 @@
-// /admin has no page of its own — it's split into Departments / Faculty /
-// Students. Send it to the first management page.
+// /admin has no page of its own yet — management pages are being rebuilt from
+// the new schema. Send it to the dashboard for now.
 import { redirect } from "next/navigation";
 
 export default function AdminIndexPage() {
-  redirect("/admin/departments");
+  redirect("/dashboard");
 }

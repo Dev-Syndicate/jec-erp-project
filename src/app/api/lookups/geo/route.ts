@@ -1,38 +1,23 @@
-// GET /api/lookups/geo?stateId=…  → districts for a state
-// GET /api/lookups/geo?countryId=… → states for a country
+// GET /api/lookups/geo            → all Indian states
+// GET /api/lookups/geo?state=Tamil Nadu → districts for that state
 //
-// The address dropdowns cascade, so we fetch one level at a time instead of
-// shipping every state+district on form load. Authenticated (reference data,
-// but still behind the token boundary).
+// Served from the bundled JSON (src/lib/india-geo), not the DB — states/districts
+// are static reference data. The cascade fetches one level at a time so the form
+// doesn't ship every district up front. Authenticated (behind the token boundary).
 import { authenticate, toAuthResponse } from "@/lib/auth";
-import { db } from "@/lib/db";
+import { listDistricts, listStates } from "@/lib/india-geo";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
     await authenticate(req);
-    const { searchParams } = new URL(req.url);
-    const countryId = searchParams.get("countryId");
-    const stateId = searchParams.get("stateId");
+    const state = new URL(req.url).searchParams.get("state");
 
-    if (stateId) {
-      const districts = await db.district.findMany({
-        where: { stateId },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      });
-      return Response.json({ districts });
+    if (state) {
+      return Response.json({ districts: listDistricts(state) });
     }
-    if (countryId) {
-      const states = await db.state.findMany({
-        where: { countryId },
-        orderBy: { name: "asc" },
-        select: { id: true, name: true },
-      });
-      return Response.json({ states });
-    }
-    return Response.json({ error: "Provide countryId or stateId." }, { status: 400 });
+    return Response.json({ states: listStates() });
   } catch (err) {
     return toAuthResponse(err);
   }

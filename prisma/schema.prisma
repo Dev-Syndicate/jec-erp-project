@@ -89,6 +89,12 @@ enum MaritalStatus {
   OTHER
 }
 
+// The two sessions of an academic year (Anna University structure).
+enum TermKind {
+  ODD  // Jul-Dec — curriculum semesters 1/3/5/7
+  EVEN // Jan-May — curriculum semesters 2/4/6/8
+}
+
 // Where the student stays (Basic Info).
 enum Accommodation {
   DAY_SCHOLAR
@@ -250,7 +256,6 @@ model AcademicYear {
 
   terms              Term[]
   enrollments        Enrollment[]
-  teacherAssignments TeacherAssignment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -258,16 +263,25 @@ model AcademicYear {
 
 model Term {
   id             String @id @default(cuid())
-  name           String // e.g. "Semester 1"
+  name           String // display label, derived from kind ("Odd Semester" / "Even Semester")
+  // An Anna-University year has exactly two sessions: ODD (Jul-Dec, curriculum
+  // sems 1/3/5/7) and EVEN (Jan-May, sems 2/4/6/8). One of each per year.
+  kind           TermKind
   academicYearId String
   academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
   startDate      DateTime
   endDate        DateTime
   isActive       Boolean @default(false)
 
+  // Teacher assignments (and, later, timetable) are TERM-scoped — they change
+  // every semester. See docs/timetable-teacher-assignment.md.
+  teacherAssignments TeacherAssignment[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  // One Odd + one Even per year — no duplicate sessions.
+  @@unique([academicYearId, kind])
   @@index([academicYearId])
 }
 
@@ -285,9 +299,33 @@ model Department {
   users               User[]
   teacherAssignments  TeacherAssignment[]
   importBatches       ImportBatch[]
+  subjects            Subject[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// A subject in a department's curriculum. Reusable catalog: tagged with the
+// curriculum semesterNumber (1-8) and reused by every batch. Editable — on a
+// syllabus revision, add the new subject and deactivate (never hard-delete) the
+// old one, so term-scoped assignments keep pointing at what was actually taught.
+// See docs/timetable-teacher-assignment.md.
+model Subject {
+  id             String @id @default(cuid())
+  name           String
+  code           String
+  departmentId   String
+  department     Department @relation(fields: [departmentId], references: [id])
+  semesterNumber Int     // 1..8 — the curriculum semester this subject belongs to
+  isActive       Boolean @default(true)
+
+  teacherAssignments TeacherAssignment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([departmentId, code])
+  @@index([departmentId])
 }
 
 model Class {
@@ -406,17 +444,23 @@ model TeacherAssignment {
   section      Section @relation(fields: [sectionId], references: [id])
   departmentId String
   department   Department @relation(fields: [departmentId], references: [id])
-  // Assignments are per-year too (teacher rotation).
-  academicYearId String
-  academicYear   AcademicYear @relation(fields: [academicYearId], references: [id])
+  // The subject this teacher teaches to this section.
+  subjectId    String
+  subject      Subject @relation(fields: [subjectId], references: [id])
+  // TERM-scoped: teacher↔subject↔section changes every SEMESTER (not year), and
+  // teacher rotation is per-term. Old terms keep their rows as history.
+  termId       String
+  term         Term @relation(fields: [termId], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([teacherId, sectionId, academicYearId])
+  // One (teacher, subject, section) row per term.
+  @@unique([teacherId, sectionId, subjectId, termId])
   @@index([sectionId])
   @@index([departmentId])
-  @@index([academicYearId])
+  @@index([subjectId])
+  @@index([termId])
 }
 
 // ---------------------------------------------------------------------------
@@ -590,12 +634,11 @@ model StudentAddress {
 
   kind AddressKind
 
-  countryId  String
-  country    Country @relation(fields: [countryId], references: [id])
-  stateId    String
-  state      State @relation(fields: [stateId], references: [id])
-  districtId String
-  district   District @relation(fields: [districtId], references: [id])
+  // Geo stored by NAME (not FK) — states/districts are static reference data
+  // served from src/data JSON, not the DB. India-only, so country is implicit.
+  country      String @default("India")
+  state        String
+  district     String
 
   pincode      String
   type         String // Home / Office / …
@@ -607,9 +650,6 @@ model StudentAddress {
 
   // One present + one permanent per student.
   @@unique([studentId, kind])
-  @@index([countryId])
-  @@index([stateId])
-  @@index([districtId])
 }
 
 // 04 — Father / mother / guardian. Up to 3 rows, tagged by relation.
@@ -692,43 +732,12 @@ model StudentDocument {
 }
 
 // ---------------------------------------------------------------------------
-// Lookups — reference data seeded once.
+// Lookups — reference data.
+//
+// NOTE: geo (Country/State/District) is NOT here — it's static reference data
+// served from src/data/india-states-districts.json (see src/lib/india-geo.ts),
+// not the database. Addresses store state/district by name.
 // ---------------------------------------------------------------------------
-
-// Cascading geo lookups for the address dropdowns (India-only to start).
-model Country {
-  id    String @id @default(cuid())
-  name  String @unique
-  code  String @unique // ISO, e.g. "IN"
-
-  states    State[]
-  addresses StudentAddress[]
-}
-
-model State {
-  id        String @id @default(cuid())
-  name      String
-  countryId String
-  country   Country @relation(fields: [countryId], references: [id])
-
-  districts District[]
-  addresses StudentAddress[]
-
-  @@unique([countryId, name])
-  @@index([countryId])
-}
-
-model District {
-  id      String @id @default(cuid())
-  name    String
-  stateId String
-  state   State @relation(fields: [stateId], references: [id])
-
-  addresses StudentAddress[]
-
-  @@unique([stateId, name])
-  @@index([stateId])
-}
 
 // Small optional-dropdown lookups (Basic/Personal Info).
 model Religion {

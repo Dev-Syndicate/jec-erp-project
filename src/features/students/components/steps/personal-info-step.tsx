@@ -17,7 +17,6 @@ import type {
   AddressKind,
   GuardianInput,
   GuardianRelation,
-  Lookups,
   PersonalInfo,
   StudentDetail,
 } from "@/features/students/types";
@@ -45,11 +44,11 @@ const ADDRESS_SLOTS: { kind: AddressKind; label: string }[] = [
 function emptyGuardian(relation: GuardianRelation): GuardianInput {
   return { relation, fullName: "", email: "", mobile: "", occupation: "", annualIncome: "", address: "" };
 }
-function emptyAddress(kind: AddressKind, countryId: string): AddressInput {
-  return { kind, countryId, stateId: "", districtId: "", pincode: "", type: "", addressLine1: "", addressLine2: "" };
+function emptyAddress(kind: AddressKind): AddressInput {
+  return { kind, state: "", district: "", pincode: "", type: "", addressLine1: "", addressLine2: "" };
 }
 
-function initialValues(student: StudentDetail | undefined, defaultCountryId: string): PersonalInfo {
+function initialValues(student: StudentDetail | undefined): PersonalInfo {
   const guardians = GUARDIAN_SLOTS.map(({ relation }) => {
     const existing = student?.guardians.find((g) => g.relation === relation);
     return existing
@@ -69,15 +68,14 @@ function initialValues(student: StudentDetail | undefined, defaultCountryId: str
     return existing
       ? {
           kind,
-          countryId: existing.countryId,
-          stateId: existing.stateId,
-          districtId: existing.districtId,
+          state: existing.state,
+          district: existing.district,
           pincode: existing.pincode,
           type: existing.type,
           addressLine1: existing.addressLine1,
           addressLine2: existing.addressLine2 ?? "",
         }
-      : emptyAddress(kind, defaultCountryId);
+      : emptyAddress(kind);
   });
   return { guardians, addresses };
 }
@@ -85,15 +83,12 @@ function initialValues(student: StudentDetail | undefined, defaultCountryId: str
 export function PersonalInfoStep({
   studentId,
   student,
-  lookups,
 }: {
   studentId: string;
   student: StudentDetail | undefined;
-  lookups: Lookups | undefined;
 }) {
-  const defaultCountryId = lookups?.countries[0]?.id ?? "";
   const save = useSavePersonalInfo(studentId);
-  const [form, setForm] = useState<PersonalInfo>(() => initialValues(student, defaultCountryId));
+  const [form, setForm] = useState<PersonalInfo>(() => initialValues(student));
   const [saved, setSaved] = useState(false);
 
   const setGuardian = (i: number, patch: Partial<GuardianInput>) => {
@@ -149,7 +144,6 @@ export function PersonalInfoStep({
           title={ADDRESS_SLOTS[i].label}
           value={a}
           onChange={(patch) => setAddress(i, patch)}
-          lookups={lookups}
         />
       ))}
 
@@ -158,45 +152,37 @@ export function PersonalInfoStep({
   );
 }
 
-// One address block with cascading country → state → district. Changing a
-// higher level clears the lower ones so a stale id can't be saved.
+// One address block with a cascading state → district picker (India-only, so no
+// country field). Options come from the JSON-backed geo route, keyed by name.
+// Changing the state clears the district so a mismatched pair can't be saved.
 function AddressFields({
   title,
   value,
   onChange,
-  lookups,
 }: {
   title: string;
   value: AddressInput;
   onChange: (patch: Partial<AddressInput>) => void;
-  lookups: Lookups | undefined;
 }) {
-  const states = useStates(value.countryId || undefined);
-  const districts = useDistricts(value.stateId || undefined);
+  const states = useStates();
+  const districts = useDistricts(value.state || undefined);
+  const toOptions = (names: string[] | undefined) => (names ?? []).map((n) => ({ id: n, name: n }));
 
   return (
     <Section title={title}>
-      <Field label="Country" optional>
-        <LookupSelect
-          value={value.countryId}
-          onChange={(v) => onChange({ countryId: v, stateId: "", districtId: "" })}
-          options={lookups?.countries ?? []}
-        />
-      </Field>
       <Field label="State" optional>
         <LookupSelect
-          value={value.stateId}
-          onChange={(v) => onChange({ stateId: v, districtId: "" })}
-          options={states.data ?? []}
-          placeholder={value.countryId ? "Select" : "Pick a country first"}
+          value={value.state}
+          onChange={(v) => onChange({ state: v, district: "" })}
+          options={toOptions(states.data)}
         />
       </Field>
       <Field label="District" optional>
         <LookupSelect
-          value={value.districtId}
-          onChange={(v) => onChange({ districtId: v })}
-          options={districts.data ?? []}
-          placeholder={value.stateId ? "Select" : "Pick a state first"}
+          value={value.district}
+          onChange={(v) => onChange({ district: v })}
+          options={toOptions(districts.data)}
+          placeholder={value.state ? "Select" : "Pick a state first"}
         />
       </Field>
       <Field label="Pincode" optional>

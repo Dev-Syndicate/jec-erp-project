@@ -12,6 +12,10 @@ import {
   Building2,
   Users,
   GraduationCap,
+  CalendarRange,
+  Layers,
+  BookOpen,
+  ClipboardList,
   ChevronsUpDown,
   ChevronRight,
   LogOut,
@@ -103,6 +107,15 @@ const NAV: NavGroup[] = [
           { title: "Bulk import", href: "/admin/students/import" },
         ],
       },
+    ],
+  },
+  {
+    label: "Academic",
+    items: [
+      { title: "Academic year", href: "/admin/academic/years", icon: CalendarRange, roles: ["Super Admin"] },
+      { title: "Classes & sections", href: "/admin/academic/classes", icon: Layers, roles: ["Super Admin", "HOD"] },
+      { title: "Subjects", href: "/admin/academic/subjects", icon: BookOpen, roles: ["Super Admin", "HOD"] },
+      { title: "Assignments", href: "/admin/academic/assignments", icon: ClipboardList, roles: ["Super Admin", "HOD"] },
     ],
   },
 ];

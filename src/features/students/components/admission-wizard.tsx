@@ -12,7 +12,7 @@ import { useSearchParams } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { useLookups, useStudent } from "@/features/students/hooks/use-students";
+import { useStudent } from "@/features/students/hooks/use-students";
 import { TempPasswordBanner } from "@/components/temp-password-banner";
 import { RegeneratePasswordButton } from "@/features/students/components/regenerate-password-button";
 import { BasicInfoStep } from "@/features/students/components/steps/basic-info-step";
@@ -32,7 +32,6 @@ type StepId = (typeof STEPS)[number]["id"];
 
 export function AdmissionWizard({ studentId }: { studentId: string }) {
   const student = useStudent(studentId);
-  const lookups = useLookups();
   const [step, setStep] = useState<StepId>("basic");
   // Temp password to reveal once: either from creation (redirect query param) or
   // from a manual regenerate (state). Either surfaces the same banner.
@@ -111,7 +110,7 @@ export function AdmissionWizard({ studentId }: { studentId: string }) {
       ) : step === "basic" ? (
         <BasicInfoStep studentId={studentId} student={student.data} />
       ) : step === "personal" ? (
-        <PersonalInfoStep studentId={studentId} student={student.data} lookups={lookups.data} />
+        <PersonalInfoStep studentId={studentId} student={student.data} />
       ) : step === "education" ? (
         <EducationStep studentId={studentId} student={student.data} />
       ) : step === "banks" ? (

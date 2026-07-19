@@ -37,21 +37,21 @@ export function useLookups() {
   return useQuery({ queryKey: ["lookups"], queryFn: getLookups, staleTime: 10 * 60_000 });
 }
 
-export function useStates(countryId: string | undefined) {
+// India states — static JSON, so cache hard. No dependency (country is India).
+export function useStates() {
   return useQuery({
-    queryKey: ["geo", "states", countryId],
-    queryFn: () => getStates(countryId!),
-    enabled: !!countryId,
-    staleTime: 10 * 60_000,
+    queryKey: ["geo", "states"],
+    queryFn: getStates,
+    staleTime: 60 * 60_000,
   });
 }
 
-export function useDistricts(stateId: string | undefined) {
+export function useDistricts(state: string | undefined) {
   return useQuery({
-    queryKey: ["geo", "districts", stateId],
-    queryFn: () => getDistricts(stateId!),
-    enabled: !!stateId,
-    staleTime: 10 * 60_000,
+    queryKey: ["geo", "districts", state],
+    queryFn: () => getDistricts(state!),
+    enabled: !!state,
+    staleTime: 60 * 60_000,
   });
 }
 

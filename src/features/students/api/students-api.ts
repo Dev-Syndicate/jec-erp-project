@@ -10,7 +10,6 @@ import type {
   DocumentType,
   EducationInput,
   Lookups,
-  LookupOption,
   PersonalInfo,
   StudentDetail,
   StudentListItem,
@@ -29,16 +28,15 @@ export function getLookups(): Promise<Lookups> {
   return apiFetch<Lookups>("/api/lookups");
 }
 
-export async function getStates(countryId: string): Promise<LookupOption[]> {
-  const { states } = await apiFetch<{ states: LookupOption[] }>(
-    `/api/lookups/geo?countryId=${countryId}`,
-  );
+// Geo comes from the JSON-backed route as plain name lists (India-only).
+export async function getStates(): Promise<string[]> {
+  const { states } = await apiFetch<{ states: string[] }>("/api/lookups/geo");
   return states;
 }
 
-export async function getDistricts(stateId: string): Promise<LookupOption[]> {
-  const { districts } = await apiFetch<{ districts: LookupOption[] }>(
-    `/api/lookups/geo?stateId=${stateId}`,
+export async function getDistricts(state: string): Promise<string[]> {
+  const { districts } = await apiFetch<{ districts: string[] }>(
+    `/api/lookups/geo?state=${encodeURIComponent(state)}`,
   );
   return districts;
 }
@@ -85,12 +83,11 @@ export function savePersonalInfo(
       address: g.address || null,
     }));
   const addresses = values.addresses
-    .filter((a) => a.addressLine1.trim() || a.pincode.trim() || a.districtId)
+    .filter((a) => a.addressLine1.trim() || a.pincode.trim() || a.district)
     .map((a) => ({
       kind: a.kind,
-      countryId: a.countryId,
-      stateId: a.stateId,
-      districtId: a.districtId,
+      state: a.state,
+      district: a.district,
       pincode: a.pincode,
       type: a.type,
       addressLine1: a.addressLine1,

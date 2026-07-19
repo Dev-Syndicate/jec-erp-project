@@ -152,44 +152,9 @@ async function seedLookups() {
   console.log(`  Lookups: ${RELIGIONS.length} religions, ${CATEGORIES.length} categories.`);
 }
 
-// --- India geo (Country → State → District) --------------------------------
-// Reads the bundled dataset (prisma/data/india-states-districts.json) so the
-// seed has no runtime API dependency. Idempotent.
-
-async function seedIndiaGeo() {
-  const { readFileSync } = await import("node:fs");
-  const { fileURLToPath } = await import("node:url");
-  const path = await import("node:path");
-  const here = path.dirname(fileURLToPath(import.meta.url));
-  const raw = readFileSync(path.join(here, "data", "india-states-districts.json"), "utf8");
-  const data = JSON.parse(raw) as { states: Array<{ state: string; districts: string[] }> };
-
-  const india = await db.country.upsert({
-    where: { code: "IN" },
-    update: {},
-    create: { name: "India", code: "IN" },
-  });
-
-  let stateCount = 0;
-  let districtCount = 0;
-  for (const s of data.states) {
-    const state = await db.state.upsert({
-      where: { countryId_name: { countryId: india.id, name: s.state } },
-      update: {},
-      create: { name: s.state, countryId: india.id },
-    });
-    stateCount++;
-    for (const d of s.districts) {
-      await db.district.upsert({
-        where: { stateId_name: { stateId: state.id, name: d } },
-        update: {},
-        create: { name: d, stateId: state.id },
-      });
-      districtCount++;
-    }
-  }
-  console.log(`  India geo: ${stateCount} states, ${districtCount} districts.`);
-}
+// Note: India geo (states/districts) is NOT seeded — it's static reference data
+// served from src/data/india-states-districts.json (see src/lib/india-geo.ts),
+// not the database.
 
 async function main() {
   console.log("Seeding RBAC baseline…");
@@ -198,8 +163,6 @@ async function main() {
   await seedSuperAdmin(superAdminRole.id);
   console.log("Seeding admission lookups…");
   await seedLookups();
-  console.log("Seeding India geo (states & districts)…");
-  await seedIndiaGeo();
   console.log("Seed complete.");
 }
 

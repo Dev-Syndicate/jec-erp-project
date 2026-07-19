@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { DepartmentSelect } from "@/features/roles/components/department-select";
+import { DepartmentSelect } from "@/components/department-select";
 import { ProvisionResult } from "@/features/roles/components/provision-result";
 import { useProvisionStudent } from "@/features/roles/hooks/use-provisioning";
 import type { DepartmentOption, Gender, ProvisionedUser } from "@/features/roles/types";

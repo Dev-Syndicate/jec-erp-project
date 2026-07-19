@@ -1,9 +1,10 @@
-// A department picker that shows the department NAME, not its id.
+// A department picker that shows the department NAME, not its id. Shared across
+// features (provisioning, import, academic setup), so it lives in components/.
 //
 // Base UI's Select renders the raw `value` (here a cuid) in the trigger unless
 // you give Select.Value a render function mapping value → label. Radix shows the
 // selected item's text automatically; Base UI does not — this component
-// encapsulates that difference so provisioning forms don't each re-trip on it.
+// encapsulates that difference so forms don't each re-trip on it.
 "use client";
 
 import {
@@ -13,7 +14,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { DepartmentOption } from "@/features/roles/types";
+
+// Minimal shape — anything with an id + display name works.
+export type DepartmentPickOption = { id: string; name: string };
 
 export function DepartmentSelect({
   id,
@@ -24,7 +27,7 @@ export function DepartmentSelect({
   id: string;
   value: string;
   onChange: (id: string) => void;
-  departments: DepartmentOption[];
+  departments: DepartmentPickOption[];
 }) {
   const label = (deptId: unknown) => {
     const d = departments.find((x) => x.id === deptId);

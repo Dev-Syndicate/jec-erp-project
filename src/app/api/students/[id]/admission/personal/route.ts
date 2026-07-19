@@ -24,9 +24,8 @@ type GuardianIn = {
 
 type AddressIn = {
   kind: "PRESENT" | "PERMANENT";
-  countryId?: string;
-  stateId?: string;
-  districtId?: string;
+  state?: string;
+  district?: string;
   pincode?: string;
   type?: string;
   addressLine1?: string;
@@ -64,9 +63,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
       }
     }
     for (const a of addresses) {
-      if (!a.countryId || !a.stateId || !a.districtId || !a.addressLine1?.trim() || !a.pincode?.trim() || !a.type?.trim()) {
+      if (!a.state?.trim() || !a.district?.trim() || !a.addressLine1?.trim() || !a.pincode?.trim() || !a.type?.trim()) {
         return Response.json(
-          { error: `${a.kind.toLowerCase()} address is incomplete — fill country, state, district, line 1, pincode and type.` },
+          { error: `${a.kind.toLowerCase()} address is incomplete — fill state, district, line 1, pincode and type.` },
           { status: 400 },
         );
       }
@@ -109,9 +108,8 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
 
       for (const a of addresses) {
         const data = {
-          countryId: a.countryId!,
-          stateId: a.stateId!,
-          districtId: a.districtId!,
+          state: a.state!.trim(),
+          district: a.district!.trim(),
           pincode: a.pincode!.trim(),
           type: a.type!.trim(),
           addressLine1: a.addressLine1!.trim(),

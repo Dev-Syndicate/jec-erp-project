@@ -16,7 +16,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { DepartmentSelect } from "@/features/roles/components/department-select";
+import { DepartmentSelect } from "@/components/department-select";
 import type { DepartmentOption } from "@/features/roles/types";
 import {
   downloadImportResults,

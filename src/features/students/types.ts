@@ -43,7 +43,6 @@ export type Lookups = {
   religions: LookupOption[];
   categories: LookupOption[];
   castes: LookupOption[];
-  countries: Array<LookupOption & { code: string }>;
 };
 
 // The Basic Info step's editable values (StudentProfile + a couple anchor fields).
@@ -99,9 +98,9 @@ export type StudentDetail = {
 export type AddressRow = {
   id: string;
   kind: AddressKind;
-  countryId: string;
-  stateId: string;
-  districtId: string;
+  country: string;
+  state: string;
+  district: string;
   pincode: string;
   type: string;
   addressLine1: string;
@@ -130,12 +129,12 @@ export type GuardianInput = {
   address: string;
 };
 
-// What the form edits for one address slot.
+// What the form edits for one address slot. (Country is implicit India; state
+// and district are picked by name from the JSON geo lists.)
 export type AddressInput = {
   kind: AddressKind;
-  countryId: string;
-  stateId: string;
-  districtId: string;
+  state: string;
+  district: string;
   pincode: string;
   type: string;
   addressLine1: string;

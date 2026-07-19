@@ -10,6 +10,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   Building2,
+  CalendarDays,
   ChevronsUpDown,
   ChevronRight,
   LogOut,
@@ -95,6 +96,17 @@ const NAV: NavGroup[] = [
           { title: "Programs", href: "/structure/programs" },
           { title: "Classes", href: "/structure/classes" },
         ],
+      },
+    ],
+  },
+  {
+    label: "Academic",
+    items: [
+      {
+        title: "Years & semesters",
+        href: "/academic",
+        icon: CalendarDays,
+        roles: ["Super Admin"],
       },
     ],
   },

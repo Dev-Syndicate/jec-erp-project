@@ -9,6 +9,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
+  Building2,
   ChevronsUpDown,
   ChevronRight,
   LogOut,
@@ -77,6 +78,25 @@ const NAV: NavGroup[] = [
   {
     label: "Today",
     items: [{ title: "Overview", href: "/dashboard", icon: LayoutDashboard }],
+  },
+  {
+    label: "Structure",
+    items: [
+      {
+        title: "Structure setup",
+        href: "/structure/degrees",
+        icon: Building2,
+        roles: ["Super Admin"],
+        // The dependency chain: a Program pairs a Degree × Branch; a Class sits
+        // within a Program.
+        children: [
+          { title: "Degrees", href: "/structure/degrees" },
+          { title: "Branches", href: "/structure/branches" },
+          { title: "Programs", href: "/structure/programs" },
+          { title: "Classes", href: "/structure/classes" },
+        ],
+      },
+    ],
   },
 ];
 

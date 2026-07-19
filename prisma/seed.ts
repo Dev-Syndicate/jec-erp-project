@@ -57,7 +57,7 @@ const PERMISSIONS: Array<{ action: string; subject: string }> = [
 // The four baseline roles. isSystem=true means the UI can't delete them.
 // Permission composition beyond Super Admin is intentionally left to the admin
 // console (RBAC is configurable) — we only guarantee Super Admin can bootstrap.
-const SYSTEM_ROLES = ["Super Admin", "HOD", "Teacher", "Student"] as const;
+const SYSTEM_ROLES = ["Super Admin", "HOD", "Faculty", "Student"] as const;
 
 async function seedRbac() {
   for (const p of PERMISSIONS) {
@@ -119,7 +119,7 @@ async function seedSuperAdmin(superAdminRoleId: string) {
       email,
       displayName,
       mustChangePassword: true,
-      // Super Admin has NO department (no department filter).
+      // Super Admin has NO program (spans every program).
     },
   });
 
@@ -132,37 +132,15 @@ async function seedSuperAdmin(superAdminRoleId: string) {
   console.log(`  Linked Neon User ${user.id} and granted Super Admin role.`);
 }
 
-// --- Admission lookups -----------------------------------------------------
-
-// Small optional dropdowns (Basic/Personal Info). Idempotent upserts.
-const RELIGIONS = ["Hindu", "Muslim", "Christian", "Sikh", "Buddhist", "Jain", "Parsi", "Other"];
-const CATEGORIES = ["General", "OBC", "BC", "MBC", "SC", "ST", "EWS", "Other"];
-const CASTES: string[] = []; // caste list is institution-specific; left empty to fill later
-
-async function seedLookups() {
-  for (const name of RELIGIONS) {
-    await db.religion.upsert({ where: { name }, update: {}, create: { name } });
-  }
-  for (const name of CATEGORIES) {
-    await db.category.upsert({ where: { name }, update: {}, create: { name } });
-  }
-  for (const name of CASTES) {
-    await db.caste.upsert({ where: { name }, update: {}, create: { name } });
-  }
-  console.log(`  Lookups: ${RELIGIONS.length} religions, ${CATEGORIES.length} categories.`);
-}
-
-// Note: India geo (states/districts) is NOT seeded — it's static reference data
-// served from src/data/india-states-districts.json (see src/lib/india-geo.ts),
-// not the database.
+// Note: admission lookups (religion/category/caste) and India geo are NOT seeded
+// here — they belong to the student-records slice, deferred with the admission
+// detail tables. Geo is served from src/data/india-states-districts.json.
 
 async function main() {
   console.log("Seeding RBAC baseline…");
   const { superAdminRole } = await seedRbac();
   console.log("Bootstrapping Super Admin…");
   await seedSuperAdmin(superAdminRole.id);
-  console.log("Seeding admission lookups…");
-  await seedLookups();
   console.log("Seed complete.");
 }
 

@@ -63,7 +63,7 @@ async function resolveUser(uid: string): Promise<CachedUser | null> {
 
 /**
  * Drop a user from the auth cache so their next request re-reads Neon. Call
- * after a mutation that must take effect immediately (role change, department
+ * after a mutation that must take effect immediately (role change, program
  * move, deactivation) instead of waiting out the TTL.
  */
 export function invalidateAuthUser(uid: string): void {
@@ -98,7 +98,7 @@ export async function authenticate(req: Request) {
   const user = await resolveUser(uid);
 
   if (!user) throw new AuthError(403, "No account is provisioned for this identity.");
-  if (!user.isActive) throw new AuthError(403, "This account is inactive.");
+  if (user.status !== "ACTIVE") throw new AuthError(403, "This account is inactive.");
 
   return {
     user,
@@ -112,8 +112,8 @@ export async function authenticate(req: Request) {
 // Coarse role checks — a STOPGAP until the CASL ability factory (src/lib/rbac)
 // lands. CASL will replace these with permission+subject checks driven by the
 // DB role→permission mapping. Until then, routes gate on role name + the same
-// dept-scoping rule CASL will enforce. Keep the surface small so the swap is
-// mechanical: routes call requireRole()/assertDeptScope(), not raw role strings.
+// program-scoping rule CASL will enforce. Keep the surface small so the swap is
+// mechanical: routes call requireRole()/assertProgramScope(), not raw role strings.
 // ---------------------------------------------------------------------------
 
 export function hasRole(ctx: AuthContext, role: string): boolean {
@@ -128,14 +128,14 @@ export function requireRole(ctx: AuthContext, ...roles: string[]): void {
 }
 
 /**
- * Enforce department scoping the way CASL will: Super Admin is unscoped (any
- * department), everyone else may only act within their own department. Throws
- * 403 on a cross-department action by a non-Super-Admin.
+ * Enforce program scoping the way CASL will: Super Admin is unscoped (any
+ * program), everyone else may only act within their own program. Throws 403 on a
+ * cross-program action by a non-Super-Admin.
  */
-export function assertDeptScope(ctx: AuthContext, targetDepartmentId: string | null): void {
-  if (ctx.roles.includes("Super Admin")) return; // no department filter
-  if (!ctx.user.departmentId || ctx.user.departmentId !== targetDepartmentId) {
-    throw new AuthError(403, "That's outside your department.");
+export function assertProgramScope(ctx: AuthContext, targetProgramId: string | null): void {
+  if (ctx.roles.includes("Super Admin")) return; // no program filter
+  if (!ctx.user.programId || ctx.user.programId !== targetProgramId) {
+    throw new AuthError(403, "That's outside your program.");
   }
 }
 

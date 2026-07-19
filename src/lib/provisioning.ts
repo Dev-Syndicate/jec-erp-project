@@ -29,7 +29,7 @@ export function generateTempPassword(length = 14): string {
 export type StudentAnchor = {
   email: string;
   displayName: string;
-  departmentId: string;
+  programId: string;
   roleId: string; // the seeded "Student" Role id
   registerNumber: string; // login handle — required
   rollNumber?: string | null; // college-given — optional
@@ -66,7 +66,7 @@ export async function provisionStudentAccount(anchor: StudentAnchor): Promise<Pr
           firebaseUid,
           email: anchor.email,
           displayName: anchor.displayName,
-          departmentId: anchor.departmentId,
+          programId: anchor.programId,
           mustChangePassword: true,
           roles: { create: { roleId: anchor.roleId } },
           student: {

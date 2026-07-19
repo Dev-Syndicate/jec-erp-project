@@ -5,7 +5,7 @@ export type AuthUser = {
   id: string;
   email: string;
   displayName: string;
-  departmentId: string | null;
+  programId: string | null;
   roles: string[];
   mustChangePassword: boolean;
 };

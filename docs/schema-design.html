@@ -18,6 +18,7 @@
     --g-time:   #a8710f;  --g-time-soft:   #f7f0e2;
     --g-place:  #8451c7;  --g-place-soft:  #f1eafa;
     --g-rec:    #c0435f;  --g-rec-soft:    #fbe9ee;
+    --g-auth:   #556472;  --g-auth-soft:   #eceff2;
   }
   * { box-sizing: border-box; }
   body {
@@ -132,6 +133,8 @@
   .rail-time   { --rail: var(--g-time); }   .bg-time   { background: var(--g-time-soft);   color: var(--g-time); }
   .rail-place  { --rail: var(--g-place); }   .bg-place  { background: var(--g-place-soft);  color: var(--g-place); }
   .rail-rec    { --rail: var(--g-rec); }     .bg-rec    { background: var(--g-rec-soft);    color: var(--g-rec); }
+  .rail-auth   { --rail: var(--g-auth); }    .bg-auth   { background: var(--g-auth-soft);   color: var(--g-auth); }
+  .c-auth .dot { background: var(--g-auth); }
 
   /* ---- workflow flows ---- */
   .flows { display: grid; gap: 14px; }
@@ -144,6 +147,16 @@
   .steps { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; overflow-x: auto; }
   .step { background:#fff; border:1px solid var(--line-strong); border-radius: 8px; padding: 6px 10px; font-size: 0.84rem; white-space: nowrap; }
   .step b { font-family: ui-monospace, monospace; font-weight: 600; }
+
+  /* ---- scope table ---- */
+  .scope { margin-top: 16px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: var(--panel); }
+  .scope-row { display: grid; grid-template-columns: 150px 1fr; gap: 16px; padding: 12px 18px; border-top: 1px solid var(--line); font-size: 0.9rem; }
+  .scope-row:first-child { border-top: none; }
+  .scope-head { background: var(--g-auth-soft); font-family: ui-monospace, monospace; font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--g-auth); font-weight: 600; }
+  .scope-row .rl { color: var(--ink); }
+  .scope-row span:last-child { color: var(--muted); }
+  .scope-row .rl b { color: var(--g-auth); }
+  @media (max-width: 560px) { .scope-row { grid-template-columns: 1fr; gap: 4px; } }
 
   /* ---- derive box ---- */
   .derive {
@@ -167,7 +180,7 @@
   <h1>The backbone, designed around the four daily jobs</h1>
   <p class="lede">
     Everything below exists to serve what the college actually does every day. We lock this shape
-    <em>before</em> writing model code — so the foundation stops shifting.
+    <em>before</em> writing model code — so the foundation is solid from day one.
   </p>
 
   <div class="jobs">
@@ -175,13 +188,14 @@
     <span class="job"><span class="n">2</span> Student records</span>
     <span class="job"><span class="n">3</span> Faculty records</span>
     <span class="job"><span class="n">4</span> Internal marks <small>· per semester</small></span>
+    <span class="job" style="border-style:dashed"><span class="n" style="background:var(--g-auth)">+</span> Configurable RBAC <small>· with Super Admin</small></span>
   </div>
 
   <div class="callout">
     <h3>The one idea that shapes everything</h3>
     <p>
       Attendance and marks are <b>per semester</b> (Odd / Even within a year). So the <b>Semester</b> is
-      the hub — every time-bound record points at it. And a student's year+section is a <b>yearly
+      the hub — every time-bound record points at it. And which <b>class</b> a student sits in is a <b>yearly
       sticker</b> (an Enrollment), not a fixed field — which is what makes <b>promotion</b> and history work.
     </p>
   </div>
@@ -202,7 +216,7 @@
             <span class="arrow">→</span>
             <span class="node"><span class="dot"></span>Program</span>
             <span class="arrow">→</span>
-            <span class="node"><span class="dot"></span>Section <em style="font-weight:500;color:var(--muted)">(has a year)</em></span>
+            <span class="node"><span class="dot"></span>Class <em style="font-weight:500;color:var(--muted)">(year + letter)</em></span>
           </div>
         </div>
 
@@ -216,6 +230,18 @@
             <span class="node"><span class="dot"></span>Faculty</span>
             <span class="arrow">→<span class="lbl">belongs to</span></span>
             <span class="node c-struct"><span class="dot"></span>Program</span>
+          </div>
+        </div>
+
+        <div class="lane">
+          <span class="lane-label">Access</span>
+          <div class="flow c-auth">
+            <span class="node"><span class="dot"></span>User</span>
+            <span class="arrow">→</span>
+            <span class="node"><span class="dot"></span>Role <em style="font-weight:500;color:var(--muted)">(configurable)</em></span>
+            <span class="arrow">→</span>
+            <span class="node"><span class="dot"></span>Permission</span>
+            <span class="node soft">Super Admin · HOD · Faculty · Student</span>
           </div>
         </div>
 
@@ -235,25 +261,29 @@
             <span class="arrow">→</span>
             <span class="node"><span class="dot"></span>Enrollment <em style="font-weight:500;color:var(--muted)">(per year)</em></span>
             <span class="arrow">→</span>
-            <span class="node c-struct"><span class="dot"></span>Section</span>
+            <span class="node c-struct"><span class="dot"></span>Class</span>
           </div>
         </div>
 
         <div class="lane">
           <span class="lane-label">Curriculum</span>
           <div class="flow c-struct">
-            <span class="node"><span class="dot"></span>Subject <em style="font-weight:500;color:var(--muted)">(sem 1–8)</em></span>
+            <span class="node"><span class="dot"></span>Subject <em style="font-weight:500;color:var(--muted)">(per semester)</em></span>
             <span class="arrow">→</span>
-            <span class="node c-people"><span class="dot"></span>Teacher Assignment</span>
-            <span class="arrow">→<span class="lbl">authorises</span></span>
-            <span class="node c-rec"><span class="dot"></span>marking</span>
+            <span class="node c-people"><span class="dot"></span>Faculty Assignment</span>
+            <span class="arrow">→<span class="lbl">scheduled as</span></span>
+            <span class="node"><span class="dot"></span>Timetable Slot</span>
+            <span class="arrow">→<span class="lbl">drives</span></span>
+            <span class="node c-rec"><span class="dot"></span>attendance</span>
           </div>
         </div>
 
         <div class="lane">
           <span class="lane-label">Records</span>
           <div class="flow c-rec">
-            <span class="node"><span class="dot"></span>Attendance</span>
+            <span class="node"><span class="dot"></span>Master Att.</span>
+            <span class="plus">+</span>
+            <span class="node"><span class="dot"></span>Period Att.</span>
             <span class="node"><span class="dot"></span>Internal Mark</span>
             <span class="arrow">→<span class="lbl">scoped to</span></span>
             <span class="node c-time"><span class="dot"></span>Semester</span>
@@ -267,7 +297,7 @@
   <!-- ============ STRUCTURE ============ -->
   <div class="sec">
     <h2>Structure <span class="k">set up once by the admin</span></h2>
-    <p class="sub">The word “department” is gone. A <b>Program</b> is a Degree × Branch pairing — the unit everyone belongs to.</p>
+    <p class="sub">A <b>Program</b> is a Degree × Branch pairing (e.g. B.E × CSE) — the unit everyone belongs to.</p>
     <div class="cards">
 
       <div class="card rail-struct">
@@ -291,7 +321,7 @@
 
       <div class="card rail-struct">
         <header><h4>Program</h4><span class="chip bg-struct">= Degree × Branch</span></header>
-        <p class="note">Replaces “department”. <span class="mono">programId</span> is the scoping key (HOD sees their program only).</p>
+        <p class="note"><span class="mono">programId</span> is the scoping key — an HOD sees only their own program.</p>
         <table class="fields">
           <tr><td class="fk">degreeId</td><td><span class="ty">→ Degree</span></td></tr>
           <tr><td class="fk">branchId</td><td><span class="ty">→ Branch</span></td></tr>
@@ -300,13 +330,14 @@
       </div>
 
       <div class="card rail-struct">
-        <header><h4>Section</h4><span class="chip bg-struct">program + year</span></header>
-        <p class="note">A “class” is just all sections sharing a program + year — no separate table.</p>
+        <header><h4>Class</h4><span class="chip bg-struct">program + year</span></header>
+        <p class="note">One class group like II·A — it carries its own year and letter. Students enroll into a class; attendance and marks target it.</p>
         <table class="fields">
           <tr><td class="fk">programId</td><td><span class="ty">→ Program</span></td></tr>
           <tr><td>year</td><td><span class="ty">int</span> · <em>1…duration (I–IV)</em></td></tr>
-          <tr><td>name</td><td><span class="ty">string</span> · <em>“A”…“H”</em></td></tr>
-          <tr><td>isActive</td><td><span class="ty">bool</span> · <em>unique(program, year, name)</em></td></tr>
+          <tr><td>section</td><td><span class="ty">string</span> · <em>“A”…“H”</em></td></tr>
+          <tr><td class="fk">advisorId</td><td><span class="ty">→ User?</span> · <em>class in-charge / mentor</em></td></tr>
+          <tr><td>isActive</td><td><span class="ty">bool</span> · <em>unique(program, year, section)</em></td></tr>
         </table>
       </div>
 
@@ -327,20 +358,22 @@
           <tr><td>email</td><td><span class="ty">string</span></td></tr>
           <tr><td>displayName</td><td><span class="ty">string</span></td></tr>
           <tr><td class="fk">programId</td><td><span class="ty">→ Program?</span></td></tr>
-          <tr><td>roles</td><td><span class="ty">→ Role[]</span> · <em>Super Admin / HOD / Teacher / Student</em></td></tr>
+          <tr><td>roles</td><td><span class="ty">→ Role[]</span> · <em>Super Admin / HOD / Faculty / Student</em></td></tr>
+          <tr><td>status</td><td><span class="ty">enum</span> · <em>ACTIVE / INACTIVE — deactivate on resign</em></td></tr>
           <tr><td>mustChangePassword</td><td><span class="ty">bool</span></td></tr>
         </table>
       </div>
 
       <div class="card rail-people">
         <header><h4>Student</h4><span class="chip bg-people">job 2</span></header>
-        <p class="note">Login = register number. Degree+Branch come from the account’s Program; year+section from Enrollment.</p>
+        <p class="note">Login = register number. Degree+Branch come from the account’s Program; the class (year + letter) from Enrollment.</p>
         <table class="fields">
           <tr><td>registerNumber</td><td><span class="ty">string</span> <span class="req">*</span> · <em>login handle, unique</em></td></tr>
           <tr><td>rollNumber</td><td><span class="ty">string?</span> · <em>optional, unique</em></td></tr>
           <tr><td>dateOfBirth</td><td><span class="ty">date</span></td></tr>
           <tr><td>phone</td><td><span class="ty">string</span></td></tr>
           <tr><td>gender</td><td><span class="ty">enum?</span></td></tr>
+          <tr><td>status</td><td><span class="ty">enum</span> · <em>ACTIVE / GRADUATED / DROPPED / TRANSFERRED</em></td></tr>
           <tr><td class="fk">userId</td><td><span class="ty">→ User</span></td></tr>
           <tr><td>+ admission</td><td><em>profile · guardians · address · education · banks · documents</em></td></tr>
         </table>
@@ -358,6 +391,77 @@
         </table>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ============ ACCESS & ROLES (RBAC) ============ -->
+  <div class="sec">
+    <h2>Access &amp; roles <span class="k">configurable RBAC</span></h2>
+    <p class="sub">
+      Roles and permissions are <b>data, not hard-coded</b> — the admin composes custom roles in a UI.
+      Four are seeded (Super Admin · HOD · Faculty · Student); <b>Super Admin is bootstrapped once</b>
+      (no higher role exists to create it). A role is <b>assigned to</b> a person and revocable — so HOD
+      rotation never means a new account.
+    </p>
+    <div class="cards">
+
+      <div class="card rail-auth">
+        <header><h4>Role</h4><span class="chip bg-auth">configurable</span></header>
+        <p class="note">System roles (seeded) can't be deleted; admins add their own (e.g. “ERP Coordinator”).</p>
+        <table class="fields">
+          <tr><td>name</td><td><span class="ty">string</span> · <em>“HOD”, “ERP Coordinator”…</em></td></tr>
+          <tr><td>description</td><td><span class="ty">string?</span></td></tr>
+          <tr><td>scope</td><td><span class="ty">enum</span> · <em>PROGRAM / INSTITUTION — where it acts</em></td></tr>
+          <tr><td>isSystem</td><td><span class="ty">bool</span> · <em>seeded four = true</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-auth">
+        <header><h4>Permission</h4><span class="chip bg-auth">CASL-shaped</span></header>
+        <p class="note">action + subject — e.g. <span class="mono">manage · all</span>, <span class="mono">mark · Attendance</span>.</p>
+        <table class="fields">
+          <tr><td>action</td><td><span class="ty">string</span> · <em>manage / mark / read…</em></td></tr>
+          <tr><td>subject</td><td><span class="ty">string</span> · <em>all / Attendance / Student…</em></td></tr>
+          <tr><td></td><td><em>unique(action, subject)</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-auth">
+        <header><h4>UserRole</h4><span class="chip bg-auth">assignment</span></header>
+        <p class="note">Grant/revoke a role to a person. HOD rotation = delete one row, create another — account unchanged.</p>
+        <table class="fields">
+          <tr><td class="fk">userId</td><td><span class="ty">→ User</span></td></tr>
+          <tr><td class="fk">roleId</td><td><span class="ty">→ Role</span> · <em>id(user, role)</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-auth">
+        <header><h4>RolePermission</h4><span class="chip bg-auth">composition</span></header>
+        <p class="note">Which permissions a role carries. CASL abilities are built in code from this mapping.</p>
+        <table class="fields">
+          <tr><td class="fk">roleId</td><td><span class="ty">→ Role</span></td></tr>
+          <tr><td class="fk">permissionId</td><td><span class="ty">→ Permission</span> · <em>id(role, perm)</em></td></tr>
+        </table>
+      </div>
+
+    </div>
+
+    <div class="scope">
+      <div class="scope-row scope-head"><span>Role</span><span>What they can reach</span></div>
+      <div class="scope-row"><span class="rl"><b>Super Admin</b></span><span>Everything, every Program. Sole authority over degrees/branches, programs, roles &amp; permissions. Seeded once.</span></div>
+      <div class="scope-row"><span class="rl"><b>HOD</b></span><span>Their <b>own Program only</b> — students, faculty, classes, subjects, assignments, attendance. No other program; can't manage roles.</span></div>
+      <div class="scope-row"><span class="rl"><b>Faculty</b></span><span>Mark attendance / enter marks <b>only for classes in their assignment</b>.</span></div>
+      <div class="scope-row"><span class="rl"><b>Student</b></span><span>Read-only, <b>their own records</b> (attendance, marks).</span></div>
+    </div>
+
+    <div class="callout" style="margin-top:16px">
+      <h3>Custom role example — “ERP Coordinator”</h3>
+      <p>
+        Super Admin composes it as <b>HOD-like, but with some blocked</b>: grant
+        <b>Student · Attendance · Marks · Reports</b>, leave <b>Faculty · Subject · Assignment</b>
+        unchecked. “Blocked” = simply not granted (a clean allow-list — no explicit deny). Scope =
+        <b>PROGRAM</b>, so a coordinator only ever sees their own program's data, just like an HOD.
+      </p>
     </div>
   </div>
 
@@ -392,7 +496,7 @@
         <p class="note">Where a student sits <em>this year</em>. Promotion = a new row next year; old rows stay as history.</p>
         <table class="fields">
           <tr><td class="fk">studentId</td><td><span class="ty">→ Student</span></td></tr>
-          <tr><td class="fk">sectionId</td><td><span class="ty">→ Section</span> · <em>year comes from here</em></td></tr>
+          <tr><td class="fk">classId</td><td><span class="ty">→ Class</span> · <em>year comes from here</em></td></tr>
           <tr><td class="fk">academicYearId</td><td><span class="ty">→ AcademicYear</span> · <em>unique(student, year)</em></td></tr>
         </table>
       </div>
@@ -408,37 +512,64 @@
 
       <div class="card rail-struct">
         <header><h4>Subject</h4><span class="chip bg-struct">catalog</span></header>
-        <p class="note">Per program, tagged by curriculum semester (1–8). Reused every batch; deactivate on syllabus change.</p>
+        <p class="note">Per program, tagged by curriculum semester. The range depends on the degree — B.E (4 yrs) → 1–8, M.E (2 yrs) → 1–4. Reused every batch; deactivate on syllabus change.</p>
         <table class="fields">
           <tr><td class="fk">programId</td><td><span class="ty">→ Program</span></td></tr>
           <tr><td>name / code</td><td><span class="ty">string</span> · <em>“Data Structures / CS201”</em></td></tr>
-          <tr><td>semesterNumber</td><td><span class="ty">int</span> · <em>1…8</em></td></tr>
+          <tr><td>semesterNumber</td><td><span class="ty">int</span> · <em>1…(2 × degree years)</em></td></tr>
           <tr><td>isActive</td><td><span class="ty">bool</span></td></tr>
         </table>
       </div>
 
       <div class="card rail-people">
-        <header><h4>TeacherAssignment</h4><span class="chip bg-people">gate</span></header>
-        <p class="note">Who teaches what, to which section, this semester. Attendance permission derives from this.</p>
+        <header><h4>FacultyAssignment</h4><span class="chip bg-people">gate</span></header>
+        <p class="note">Who teaches what, to which class, this semester. Attendance permission derives from this.</p>
         <table class="fields">
-          <tr><td class="fk">teacherId</td><td><span class="ty">→ User</span></td></tr>
+          <tr><td class="fk">facultyId</td><td><span class="ty">→ User</span></td></tr>
           <tr><td class="fk">subjectId</td><td><span class="ty">→ Subject</span></td></tr>
-          <tr><td class="fk">sectionId</td><td><span class="ty">→ Section</span></td></tr>
+          <tr><td class="fk">classId</td><td><span class="ty">→ Class</span></td></tr>
           <tr><td class="fk">semesterId</td><td><span class="ty">→ Semester</span> · <em>unique(all four)</em></td></tr>
         </table>
       </div>
 
+      <div class="card rail-struct">
+        <header><h4>TimetableSlot</h4><span class="chip bg-struct">weekly grid</span></header>
+        <p class="note">The weekly schedule — what subject/faculty sits in each (day, period) for a class. <b>Mon–Fri only</b>; a working Saturday borrows a weekday’s grid. Drives the attendance screen.</p>
+        <table class="fields">
+          <tr><td class="fk">classId</td><td><span class="ty">→ Class</span></td></tr>
+          <tr><td class="fk">semesterId</td><td><span class="ty">→ Semester</span></td></tr>
+          <tr><td>dayOfWeek</td><td><span class="ty">enum</span> · <em>MON…FRI</em></td></tr>
+          <tr><td>period</td><td><span class="ty">int</span> · <em>1…8</em></td></tr>
+          <tr><td class="fk">subjectId</td><td><span class="ty">→ Subject</span></td></tr>
+          <tr><td class="fk">facultyId</td><td><span class="ty">→ User</span> · <em>unique(class, sem, day, period)</em></td></tr>
+        </table>
+      </div>
+
       <div class="card rail-rec">
-        <header><h4>Attendance</h4><span class="chip bg-rec">job 1</span></header>
-        <p class="note">One row per student, per subject, per day. Semester-scoped for reports.</p>
+        <header><h4>MasterAttendance</h4><span class="chip bg-rec">job 1 · the main one</span></header>
+        <p class="note">The <b>official day attendance</b> — one row per student per day, drives overall attendance %. <b>Set from period 1</b>: present in the first period → present for the day.</p>
         <table class="fields">
           <tr><td class="fk">studentId</td><td><span class="ty">→ Student</span></td></tr>
-          <tr><td class="fk">subjectId</td><td><span class="ty">→ Subject</span></td></tr>
-          <tr><td class="fk">sectionId</td><td><span class="ty">→ Section</span></td></tr>
+          <tr><td class="fk">classId</td><td><span class="ty">→ Class</span></td></tr>
           <tr><td class="fk">semesterId</td><td><span class="ty">→ Semester</span></td></tr>
           <tr><td>date</td><td><span class="ty">date</span></td></tr>
           <tr><td>status</td><td><span class="ty">enum</span> · <em>PRESENT / ABSENT / OD / EXCUSED</em></td></tr>
-          <tr><td class="fk">markedById</td><td><span class="ty">→ User</span> · <em>unique(student, subject, date)</em></td></tr>
+          <tr><td class="fk">markedById</td><td><span class="ty">→ User</span> · <em>unique(student, date)</em></td></tr>
+        </table>
+      </div>
+
+      <div class="card rail-rec">
+        <header><h4>PeriodAttendance</h4><span class="chip bg-rec">job 1 · hour-wise</span></header>
+        <p class="note">Subject-wise, hour-by-hour — one row per student per period. Feeds subject attendance %; <b>period 1 also sets MasterAttendance</b>.</p>
+        <table class="fields">
+          <tr><td class="fk">studentId</td><td><span class="ty">→ Student</span></td></tr>
+          <tr><td class="fk">subjectId</td><td><span class="ty">→ Subject</span></td></tr>
+          <tr><td class="fk">classId</td><td><span class="ty">→ Class</span></td></tr>
+          <tr><td class="fk">semesterId</td><td><span class="ty">→ Semester</span></td></tr>
+          <tr><td>date</td><td><span class="ty">date</span></td></tr>
+          <tr><td>period</td><td><span class="ty">int</span> · <em>1…8</em></td></tr>
+          <tr><td>status</td><td><span class="ty">enum</span> · <em>PRESENT / ABSENT / OD / EXCUSED</em></td></tr>
+          <tr><td class="fk">markedById</td><td><span class="ty">→ User</span> · <em>unique(student, date, period)</em></td></tr>
         </table>
       </div>
 
@@ -457,9 +588,9 @@
     </div>
 
     <div class="derive">
-      <span class="cm"># the semester a section studies is DERIVED — no duplicate data</span><br />
+      <span class="cm"># the semester a class studies is DERIVED — no duplicate data</span><br />
       semesterNumber = (<span class="hl">year</span> − 1) × 2 + (<span class="hl">kind</span> == ODD ? 1 : 2)<br />
-      <span class="cm"># e.g. Section in year 2, Odd semester → subjects where semesterNumber = 3</span>
+      <span class="cm"># e.g. a Class in year 2, Odd semester → subjects where semesterNumber = 3</span>
     </div>
   </div>
 
@@ -470,19 +601,19 @@
     <div class="flows">
 
       <div class="flowcard">
-        <div class="title">Mark attendance<small>job 1 · daily</small></div>
+        <div class="title">Mark attendance<small>job 1 · per period</small></div>
         <div class="steps">
-          <span class="step">Teacher opens <b>their assignment</b></span><span class="arrow">→</span>
-          <span class="step"><b>Section</b> + <b>Subject</b> + date</span><span class="arrow">→</span>
+          <span class="step">Faculty opens <b>their assignment</b></span><span class="arrow">→</span>
+          <span class="step"><b>Class</b> + <b>Subject</b> + date + <b>period</b></span><span class="arrow">→</span>
           <span class="step">tap present / absent</span><span class="arrow">→</span>
-          <span class="step"><b>Attendance</b> rows @ active <b>Semester</b></span>
+          <span class="step"><b>PeriodAttendance</b> · period 1 → <b>MasterAttendance</b></span>
         </div>
       </div>
 
       <div class="flowcard">
         <div class="title">Enter internal marks<small>job 4 · per assessment</small></div>
         <div class="steps">
-          <span class="step">Teacher picks <b>Section</b> + <b>Subject</b></span><span class="arrow">→</span>
+          <span class="step">Faculty picks <b>Class</b> + <b>Subject</b></span><span class="arrow">→</span>
           <span class="step">choose <b>IA1 / IA2 / Model</b></span><span class="arrow">→</span>
           <span class="step">enter each student's mark</span><span class="arrow">→</span>
           <span class="step"><b>InternalMark</b> rows @ active <b>Semester</b></span>
@@ -494,7 +625,7 @@
         <div class="steps">
           <span class="step">account: name, register no…</span><span class="arrow">→</span>
           <span class="step">pick <b>Degree + Branch</b> (= Program)</span><span class="arrow">→</span>
-          <span class="step">optional: put in <b>Section</b> III·A</span><span class="arrow">→</span>
+          <span class="step">optional: put in <b>Class</b> III·A</span><span class="arrow">→</span>
           <span class="step"><b>Enrollment</b> @ active year</span>
         </div>
       </div>
@@ -502,7 +633,7 @@
       <div class="flowcard">
         <div class="title">Promote at year-end<small>rollover</small></div>
         <div class="steps">
-          <span class="step">select <b>Section</b> II·A</span><span class="arrow">→</span>
+          <span class="step">select <b>Class</b> II·A</span><span class="arrow">→</span>
           <span class="step">“promote to III·A”</span><span class="arrow">→</span>
           <span class="step">new <b>Enrollment</b> per student, next year</span><span class="arrow">→</span>
           <span class="step">last year untouched = history</span>
@@ -513,9 +644,10 @@
   </div>
 
   <footer class="end">
-    <p><b>What changes from today:</b> “department” becomes <b>Program</b> (Degree × Branch, <span class="mono">programId</span>);
-    Class collapses into <b>Section</b> (with a year); Term becomes <b>Semester</b>; and two new tables —
-    <b>Attendance</b> and <b>InternalMark</b> — land the two daily jobs we don't have yet.</p>
+    <p><b>In one line:</b> a <b>Program</b> (Degree × Branch) holds <b>Classes</b> (year + letter);
+    people belong to a Program via configurable, scoped <b>roles</b>; a student's <b>Enrollment</b> places
+    them in a class each year; and every <b>Attendance</b> and <b>Internal Mark</b> is scoped to the
+    active <b>Semester</b>.</p>
     <p style="margin-top:10px"><b>Your move:</b> mark up anything wrong on this map. Once it's right, I build it in one clean pass and we don't touch the backbone again.</p>
   </footer>
 </div>

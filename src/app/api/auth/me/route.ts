@@ -1,7 +1,7 @@
 // GET /api/auth/me — the authenticated user's profile.
 //
 // The canonical "am I logged in, and as whom" endpoint. The web/Flutter clients
-// call it right after sign-in to learn the user's roles, department, and whether
+// call it right after sign-in to learn the user's roles, program, and whether
 // a password reset is still pending (mustChangePassword). Demonstrates the
 // route shape: authenticate() first, then respond.
 import { authenticate, toAuthResponse } from "@/lib/auth";
@@ -15,7 +15,7 @@ export async function GET(req: Request) {
       id: user.id,
       email: user.email,
       displayName: user.displayName,
-      departmentId: user.departmentId,
+      programId: user.programId,
       roles,
       mustChangePassword,
     });

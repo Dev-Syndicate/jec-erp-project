@@ -194,14 +194,14 @@ export type ImportOutcome = {
 };
 
 /**
- * Provision each parsed row into the given department, one at a time with the
+ * Provision each parsed row into the given program, one at a time with the
  * shared helper. A row that collides with an existing account (email/register/
  * roll already taken) is reported as "skipped: already exists" rather than
  * aborting the whole import. Returns per-row outcomes (incl. temp passwords).
  */
 export async function provisionRows(
   rows: ParsedRow[],
-  opts: { departmentId: string; roleId: string },
+  opts: { programId: string; roleId: string },
 ): Promise<ImportOutcome[]> {
   const outcomes: ImportOutcome[] = [];
 
@@ -210,7 +210,7 @@ export async function provisionRows(
       const { studentId, tempPassword } = await provisionStudentAccount({
         email: row.email,
         displayName: row.name,
-        departmentId: opts.departmentId,
+        programId: opts.programId,
         roleId: opts.roleId,
         registerNumber: row.registerNumber,
         rollNumber: row.rollNumber || null,

@@ -30,10 +30,10 @@ export async function POST(req: Request) {
     include: { user: true },
   });
 
-  // Same generic message whether the register number is unknown, the student is
-  // soft-deleted, or their account is inactive — don't leak which numbers exist.
+  // Same generic message whether the register number is unknown, the student has
+  // left, or their account is inactive — don't leak which numbers exist.
   // The password check (Firebase) is the real gate regardless.
-  if (!student || !student.isActive || !student.user.isActive) {
+  if (!student || student.status !== "ACTIVE" || student.user.status !== "ACTIVE") {
     return Response.json(
       { error: "We couldn't find an active account for that register number." },
       { status: 404 },

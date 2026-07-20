@@ -29,7 +29,9 @@ export function deleteSubject(id: string): Promise<{ ok: true }> {
 
 type RawProgram = {
   id: string;
+  degreeId: string;
   degreeCode: string;
+  branchId: string;
   branchCode: string;
   durationYears: number;
   isActive: boolean;
@@ -40,6 +42,10 @@ export async function fetchProgramOptions(): Promise<ProgramOption[]> {
   return programs.map((p) => ({
     id: p.id,
     label: `${p.degreeCode} · ${p.branchCode}`,
+    degreeId: p.degreeId,
+    degreeLabel: p.degreeCode,
+    branchId: p.branchId,
+    branchLabel: p.branchCode,
     durationYears: p.durationYears,
     isActive: p.isActive,
   }));

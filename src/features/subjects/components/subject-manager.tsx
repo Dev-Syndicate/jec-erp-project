@@ -5,7 +5,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Power, Trash2 } from "lucide-react";
+import { Plus, Pencil, Power, Trash2, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,27 @@ function errorMessage(e: unknown): string {
 }
 
 const kindLabel = (k: "ODD" | "EVEN") => (k === "ODD" ? "Odd" : "Even");
+
+// Group subjects by curriculum semester (ascending) so the list reads as a few
+// scannable blocks instead of one long table. year/kind are shared per semester.
+function groupBySemester(
+  subjects: Subject[],
+): Array<{ semesterNumber: number; year: number; kind: "ODD" | "EVEN"; items: Subject[] }> {
+  const map = new Map<number, Subject[]>();
+  for (const s of subjects) {
+    const arr = map.get(s.semesterNumber);
+    if (arr) arr.push(s);
+    else map.set(s.semesterNumber, [s]);
+  }
+  return [...map.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([semesterNumber, items]) => ({
+      semesterNumber,
+      year: items[0].year,
+      kind: items[0].kind,
+      items,
+    }));
+}
 
 // The semesterNumber options for a program of the given duration:
 // 1..2×durationYears, each labelled with its derived year + Odd/Even.
@@ -112,18 +133,36 @@ function StatusPill({ active }: { active: boolean }) {
 export function SubjectManager() {
   const { data: subjects, isPending, isError, error } = useSubjects();
   const programs = useProgramOptions();
-  const [programFilter, setProgramFilter] = useState("");
+  const [degreeFilter, setDegreeFilter] = useState("");
+  const [branchFilter, setBranchFilter] = useState("");
   const [editing, setEditing] = useState<Subject | "new" | null>(null);
   const [deleting, setDeleting] = useState<Subject | null>(null);
 
-  const filtered = (subjects ?? []).filter(
-    (s) => programFilter === "" || s.programId === programFilter,
+  const allPrograms = programs.data ?? [];
+
+  // A subject catalogue is per-program, and a program is a Degree × Branch — so
+  // narrow with a Degree → Branch cascade (scales better than one flat program
+  // list). Everything is DERIVED during render (default to the first degree/branch)
+  // so there's no setState-in-effect.
+  const degreeOptions = [
+    ...new Map(allPrograms.map((p) => [p.degreeId, p.degreeLabel])).entries(),
+  ].map(([value, label]) => ({ value, label }));
+
+  const activeDegreeId = degreeFilter || degreeOptions[0]?.value || "";
+
+  const branchOptions = allPrograms
+    .filter((p) => p.degreeId === activeDegreeId)
+    .map((p) => ({ value: p.branchId, label: p.branchLabel }));
+
+  // Keep the chosen branch only if it belongs to the active degree; else first.
+  const activeBranchId =
+    branchOptions.find((b) => b.value === branchFilter)?.value ?? branchOptions[0]?.value ?? "";
+
+  const activeProgram = allPrograms.find(
+    (p) => p.degreeId === activeDegreeId && p.branchId === activeBranchId,
   );
 
-  const filterOptions = [
-    { value: "", label: "All programs" },
-    ...(programs.data ?? []).map((p) => ({ value: p.id, label: p.label })),
-  ];
+  const filtered = (subjects ?? []).filter((s) => s.programId === activeProgram?.id);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -145,73 +184,103 @@ export function SubjectManager() {
         <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
           {errorMessage(error)}
         </p>
+      ) : allPrograms.length === 0 ? (
+        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-16 text-center">
+          <p className="text-sm text-muted-foreground">No programs yet.</p>
+          <p className="text-xs text-muted-foreground">
+            Create a program under Structure → Programs before adding subjects.
+          </p>
+        </div>
       ) : (
         <>
-          {(subjects?.length ?? 0) > 0 && (
+          <div className="flex flex-wrap items-center gap-4">
             <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Program</span>
-              <div className="w-64">
+              <span className="text-sm text-muted-foreground">Degree</span>
+              <div className="w-48">
                 <FormSelect
-                  value={programFilter}
-                  onChange={setProgramFilter}
-                  options={filterOptions}
-                  placeholder="All programs"
+                  value={activeDegreeId}
+                  onChange={(v) => {
+                    setDegreeFilter(v);
+                    setBranchFilter(""); // branches differ per degree — reset
+                  }}
+                  options={degreeOptions}
+                  placeholder="Select a degree"
                 />
               </div>
             </div>
-          )}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Branch</span>
+              <div className="w-48">
+                <FormSelect
+                  value={activeBranchId}
+                  onChange={setBranchFilter}
+                  options={branchOptions}
+                  placeholder="Select a branch"
+                />
+              </div>
+            </div>
+          </div>
 
           {filtered.length === 0 ? (
             <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-              <p className="text-sm text-muted-foreground">
-                {(subjects?.length ?? 0) === 0 ? "No subjects yet." : "No subjects in this program."}
-              </p>
+              <p className="text-sm text-muted-foreground">No subjects in this program yet.</p>
               <Button variant="outline" onClick={() => setEditing("new")} data-icon="inline-start">
                 <Plus />
                 Add a subject
               </Button>
             </div>
           ) : (
-            <div className="rounded-xl ring-1 ring-foreground/10">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Program</TableHead>
-                    <TableHead>Semester</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-0 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filtered.map((s) => (
-                    <TableRow key={s.id}>
-                      <TableCell className="font-mono text-xs">{s.code}</TableCell>
-                      <TableCell className="font-medium">{s.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{s.programLabel}</TableCell>
-                      <TableCell>
-                        <div className="flex flex-col leading-tight">
-                          <span className="tabular-nums">Sem {s.semesterNumber}</span>
-                          <span className="text-xs text-muted-foreground">
-                            Year {s.year} · {kindLabel(s.kind)}
-                          </span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusPill active={s.isActive} />
-                      </TableCell>
-                      <TableCell>
-                        <RowActions
-                          subject={s}
-                          onEdit={() => setEditing(s)}
-                          onDelete={() => setDeleting(s)}
-                        />
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            <div className="flex flex-col gap-4">
+              {groupBySemester(filtered).map((g) => (
+                <details
+                  key={g.semesterNumber}
+                  open
+                  className="group overflow-hidden rounded-xl ring-1 ring-foreground/10"
+                >
+                  <summary className="flex cursor-pointer list-none items-center gap-2 bg-muted/40 px-4 py-2.5 [&::-webkit-details-marker]:hidden">
+                    <ChevronRight className="size-4 text-muted-foreground transition-transform group-open:rotate-90" />
+                    <span className="font-heading text-sm font-semibold text-foreground">
+                      Semester {g.semesterNumber}
+                    </span>
+                    <span className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                      Year {g.year} · {kindLabel(g.kind)}
+                    </span>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                      {g.items.length} subject{g.items.length === 1 ? "" : "s"}
+                    </span>
+                  </summary>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Code</TableHead>
+                        <TableHead>Name</TableHead>
+                        <TableHead>Program</TableHead>
+                        <TableHead>Status</TableHead>
+                        <TableHead className="w-0 text-right">Actions</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {g.items.map((s) => (
+                        <TableRow key={s.id}>
+                          <TableCell className="font-mono text-xs">{s.code}</TableCell>
+                          <TableCell className="font-medium">{s.name}</TableCell>
+                          <TableCell className="text-muted-foreground">{s.programLabel}</TableCell>
+                          <TableCell>
+                            <StatusPill active={s.isActive} />
+                          </TableCell>
+                          <TableCell>
+                            <RowActions
+                              subject={s}
+                              onEdit={() => setEditing(s)}
+                              onDelete={() => setDeleting(s)}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </details>
+              ))}
             </div>
           )}
         </>

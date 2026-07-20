@@ -31,10 +31,16 @@ export type SubjectInput = {
 };
 
 // This feature's own read-only program fetch (features don't import each other).
-// durationYears bounds the semesterNumber picker (1..2×durationYears).
+// durationYears bounds the semesterNumber picker (1..2×durationYears). Degree +
+// branch are carried separately so the list can be filtered by a Degree → Branch
+// cascade rather than one flat program dropdown.
 export type ProgramOption = {
   id: string;
   label: string; // "B.E · CSE"
+  degreeId: string;
+  degreeLabel: string; // "B.E"
+  branchId: string;
+  branchLabel: string; // "CSE"
   durationYears: number;
   isActive: boolean;
 };

@@ -12,6 +12,7 @@ import {
   Building2,
   CalendarDays,
   Users,
+  BookOpen,
   ChevronsUpDown,
   ChevronRight,
   LogOut,
@@ -118,6 +119,17 @@ const NAV: NavGroup[] = [
         title: "Students",
         href: "/students",
         icon: Users,
+        roles: ["Super Admin"],
+      },
+    ],
+  },
+  {
+    label: "Curriculum",
+    items: [
+      {
+        title: "Subjects",
+        href: "/subjects",
+        icon: BookOpen,
         roles: ["Super Admin"],
       },
     ],

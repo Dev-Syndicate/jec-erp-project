@@ -92,6 +92,82 @@ export async function provisionStudentAccount(anchor: StudentAnchor): Promise<Pr
   }
 }
 
+// The anchor fields needed to create one faculty account. Faculty log in with
+// their email (not a register number); their profile is HR detail, not a Student.
+export type FacultyAnchor = {
+  email: string;
+  displayName: string;
+  programId: string;
+  roleId: string; // the seeded "Faculty" (or "HOD") Role id
+  staffId: string; // college-assigned id — required, unique
+  designation: string; // HR title, e.g. "Asst. Professor"
+  phone: string;
+  emergencyPhone?: string | null;
+  gender?: "MALE" | "FEMALE" | "OTHER" | null;
+  dateOfBirth?: string | null; // ISO yyyy-mm-dd or null
+  maritalStatus?: "SINGLE" | "MARRIED" | "OTHER" | null;
+  fatherName?: string | null;
+  motherName?: string | null;
+};
+
+export type ProvisionedFaculty = {
+  userId: string;
+  facultyProfileId: string;
+  tempPassword: string;
+};
+
+/**
+ * Create one faculty account: Firebase identity first, then the linked Neon User
+ * + FacultyProfile in a transaction. If the Neon write fails, the Firebase user
+ * is deleted so the operation is all-or-nothing and a retry won't collide on the
+ * email. Same shape as provisionStudentAccount — returns the ids + one-time temp
+ * password. Throws on failure (the caller maps it to a response).
+ */
+export async function provisionFacultyAccount(anchor: FacultyAnchor): Promise<ProvisionedFaculty> {
+  const tempPassword = generateTempPassword();
+  const firebaseUid = await createFirebaseUser({
+    email: anchor.email,
+    password: tempPassword,
+    displayName: anchor.displayName,
+  });
+
+  try {
+    const user = await db.$transaction(async (tx) => {
+      return tx.user.create({
+        data: {
+          firebaseUid,
+          email: anchor.email,
+          displayName: anchor.displayName,
+          programId: anchor.programId,
+          mustChangePassword: true,
+          roles: { create: { roleId: anchor.roleId } },
+          facultyProfile: {
+            create: {
+              staffId: anchor.staffId,
+              designation: anchor.designation,
+              phone: anchor.phone,
+              emergencyPhone: anchor.emergencyPhone?.trim() || null,
+              gender: anchor.gender ?? null,
+              dateOfBirth: anchor.dateOfBirth ? new Date(anchor.dateOfBirth) : null,
+              maritalStatus: anchor.maritalStatus ?? null,
+              fatherName: anchor.fatherName?.trim() || null,
+              motherName: anchor.motherName?.trim() || null,
+            },
+          },
+        },
+        include: { facultyProfile: true },
+      });
+    });
+    return { userId: user.id, facultyProfileId: user.facultyProfile!.id, tempPassword };
+  } catch (e) {
+    // Undo the Firebase user so a retry doesn't collide on the email.
+    await deleteFirebaseUser(firebaseUid).catch((cleanupErr) =>
+      console.error("Failed to roll back Firebase user after Neon error:", cleanupErr),
+    );
+    throw e;
+  }
+}
+
 /**
  * Regenerate a user's temporary password: reset Firebase to a fresh temp and
  * re-arm mustChangePassword so first login forces a reset again. Returns the new

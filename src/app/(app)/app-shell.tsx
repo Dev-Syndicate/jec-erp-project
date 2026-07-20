@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Building2,
   CalendarDays,
+  Users,
   ChevronsUpDown,
   ChevronRight,
   LogOut,
@@ -106,6 +107,17 @@ const NAV: NavGroup[] = [
         title: "Years & semesters",
         href: "/academic",
         icon: CalendarDays,
+        roles: ["Super Admin"],
+      },
+    ],
+  },
+  {
+    label: "People",
+    items: [
+      {
+        title: "Students",
+        href: "/students",
+        icon: Users,
         roles: ["Super Admin"],
       },
     ],

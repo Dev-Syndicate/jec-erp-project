@@ -62,7 +62,8 @@ const PERMISSIONS: Array<{ action: string; subject: string }> = [
   { action: "read", subject: "Subject" },
   { action: "manage", subject: "Timetable" },
   { action: "read", subject: "Timetable" },
-  { action: "mark", subject: "Attendance" },
+  { action: "manage", subject: "Attendance" }, // mark ANY class in scope (HOD/SA)
+  { action: "mark", subject: "Attendance" }, // mark only what you teach/advise (Faculty)
   { action: "read", subject: "Attendance" },
   { action: "enter", subject: "Marks" },
   { action: "read", subject: "Marks" },
@@ -90,7 +91,7 @@ const DEFAULT_GRANTS: Record<string, Array<[string, string]>> = {
     ["manage", "Faculty"],
     ["manage", "Subject"],
     ["manage", "Timetable"],
-    ["mark", "Attendance"],
+    ["manage", "Attendance"], // mark any class in their program (covers mark + read)
     ["read", "Attendance"],
     ["enter", "Marks"],
     ["read", "Marks"],

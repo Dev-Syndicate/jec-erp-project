@@ -19,6 +19,7 @@
 // program-scoped via assertProgramScope on the class's program.
 import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { assertMarksPeriod, assertTeachesOrAdvises } from "./access";
 import { isStatus, parseDateOnly, resolveWeekday, roman } from "./dto";
 
 export const dynamic = "force-dynamic";
@@ -73,6 +74,10 @@ export async function GET(req: Request) {
         { status: 400 },
       );
     }
+
+    // A program-scoped Faculty may only view a class they teach or advise; HOD/SA
+    // (manage Attendance) can view any class in program scope.
+    await assertTeachesOrAdvises(ctx, classId, klass.advisorId, semester.id);
 
     // The day's scheduled periods for the effective weekday (Sat borrows one).
     const slots = await db.timetableSlot.findMany({
@@ -166,7 +171,10 @@ export async function POST(req: Request) {
       entries.push({ studentId, status });
     }
 
-    const klass = await db.class.findUnique({ where: { id: classId }, select: { programId: true } });
+    const klass = await db.class.findUnique({
+      where: { id: classId },
+      select: { programId: true, advisorId: true },
+    });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
     assertProgramScope(ctx, klass.programId);
 
@@ -187,7 +195,7 @@ export async function POST(req: Request) {
           period,
         },
       },
-      select: { subjectId: true },
+      select: { subjectId: true, facultyId: true },
     });
     if (!slot) {
       return Response.json(
@@ -195,6 +203,10 @@ export async function POST(req: Request) {
         { status: 400 },
       );
     }
+
+    // A plain `mark` holder (Faculty) may only mark the period they teach; the
+    // advisor and `manage Attendance` (HOD/SA) may mark any period for the class.
+    assertMarksPeriod(ctx, klass.advisorId, slot.facultyId);
 
     // Every marked student must be on this class's active-year roster.
     const enrolled = await db.enrollment.findMany({

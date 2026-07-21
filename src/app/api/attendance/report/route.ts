@@ -11,6 +11,7 @@
 // class's records. Program-scoped on the class's program.
 import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { assertTeachesOrAdvises } from "../access";
 import { roman } from "../dto";
 
 export const dynamic = "force-dynamic";
@@ -44,6 +45,10 @@ export async function GET(req: Request) {
         { status: 400 },
       );
     }
+
+    // A program-scoped Faculty may only see reports for a class they teach or
+    // advise; HOD/SA (manage Attendance) can see any class in program scope.
+    await assertTeachesOrAdvises(ctx, classId, klass.advisorId, semester.id);
 
     // Roster: students enrolled in this class for the active year.
     const enrollments = await db.enrollment.findMany({

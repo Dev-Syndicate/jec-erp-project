@@ -47,12 +47,72 @@ const firebaseApp =
 const adminAuth = getAuth(firebaseApp);
 
 // --- RBAC baseline ---------------------------------------------------------
-// CASL-shaped permissions: action + subject. "manage"/"all" is the wildcard
-// CASL grants for full access — that's the Super Admin's single permission.
-// Fine-grained permissions get added as each feature phase lands.
+// CASL-shaped permissions: action + subject. "manage"/"all" is the wildcard CASL
+// grants for full access (the Super Admin's permission). The rest are the
+// fine-grained catalog the admin composes custom roles from — the RBAC admin
+// screen renders exactly these, so keep this list the source of truth.
 const PERMISSIONS: Array<{ action: string; subject: string }> = [
   { action: "manage", subject: "all" }, // Super Admin: everything, everywhere
+
+  { action: "manage", subject: "Student" },
+  { action: "read", subject: "Student" },
+  { action: "manage", subject: "Faculty" },
+  { action: "read", subject: "Faculty" },
+  { action: "manage", subject: "Subject" },
+  { action: "read", subject: "Subject" },
+  { action: "manage", subject: "Timetable" },
+  { action: "read", subject: "Timetable" },
+  { action: "mark", subject: "Attendance" },
+  { action: "read", subject: "Attendance" },
+  { action: "enter", subject: "Marks" },
+  { action: "read", subject: "Marks" },
+  { action: "manage", subject: "Class" },
+  { action: "read", subject: "Class" },
+  { action: "manage", subject: "Program" },
+  { action: "read", subject: "Program" },
+  { action: "manage", subject: "Degree" },
+  { action: "read", subject: "Degree" },
+  { action: "manage", subject: "Branch" },
+  { action: "read", subject: "Branch" },
+  { action: "manage", subject: "AcademicYear" },
+  { action: "manage", subject: "Semester" },
+  { action: "manage", subject: "Role" }, // manage the RBAC config itself
 ];
+
+// Default permission sets for the seeded roles — a sensible starting point the
+// admin can refine. Scope (PROGRAM) restricts these to the holder's own program;
+// that condition is applied by the CASL ability factory (Pass B), not here.
+// [action, subject] pairs; Super Admin gets the wildcard.
+const DEFAULT_GRANTS: Record<string, Array<[string, string]>> = {
+  "Super Admin": [["manage", "all"]],
+  HOD: [
+    ["manage", "Student"],
+    ["manage", "Faculty"],
+    ["manage", "Subject"],
+    ["manage", "Timetable"],
+    ["mark", "Attendance"],
+    ["read", "Attendance"],
+    ["enter", "Marks"],
+    ["read", "Marks"],
+    ["read", "Class"],
+    ["read", "Program"],
+  ],
+  Faculty: [
+    ["read", "Student"],
+    ["read", "Subject"],
+    ["read", "Timetable"],
+    ["read", "Class"],
+    ["mark", "Attendance"],
+    ["read", "Attendance"],
+    ["enter", "Marks"],
+    ["read", "Marks"],
+  ],
+  Student: [
+    ["read", "Attendance"],
+    ["read", "Marks"],
+    ["read", "Timetable"],
+  ],
+};
 
 // The four baseline roles. isSystem=true means the UI can't delete them.
 // Permission composition beyond Super Admin is intentionally left to the admin
@@ -86,17 +146,24 @@ async function seedRbac() {
     });
   }
 
-  // Grant "manage all" to Super Admin.
-  const superAdminRole = await db.role.findUniqueOrThrow({ where: { name: "Super Admin" } });
-  const manageAll = await db.permission.findUniqueOrThrow({
-    where: { action_subject: { action: "manage", subject: "all" } },
-  });
-  await db.rolePermission.upsert({
-    where: { roleId_permissionId: { roleId: superAdminRole.id, permissionId: manageAll.id } },
-    update: {},
-    create: { roleId: superAdminRole.id, permissionId: manageAll.id },
-  });
+  // Grant each seeded role its default permission set (idempotent). This only
+  // ADDS the baseline grants — it never revokes, so an admin's later edits in the
+  // RBAC console survive a re-seed.
+  for (const [roleName, grants] of Object.entries(DEFAULT_GRANTS)) {
+    const role = await db.role.findUniqueOrThrow({ where: { name: roleName } });
+    for (const [action, subject] of grants) {
+      const permission = await db.permission.findUniqueOrThrow({
+        where: { action_subject: { action, subject } },
+      });
+      await db.rolePermission.upsert({
+        where: { roleId_permissionId: { roleId: role.id, permissionId: permission.id } },
+        update: {},
+        create: { roleId: role.id, permissionId: permission.id },
+      });
+    }
+  }
 
+  const superAdminRole = await db.role.findUniqueOrThrow({ where: { name: "Super Admin" } });
   return { superAdminRole };
 }
 

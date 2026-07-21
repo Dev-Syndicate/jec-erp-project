@@ -16,6 +16,7 @@ import {
   GraduationCap,
   BookOpen,
   CalendarClock,
+  ShieldCheck,
   ChevronsUp,
   ChevronsUpDown,
   ChevronRight,
@@ -164,6 +165,17 @@ const NAV: NavGroup[] = [
         href: "/timetable",
         icon: CalendarClock,
         roles: ["Super Admin", "HOD"],
+      },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      {
+        title: "Access control",
+        href: "/access",
+        icon: ShieldCheck,
+        roles: ["Super Admin"],
       },
     ],
   },

@@ -7,7 +7,7 @@
 // hand-assigned) and the seeded "Student" role (belongs to student accounts).
 // Everything a program's staff can hold — including future custom roles — is
 // PROGRAM-scoped and shows up here automatically.
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
     // Same audience as faculty provisioning (Super Admin + HOD).
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "read", "Faculty");
 
     const roles = await db.role.findMany({
       where: { scope: "PROGRAM", name: { not: "Student" } },

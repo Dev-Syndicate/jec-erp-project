@@ -4,9 +4,8 @@
 // scoped roles (an HOD's class dropdown for enrollment / timetable), so it allows
 // HOD but filters to their own program; Super Admin sees all.
 //
-// Auth is the CLAUDE.md two-step: authenticate() (who) then requireRole() (may).
-// The role check is the current stopgap until the CASL factory (src/lib/rbac) lands.
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+// Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation, isForeignKeyViolation } from "@/lib/prisma-errors";
 
@@ -78,10 +77,12 @@ function parseClassBody(
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    // Read-only list: HOD/Faculty need it for class dropdowns (attendance, etc.),
+    // so it's `read` (they hold read Class), not the `manage` the create needs.
+    authorize(ctx, "read", "Class");
 
     // Super Admin: all classes. Scoped roles: only classes in their own program.
-    const where = ctx.roles.includes("Super Admin")
+    const where = ctx.isInstitutionScoped
       ? {}
       : { programId: ctx.user.programId ?? "__none__" };
 
@@ -100,7 +101,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Class");
 
     const body = await req.json().catch(() => null);
     const parsed = parseClassBody(body);

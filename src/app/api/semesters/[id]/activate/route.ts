@@ -7,7 +7,7 @@
 //   - this semester's year  → active
 // So activating a semester also switches the active academic year to its own.
 // Returns the parent year (with semesters) so the client reflects both at once.
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { toYearDto, YEAR_INCLUDE } from "../../../academic-years/dto";
 
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Semester");
     const { id } = await params;
 
     const semester = await db.semester.findUnique({

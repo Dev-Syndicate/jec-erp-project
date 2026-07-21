@@ -4,7 +4,7 @@
 //
 // Delete is guarded: the active semester can't be deleted, nor one that already
 // has records (attendance / marks / timetable / assignments) hanging off it.
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isNotFound } from "@/lib/prisma-errors";
 import { SEMESTER_INCLUDE, toSemesterDto } from "../../academic-years/dto";
@@ -32,7 +32,7 @@ function parseSemesterPatchBody(
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Semester");
     const { id } = await params;
 
     const body = await req.json().catch(() => null);
@@ -58,7 +58,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Semester");
     const { id } = await params;
 
     const semester = await db.semester.findUnique({

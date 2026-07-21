@@ -3,7 +3,7 @@
 //
 // Delete is guarded: the active year can't be deleted (switch first), nor one
 // that still has semesters or student enrollments — a clean 409 explains which.
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isNotFound, isUniqueViolation } from "@/lib/prisma-errors";
 import { toYearDto, YEAR_INCLUDE } from "../dto";
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "AcademicYear");
     const { id } = await params;
 
     const body = await req.json().catch(() => null);
@@ -43,7 +43,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "AcademicYear");
     const { id } = await params;
 
     const year = await db.academicYear.findUnique({

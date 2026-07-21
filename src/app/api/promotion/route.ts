@@ -11,7 +11,7 @@
 //
 // Super-Admin only — a year transition, like the Academic slice. The Enrollment
 // model is unchanged; promotion just adds next-year rows.
-import { authenticate, invalidateAuthUser, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, invalidateAuthUser, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -29,7 +29,7 @@ async function activeYear() {
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "all");
 
     const classId = new URL(req.url).searchParams.get("classId")?.trim();
     if (!classId) return Response.json({ error: "Select a class." }, { status: 400 });
@@ -111,7 +111,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "all");
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     const sourceClassId = typeof body?.sourceClassId === "string" ? body.sourceClassId.trim() : "";

@@ -6,7 +6,7 @@
 //   - any active semester belonging to a DIFFERENT year → inactive
 // (the active semester must sit inside the active year; switching years clears a
 // stale one. The user then activates this year's Odd/Even.)
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { toYearDto, YEAR_INCLUDE } from "../../dto";
 
@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "AcademicYear");
     const { id } = await params;
 
     const exists = await db.academicYear.findUnique({ where: { id }, select: { id: true } });

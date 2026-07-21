@@ -5,7 +5,7 @@
 // Only valid while the faculty member is still on their temp password
 // (mustChangePassword = true). Once they've set their own, regenerating is
 // refused — that's a proper account-recovery flow, not this admin convenience.
-import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { regenerateTempPassword } from "@/lib/provisioning";
 
@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Faculty");
     const { id } = await params;
 
     const faculty = await db.facultyProfile.findUnique({

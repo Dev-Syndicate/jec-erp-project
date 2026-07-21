@@ -5,7 +5,7 @@
 // Delete is deactivate-primary: hard delete only when nothing depends on the
 // subject (faculty assignments, timetable slots, attendance, marks); otherwise a
 // clean 409 telling the admin to deactivate instead.
-import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isNotFound, isUniqueViolation } from "@/lib/prisma-errors";
 import { SUBJECT_INCLUDE, toSubjectDto } from "../dto";
@@ -48,7 +48,7 @@ function parsePatchBody(body: unknown): { data: SubjectPatch } | { error: string
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Subject");
     const { id } = await params;
 
     const body = await req.json().catch(() => null);
@@ -98,7 +98,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Subject");
     const { id } = await params;
 
     const subject = await db.subject.findUnique({

@@ -12,9 +12,12 @@
 // Saturdays: the timetable is Mon–Fri, so a working Saturday borrows a weekday's
 // grid via `followsDay` (resolveWeekday). Records still key on the real `date`.
 //
-// Super-Admin-only for now, program-scoped (assertProgramScope) so the swap to
-// CASL/HOD is mechanical.
-import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
+// Authorization: both GET and POST need `mark Attendance` — the staff capability
+// (SA/HOD/Faculty). The GET returns the WHOLE-CLASS roster + everyone's marks, so
+// it must NOT use plain `read Attendance`, which the Student role also holds (that
+// grant is for a future per-student self-view, not the class roster). Both are
+// program-scoped via assertProgramScope on the class's program.
+import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isStatus, parseDateOnly, resolveWeekday, roman } from "./dto";
 
@@ -43,7 +46,7 @@ function classLabel(k: NonNullable<Awaited<ReturnType<typeof loadClass>>>): stri
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "mark", "Attendance");
 
     const url = new URL(req.url);
     const classId = url.searchParams.get("classId")?.trim();
@@ -131,7 +134,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "mark", "Attendance");
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     const classId = typeof body?.classId === "string" ? body.classId.trim() : "";

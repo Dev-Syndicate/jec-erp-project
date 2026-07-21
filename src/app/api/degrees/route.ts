@@ -3,9 +3,8 @@
 // semester ranges. Structure is INSTITUTION-scoped, so these are Super-Admin only
 // (no program filter — the same rule assertProgramScope encodes for scoped roles).
 //
-// Auth is the CLAUDE.md two-step: authenticate() (who) then requireRole() (may).
-// The role check is the current stopgap until the CASL factory (src/lib/rbac) lands.
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+// Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
 
@@ -44,7 +43,7 @@ function parseDegreeBody(body: unknown): { data: ParsedDegree } | { error: strin
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Degree");
 
     const degrees = await db.degree.findMany({
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
@@ -71,7 +70,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Degree");
 
     const body = await req.json().catch(() => null);
     const parsed = parseDegreeBody(body);

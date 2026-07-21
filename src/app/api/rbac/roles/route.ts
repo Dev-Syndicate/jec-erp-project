@@ -2,7 +2,7 @@
 // create custom roles. Super-Admin only: managing the RBAC config is an
 // institution-level operation, distinct from /api/roles (the assignable-roles
 // list the faculty picker reads).
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
 import { ROLE_INCLUDE, toRoleDto, validatePermissionIds } from "./dto";
@@ -14,7 +14,7 @@ const SCOPES = ["PROGRAM", "INSTITUTION"] as const;
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Role");
 
     const roles = await db.role.findMany({
       orderBy: [{ isSystem: "desc" }, { name: "asc" }],
@@ -30,7 +30,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Role");
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     const name = typeof body?.name === "string" ? body.name.trim() : "";

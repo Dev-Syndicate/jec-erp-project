@@ -8,7 +8,7 @@
 // status to INACTIVE disables the login (User.status = INACTIVE) so a departed
 // faculty member can't sign in; reactivating restores it — also cache-busted so
 // it takes effect immediately rather than after the TTL.
-import { authenticate, assertProgramScope, invalidateAuthUser, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, assertProgramScope, invalidateAuthUser, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { FACULTY_INCLUDE, toFacultyDto, validateAssignableRoles } from "../dto";
 
@@ -111,7 +111,7 @@ function parsePatchBody(body: unknown): { data: FacultyPatch } | { error: string
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Faculty");
     const { id } = await params;
 
     const body = await req.json().catch(() => null);

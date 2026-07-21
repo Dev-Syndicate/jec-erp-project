@@ -9,7 +9,7 @@
 //
 // The parse + provision logic lives in src/lib/student-import.ts; this route only
 // handles auth, the upload, and the program/role lookups.
-import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { parseStudentSheet, provisionRows } from "@/lib/student-import";
 
@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Student");
 
     let form: FormData;
     try {

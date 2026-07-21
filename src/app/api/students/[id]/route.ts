@@ -6,7 +6,7 @@
 // non-ACTIVE status also disables the login (User.status = INACTIVE) so a
 // graduated/dropped student can't sign in; reactivating restores it. The auth
 // cache is busted so it takes effect immediately rather than after the TTL.
-import { authenticate, assertProgramScope, invalidateAuthUser, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, assertProgramScope, invalidateAuthUser, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { STUDENT_INCLUDE, toStudentDto } from "../dto";
 
@@ -69,7 +69,7 @@ function parsePatchBody(body: unknown): { data: StudentPatch } | { error: string
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Student");
     const { id } = await params;
 
     const body = await req.json().catch(() => null);

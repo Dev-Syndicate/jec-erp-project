@@ -1,13 +1,12 @@
 // /api/rbac/roles/[id] — update a role's description/scope/permissions, or delete
 // a custom role. Super-Admin only. params is a Promise in Next 16 — await it.
 //
-// Guardrails (role names are load-bearing until CASL lands — requireRole compares
-// them by string):
+// Guardrails (enforced here in addition to the `manage Role` permission check):
 //   - The Super Admin role can't be modified at all (locked full access).
 //   - System roles (HOD/Faculty/Student) can't be renamed or re-scoped, and can't
 //     be deleted — only their permission set is editable.
 //   - A role still assigned to users can't be deleted (reassign first).
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
 import { ROLE_INCLUDE, toRoleDto, validatePermissionIds } from "../dto";
@@ -19,7 +18,7 @@ const SCOPES = ["PROGRAM", "INSTITUTION"] as const;
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Role");
     const { id } = await params;
 
     const role = await db.role.findUnique({ where: { id }, select: { id: true, name: true, isSystem: true, scope: true } });
@@ -104,7 +103,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Role");
     const { id } = await params;
 
     const role = await db.role.findUnique({

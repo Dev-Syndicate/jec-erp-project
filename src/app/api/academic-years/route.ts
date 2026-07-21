@@ -2,8 +2,8 @@
 // (up to two) semesters; the Semester is the hub every time-bound record points
 // at. Institution-level setup, so Super-Admin only.
 //
-// Auth is the CLAUDE.md two-step: authenticate() (who) then requireRole() (may).
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+// Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
 import { toYearDto, YEAR_INCLUDE } from "./dto";
@@ -35,7 +35,7 @@ export function parseYearBody(
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "AcademicYear");
 
     const years = await db.academicYear.findMany({
       include: YEAR_INCLUDE,
@@ -51,7 +51,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "AcademicYear");
 
     const body = await req.json().catch(() => null);
     const parsed = parseYearBody(body);

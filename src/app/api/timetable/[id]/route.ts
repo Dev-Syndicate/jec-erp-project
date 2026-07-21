@@ -1,6 +1,6 @@
 // DELETE /api/timetable/[id] — clear one timetable cell. Super-Admin only,
 // program-scoped. params is a Promise in Next 16 — await it.
-import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Timetable");
     const { id } = await params;
 
     const slot = await db.timetableSlot.findUnique({

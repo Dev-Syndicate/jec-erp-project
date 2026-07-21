@@ -5,7 +5,7 @@
 //
 // Open to Super Admin (all programs) and HOD (their own program only), enforced
 // by the program-scoped `where` + assertProgramScope below.
-import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
 import { provisionStudentAccount } from "@/lib/provisioning";
@@ -77,10 +77,10 @@ function isFirebaseEmailTaken(e: unknown): boolean {
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Student");
 
     // Super Admin: all students. Scoped roles: only their own program.
-    const where = ctx.roles.includes("Super Admin")
+    const where = ctx.isInstitutionScoped
       ? {}
       : { user: { programId: ctx.user.programId ?? "__none__" } };
 
@@ -99,7 +99,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Student");
 
     const body = await req.json().catch(() => null);
     const parsed = parseStudentBody(body);

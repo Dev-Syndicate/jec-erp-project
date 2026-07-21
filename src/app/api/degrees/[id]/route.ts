@@ -5,7 +5,7 @@
 // deactivate (PATCH { isActive: false }), which keeps history. A true DELETE is
 // allowed only when the Degree has no Programs — otherwise the FK would restrict
 // it, so we return a clean 409 telling the admin to deactivate instead.
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isNotFound, isUniqueViolation } from "@/lib/prisma-errors";
 
@@ -54,7 +54,7 @@ function parsePatchBody(body: unknown): { data: DegreePatch } | { error: string 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Degree");
     const { id } = await params;
 
     const body = await req.json().catch(() => null);
@@ -97,7 +97,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Degree");
     const { id } = await params;
 
     // Guard the delete with a clear message before hitting the FK restriction:

@@ -2,7 +2,7 @@
 // Super-Admin only. There's no list endpoint: semesters are returned nested in
 // GET /api/academic-years. A year can hold at most one Odd + one Even (DB unique
 // on (academicYearId, kind)).
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isForeignKeyViolation, isUniqueViolation } from "@/lib/prisma-errors";
 import { SEMESTER_INCLUDE, toSemesterDto } from "../academic-years/dto";
@@ -38,7 +38,7 @@ export function parseSemesterCreateBody(
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Semester");
 
     const body = await req.json().catch(() => null);
     const parsed = parseSemesterCreateBody(body);

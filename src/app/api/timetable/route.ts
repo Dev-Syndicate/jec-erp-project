@@ -4,8 +4,8 @@
 // semester; a slot's subject must be in the class's program and its faculty must
 // be an active user of that program.
 //
-// Auth is the CLAUDE.md two-step: authenticate() (who) then requireRole() (may).
-import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
+// Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
+import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { curriculumSemester, roman, SLOT_INCLUDE, toSlotDto } from "./dto";
 
@@ -25,7 +25,7 @@ function activeSemester() {
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Timetable");
 
     const classId = new URL(req.url).searchParams.get("classId")?.trim();
     if (!classId) return Response.json({ error: "Select a class." }, { status: 400 });
@@ -66,7 +66,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Timetable");
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     const classId = typeof body?.classId === "string" ? body.classId.trim() : "";

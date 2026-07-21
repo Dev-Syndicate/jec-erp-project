@@ -5,8 +5,8 @@
 // scoped roles (an HOD's program dropdown), so it allows HOD but filters to their
 // own program; Super Admin sees all.
 //
-// Auth is the CLAUDE.md two-step: authenticate() (who) then requireRole() (may).
-import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
+// Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation, isForeignKeyViolation } from "@/lib/prisma-errors";
 
@@ -60,11 +60,11 @@ function parseCreateBody(body: unknown): { data: { degreeId: string; branchId: s
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "read", "Program");
 
     // Super Admin: all programs. Scoped roles: only their own program (a Program
     // IS the scoping key, so it filters on the id itself).
-    const where = ctx.roles.includes("Super Admin")
+    const where = ctx.isInstitutionScoped
       ? {}
       : { id: ctx.user.programId ?? "__none__" };
 
@@ -83,7 +83,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    authorize(ctx, "manage", "Program");
 
     const body = await req.json().catch(() => null);
     const parsed = parseCreateBody(body);

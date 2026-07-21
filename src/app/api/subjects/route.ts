@@ -3,8 +3,8 @@
 // programs) and HOD (their own program only), program-scoped via the `where` +
 // assertProgramScope below.
 //
-// Auth is the CLAUDE.md two-step: authenticate() (who) then requireRole() (may).
-import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
+// Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
+import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isForeignKeyViolation, isUniqueViolation } from "@/lib/prisma-errors";
 import { SUBJECT_INCLUDE, toSubjectDto } from "./dto";
@@ -37,10 +37,10 @@ function parseSubjectBody(body: unknown): { data: ParsedSubject } | { error: str
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Subject");
 
     // Super Admin: all subjects. Scoped roles: only their own program.
-    const where = ctx.roles.includes("Super Admin")
+    const where = ctx.isInstitutionScoped
       ? {}
       : { programId: ctx.user.programId ?? "__none__" };
 
@@ -59,7 +59,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin", "HOD");
+    authorize(ctx, "manage", "Subject");
 
     const body = await req.json().catch(() => null);
     const parsed = parseSubjectBody(body);

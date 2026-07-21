@@ -70,10 +70,11 @@ export type ProgramInput = {
 };
 
 // --- Class (a group within a Program) -------------------------------------
-// year (1..durationYears) + section ("A".."H"), optionally an advisor. Unique on
-// (program, year, section). `programLabel` is the display string ("B.E · CSE").
-// `studentCount` (placed enrollments) guards hard-delete. Advisor picker is
-// deferred until the People slice exposes a staff-listing endpoint.
+// year (1..durationYears) + section ("A".."H"), optionally an advisor (the class
+// teacher / mentor — active staff in the same program). Unique on (program, year,
+// section). `programLabel` is the display string ("B.E · CSE"); `advisorName` is
+// the advisor's display name for the table. `studentCount` (placed enrollments)
+// guards hard-delete.
 export type Class = {
   id: string;
   programId: string;
@@ -81,6 +82,7 @@ export type Class = {
   year: number;
   section: string;
   advisorId: string | null;
+  advisorName: string | null;
   isActive: boolean;
   studentCount: number;
   createdAt: string;
@@ -92,4 +94,14 @@ export type ClassInput = {
   year: number;
   section: string;
   advisorId?: string | null;
+};
+
+// A staff member (faculty / HOD) as an advisor-picker option — re-mapped from the
+// shared /api/faculty list. Features must not import each other, so the Structure
+// slice keeps its own slim option type instead of reaching into the Faculty slice.
+export type StaffOption = {
+  userId: string;
+  displayName: string;
+  programId: string | null;
+  designation: string | null;
 };

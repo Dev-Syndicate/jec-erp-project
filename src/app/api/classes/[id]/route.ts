@@ -9,47 +9,21 @@
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isNotFound, isUniqueViolation } from "@/lib/prisma-errors";
+import { CLASS_INCLUDE, toClassDto, validateAdvisor } from "../dto";
 
 export const dynamic = "force-dynamic";
 
-// Include shape shared with the list route — build the DTO the same way.
-const CLASS_INCLUDE = {
-  program: { include: { degree: true, branch: true } },
-  _count: { select: { enrollments: true } },
-} as const;
-
-type ClassRow = {
-  id: string;
-  programId: string;
-  program: { degree: { code: string }; branch: { code: string } };
-  year: number;
-  section: string;
-  advisorId: string | null;
-  isActive: boolean;
-  _count: { enrollments: number };
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-function toDto(c: ClassRow) {
-  return {
-    id: c.id,
-    programId: c.programId,
-    programLabel: `${c.program.degree.code} · ${c.program.branch.code}`,
-    year: c.year,
-    section: c.section,
-    advisorId: c.advisorId,
-    isActive: c.isActive,
-    studentCount: c._count.enrollments,
-    createdAt: c.createdAt,
-    updatedAt: c.updatedAt,
-  };
-}
-
 // Parse a PATCH body: every field optional, but any field present must be valid.
 // Returns only the keys that were supplied, so we never overwrite with undefined.
-// Program is fixed after create, so only year/section/isActive are editable.
-type ClassPatch = { year?: number; section?: string; isActive?: boolean };
+// Program is fixed after create, so only year/section/advisor/isActive are editable.
+// advisorId is captured raw here (undefined = unchanged, null = clear) and
+// validated against the class's program in the handler.
+type ClassPatch = {
+  year?: number;
+  section?: string;
+  isActive?: boolean;
+  advisorId?: string | null;
+};
 
 function parsePatchBody(body: unknown): { data: ClassPatch } | { error: string } {
   if (!body || typeof body !== "object") return { error: "Missing request body." };
@@ -75,6 +49,12 @@ function parsePatchBody(body: unknown): { data: ClassPatch } | { error: string }
     data.isActive = b.isActive;
   }
 
+  if (b.advisorId !== undefined) {
+    if (b.advisorId === null || b.advisorId === "") data.advisorId = null;
+    else if (typeof b.advisorId === "string") data.advisorId = b.advisorId.trim();
+    else return { error: "advisorId must be a staff id or null." };
+  }
+
   if (Object.keys(data).length === 0) return { error: "Nothing to update." };
   return { data };
 }
@@ -91,19 +71,27 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return Response.json({ error: parsed.error }, { status: 400 });
     }
 
-    // If the year changed, keep it within the class's program duration. Fetch the
-    // existing class (with its degree's duration) to check before writing.
-    if (parsed.data.year !== undefined) {
+    // Changing the year or the advisor both need the class's program (year bound /
+    // advisor scope), so fetch the existing class once when either is present.
+    if (parsed.data.year !== undefined || parsed.data.advisorId !== undefined) {
       const existing = await db.class.findUnique({
         where: { id },
         include: { program: { include: { degree: { select: { durationYears: true } } } } },
       });
       if (!existing) return Response.json({ error: "Class not found." }, { status: 404 });
-      if (parsed.data.year > existing.program.degree.durationYears) {
+
+      if (parsed.data.year !== undefined && parsed.data.year > existing.program.degree.durationYears) {
         return Response.json(
           { error: "Year is outside this program's duration." },
           { status: 400 },
         );
+      }
+
+      // The class teacher (if set/changed) must be active staff in this program.
+      if (parsed.data.advisorId !== undefined) {
+        const advisor = await validateAdvisor(parsed.data.advisorId, existing.programId);
+        if ("error" in advisor) return Response.json({ error: advisor.error }, { status: 400 });
+        parsed.data.advisorId = advisor.ok;
       }
     }
 
@@ -113,7 +101,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         data: parsed.data,
         include: CLASS_INCLUDE,
       });
-      return Response.json(toDto(updated));
+      return Response.json(toClassDto(updated));
     } catch (e) {
       if (isNotFound(e)) return Response.json({ error: "Class not found." }, { status: 404 });
       if (isUniqueViolation(e)) {

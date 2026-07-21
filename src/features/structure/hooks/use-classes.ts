@@ -39,7 +39,7 @@ export function useUpdateClass() {
       input,
     }: {
       id: string;
-      input: Partial<Pick<ClassInput, "year" | "section">> & { isActive?: boolean };
+      input: Partial<Pick<ClassInput, "year" | "section" | "advisorId">> & { isActive?: boolean };
     }) => updateClass(id, input),
     onSuccess: () => qc.invalidateQueries({ queryKey: CLASSES_KEY }),
   });

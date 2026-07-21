@@ -35,12 +35,17 @@ import {
 import { PageHeader } from "@/app/(app)/page-header";
 import type { Class, Program } from "@/features/structure/types";
 import { usePrograms } from "@/features/structure/hooks/use-programs";
+import { useStaffOptions } from "@/features/structure/hooks/use-staff";
 import {
   useClasses,
   useCreateClass,
   useDeleteClass,
   useUpdateClass,
 } from "@/features/structure/hooks/use-classes";
+
+// Sentinel for "no class teacher" — a Select value can't be empty, and user ids
+// are cuids so this never collides with a real staff id.
+const NO_ADVISOR = "none";
 
 // Sections a class can take. Year options are derived from the program duration.
 const SECTIONS = ["A", "B", "C", "D", "E", "F", "G", "H"] as const;
@@ -103,6 +108,7 @@ export function ClassManager() {
                 <TableHead>Program</TableHead>
                 <TableHead className="text-right">Year</TableHead>
                 <TableHead>Section</TableHead>
+                <TableHead>Class teacher</TableHead>
                 <TableHead className="text-right">Students</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="w-0 text-right">Actions</TableHead>
@@ -114,6 +120,9 @@ export function ClassManager() {
                   <TableCell className="font-mono text-xs">{c.programLabel}</TableCell>
                   <TableCell className="text-right tabular-nums">{c.year}</TableCell>
                   <TableCell className="font-medium">{c.section}</TableCell>
+                  <TableCell className="text-sm">
+                    {c.advisorName ?? <span className="text-muted-foreground">—</span>}
+                  </TableCell>
                   <TableCell className="text-right tabular-nums text-muted-foreground">
                     {c.studentCount}
                   </TableCell>
@@ -212,10 +221,17 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
 
   const { data: programs } = usePrograms();
   const activePrograms = (programs ?? []).filter((p) => p.isActive);
+  const staff = useStaffOptions();
 
   const [programId, setProgramId] = useState(cls?.programId ?? "");
   const [year, setYear] = useState(cls ? String(cls.year) : "");
   const [section, setSection] = useState(cls?.section ?? "");
+  const [advisorId, setAdvisorId] = useState(cls?.advisorId ?? NO_ADVISOR);
+
+  // The advisor must be staff in the class's program. On create that's the
+  // selected program; on edit it's fixed to the class's program.
+  const advisorProgramId = isEdit ? cls.programId : programId;
+  const advisorOptions = (staff.data ?? []).filter((s) => s.programId === advisorProgramId);
 
   const pending = create.isPending || update.isPending;
   const mutationError = create.error ?? update.error;
@@ -237,11 +253,14 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
+    const advisor = advisorId === NO_ADVISOR ? null : advisorId;
     if (isEdit) {
-      update.mutate({ id: cls.id, input: { year: yearNum, section } }, { onSuccess: onClose });
+      update.mutate(
+        { id: cls.id, input: { year: yearNum, section, advisorId: advisor } },
+        { onSuccess: onClose },
+      );
     } else {
-      // advisorId is deferred — no staff-listing endpoint yet (People slice).
-      create.mutate({ programId, year: yearNum, section }, { onSuccess: onClose });
+      create.mutate({ programId, year: yearNum, section, advisorId: advisor }, { onSuccess: onClose });
     }
   }
 
@@ -270,8 +289,10 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
                 value={programId}
                 onValueChange={(v) => {
                   setProgramId((v as string) ?? "");
-                  // Reset year — the duration bound just changed.
+                  // Reset year (duration bound changed) + advisor (staff are
+                  // program-scoped, so the previous pick may no longer apply).
                   setYear("");
+                  setAdvisorId(NO_ADVISOR);
                 }}
               >
                 <SelectTrigger id="class-program" className="h-10! w-full">
@@ -332,7 +353,40 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
             </div>
           </div>
 
-          {/* Advisor picker is deferred until the People slice exposes a staff-listing endpoint. */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="class-advisor">Class teacher</Label>
+            <Select
+              value={advisorId}
+              onValueChange={(v) => setAdvisorId((v as string) ?? NO_ADVISOR)}
+              disabled={advisorProgramId === ""}
+            >
+              <SelectTrigger id="class-advisor" className="h-10! w-full">
+                <SelectValue placeholder="Optional">
+                  {(v) => {
+                    if (v === NO_ADVISOR || !v) return "None";
+                    // Fall back to the stored name if the advisor isn't in the
+                    // active list (e.g. later deactivated).
+                    if (isEdit && v === cls.advisorId && cls.advisorName) return cls.advisorName;
+                    return advisorOptions.find((s) => s.userId === v)?.displayName ?? "None";
+                  }}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value={NO_ADVISOR}>None</SelectItem>
+                {advisorOptions.map((s) => (
+                  <SelectItem key={s.userId} value={s.userId}>
+                    {s.displayName}
+                    {s.designation ? ` · ${s.designation}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {advisorProgramId !== "" && !staff.isPending && advisorOptions.length === 0 && (
+              <p className="text-xs text-muted-foreground">
+                No staff in this program yet — add faculty first, then set the class teacher.
+              </p>
+            )}
+          </div>
 
           {mutationError && (
             <p

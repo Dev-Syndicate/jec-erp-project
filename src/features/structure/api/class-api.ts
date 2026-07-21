@@ -18,10 +18,11 @@ export function createClass(input: ClassInput): Promise<Class> {
 }
 
 // Partial update — pass only the fields that change. Program is fixed after
-// create, so only year/section (or isActive to deactivate/reactivate) are editable.
+// create, so only year/section/advisor (or isActive to deactivate/reactivate) are
+// editable.
 export function updateClass(
   id: string,
-  input: Partial<Pick<ClassInput, "year" | "section">> & { isActive?: boolean },
+  input: Partial<Pick<ClassInput, "year" | "section" | "advisorId">> & { isActive?: boolean },
 ): Promise<Class> {
   return apiFetch<Class>(`/api/classes/${id}`, {
     method: "PATCH",

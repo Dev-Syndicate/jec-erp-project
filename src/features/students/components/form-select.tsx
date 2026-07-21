@@ -17,16 +17,18 @@ export function FormSelect({
   onChange,
   options,
   placeholder,
+  disabled,
 }: {
   id?: string;
   value: string;
   onChange: (v: string) => void;
   options: Array<{ value: string; label: string }>;
   placeholder: string;
+  disabled?: boolean;
 }) {
   const label = (v: unknown) => options.find((o) => o.value === v)?.label ?? placeholder;
   return (
-    <Select value={value} onValueChange={(v) => onChange((v as string) ?? "")}>
+    <Select value={value} onValueChange={(v) => onChange((v as string) ?? "")} disabled={disabled}>
       <SelectTrigger id={id} className="h-10! w-full">
         <SelectValue placeholder={placeholder}>{label}</SelectValue>
       </SelectTrigger>

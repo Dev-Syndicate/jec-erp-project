@@ -81,6 +81,8 @@ export type ClassOption = {
   id: string;
   programId: string;
   label: string; // "B.E · CSE · II-A"
+  year: number; // 1..durationYears — the first level of the enrol cascade
+  section: string; // "A".."H" — the second level
   isActive: boolean;
 };
 

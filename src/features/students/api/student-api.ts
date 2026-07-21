@@ -111,6 +111,8 @@ export async function fetchClassOptions(): Promise<ClassOption[]> {
     id: c.id,
     programId: c.programId,
     label: `${c.programLabel} · ${roman(c.year)}-${c.section}`,
+    year: c.year,
+    section: c.section,
     isActive: c.isActive,
   }));
 }

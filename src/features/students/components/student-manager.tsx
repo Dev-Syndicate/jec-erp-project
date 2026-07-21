@@ -5,8 +5,8 @@
 // once on create/regenerate — the admin must deliver it before closing.
 "use client";
 
-import { useState } from "react";
-import { Plus, Upload, Pencil, KeyRound, GraduationCap, Copy, Check } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, Upload, Pencil, KeyRound, GraduationCap, Copy, Check, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -134,6 +134,23 @@ export function StudentManager() {
   const [editing, setEditing] = useState<Student | null>(null);
   const [enrolling, setEnrolling] = useState<Student | null>(null);
   const [resetting, setResetting] = useState<Student | null>(null);
+  const [query, setQuery] = useState("");
+
+  // Client-side filter across the fields shown in the table — matches any of
+  // register number, name, email, program, or class (year-section).
+  const filtered = useMemo(() => {
+    if (!students) return [];
+    const q = query.trim().toLowerCase();
+    if (!q) return students;
+    return students.filter((s) => {
+      const enrollment = s.currentEnrollment
+        ? `${s.currentEnrollment.year}-${s.currentEnrollment.section}`
+        : "";
+      return [s.registerNumber, s.displayName, s.email, s.programLabel, enrollment]
+        .filter(Boolean)
+        .some((field) => field!.toLowerCase().includes(q));
+    });
+  }, [students, query]);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -168,20 +185,39 @@ export function StudentManager() {
           </Button>
         </div>
       ) : (
-        <div className="rounded-xl ring-1 ring-foreground/10">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Register no.</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Program</TableHead>
-                <TableHead>Class (this year)</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-0 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {students.map((s) => (
+        <div className="flex flex-col gap-4">
+          <div className="relative max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by name, register no., email, program…"
+              aria-label="Search students"
+              className="h-10! pl-9"
+            />
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border py-16 text-center">
+              <p className="text-sm text-muted-foreground">
+                No students match “{query.trim()}”.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl ring-1 ring-foreground/10">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Register no.</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Program</TableHead>
+                    <TableHead>Class (this year)</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-0 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
                   <TableCell>
@@ -236,9 +272,11 @@ export function StudentManager() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
       )}
 
@@ -462,14 +500,28 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
   );
 }
 
+const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
+const roman = (n: number) => ROMAN[n] ?? String(n);
+
 function EnrollDialog({ student, onClose }: { student: Student; onClose: () => void }) {
   const enroll = useEnrollStudent();
   const classes = useClassOptions();
-  // Only classes in the student's own program are valid targets.
-  const options = (classes.data ?? []).filter(
+  // Only active classes in the student's own program are valid targets. The
+  // program is already fixed by the student, so within it a class is just
+  // year × section — drill down Year → Section rather than one long flat list
+  // (a program can have up to durationYears × sections classes).
+  const inProgram = (classes.data ?? []).filter(
     (c) => c.isActive && c.programId === student.programId,
   );
-  const [classId, setClassId] = useState(student.currentEnrollment?.classId ?? "");
+
+  const current = inProgram.find((c) => c.id === student.currentEnrollment?.classId);
+  const [year, setYear] = useState<string>(current ? String(current.year) : "");
+  const [classId, setClassId] = useState(current?.id ?? "");
+
+  const years = [...new Set(inProgram.map((c) => c.year))].sort((a, b) => a - b);
+  const sections = inProgram
+    .filter((c) => String(c.year) === year)
+    .sort((a, b) => a.section.localeCompare(b.section));
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
@@ -481,21 +533,44 @@ function EnrollDialog({ student, onClose }: { student: Student; onClose: () => v
             different class for this year.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-2">
-          <Label htmlFor="enroll-class">Class</Label>
-          <FormSelect
-            id="enroll-class"
-            value={classId}
-            onChange={setClassId}
-            options={options.map((c) => ({ value: c.id, label: c.label }))}
-            placeholder={
-              classes.isPending
-                ? "Loading…"
-                : options.length === 0
-                  ? "No classes in this program yet"
-                  : "Select a class"
-            }
-          />
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="enroll-year">Year</Label>
+            <FormSelect
+              id="enroll-year"
+              value={year}
+              onChange={(v) => {
+                setYear(v);
+                setClassId(""); // sections differ per year — reset the choice
+              }}
+              options={years.map((y) => ({ value: String(y), label: `Year ${roman(y)}` }))}
+              placeholder={
+                classes.isPending
+                  ? "Loading…"
+                  : years.length === 0
+                    ? "No classes yet"
+                    : "Select year"
+              }
+              disabled={years.length === 0}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="enroll-section">Section</Label>
+            <FormSelect
+              id="enroll-section"
+              value={classId}
+              onChange={setClassId}
+              options={sections.map((c) => ({ value: c.id, label: `Section ${c.section}` }))}
+              placeholder={
+                year === ""
+                  ? "Pick a year first"
+                  : sections.length === 0
+                    ? "No sections"
+                    : "Select section"
+              }
+              disabled={year === ""}
+            />
+          </div>
         </div>
         {enroll.isError && <FormError>{errorMessage(enroll.error)}</FormError>}
         <DialogFooter>

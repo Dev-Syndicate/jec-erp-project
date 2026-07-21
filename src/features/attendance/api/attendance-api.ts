@@ -5,7 +5,14 @@
 "use client";
 
 import { apiFetch } from "@/lib/api-client";
-import type { ClassOption, MarkInput, RosterView, SaveResult, Weekday } from "@/features/attendance/types";
+import type {
+  AttendanceReport,
+  ClassOption,
+  MarkInput,
+  RosterView,
+  SaveResult,
+  Weekday,
+} from "@/features/attendance/types";
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 const roman = (n: number) => ROMAN[n] ?? String(n);
@@ -24,6 +31,10 @@ export function fetchRoster(
 
 export function saveAttendance(input: MarkInput): Promise<SaveResult> {
   return apiFetch<SaveResult>("/api/attendance", { method: "POST", body: JSON.stringify(input) });
+}
+
+export function fetchAttendanceReport(classId: string): Promise<AttendanceReport> {
+  return apiFetch<AttendanceReport>(`/api/attendance/report?classId=${encodeURIComponent(classId)}`);
 }
 
 type RawClass = {

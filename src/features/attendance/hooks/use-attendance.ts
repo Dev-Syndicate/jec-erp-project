@@ -6,7 +6,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { MarkInput, Weekday } from "@/features/attendance/types";
-import { fetchClassOptions, fetchRoster, saveAttendance } from "@/features/attendance/api/attendance-api";
+import {
+  fetchAttendanceReport,
+  fetchClassOptions,
+  fetchRoster,
+  saveAttendance,
+} from "@/features/attendance/api/attendance-api";
 
 // `enabled` is decided by the caller — a Saturday must have chosen its followsDay
 // before the request is valid (otherwise the API would 400).
@@ -25,6 +30,14 @@ export function useRoster(
 
 export function useClassOptions() {
   return useQuery({ queryKey: ["attendance", "classes"], queryFn: fetchClassOptions, staleTime: 5 * 60_000 });
+}
+
+export function useAttendanceReport(classId: string | null) {
+  return useQuery({
+    queryKey: ["attendance", "report", classId],
+    queryFn: () => fetchAttendanceReport(classId as string),
+    enabled: !!classId,
+  });
 }
 
 export function useSaveAttendance() {

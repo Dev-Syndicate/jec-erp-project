@@ -64,3 +64,39 @@ export type ClassOption = {
   programLabel: string; // "B.E · CSE"
   isActive: boolean;
 };
+
+// --- Reports --------------------------------------------------------------
+// The attendance percentages for a class in the active semester. `pct` is null
+// when nothing has been marked yet (no denominator). PRESENT + OD = attended.
+export type SubjectMeta = { subjectId: string; code: string; name: string };
+
+export type SubjectStat = {
+  subjectId: string;
+  attended: number;
+  total: number;
+  pct: number | null;
+};
+
+export type StudentReport = {
+  studentId: string;
+  registerNumber: string;
+  displayName: string;
+  overall: {
+    present: number;
+    absent: number;
+    od: number;
+    excused: number;
+    total: number;
+    attended: number;
+    pct: number | null;
+  };
+  subjects: SubjectStat[]; // aligned with subjectsMeta order
+};
+
+export type AttendanceReport = {
+  classId: string;
+  classLabel: string;
+  semesterLabel: string;
+  subjectsMeta: SubjectMeta[];
+  students: StudentReport[];
+};

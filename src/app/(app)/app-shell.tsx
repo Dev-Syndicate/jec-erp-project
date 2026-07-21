@@ -12,6 +12,7 @@ import {
   Building2,
   CalendarDays,
   CalendarCheck2,
+  ClipboardList,
   Users,
   GraduationCap,
   BookOpen,
@@ -75,6 +76,9 @@ type NavItem = {
   roles?: string[];
   // If present, the item is a collapsible parent revealing these sub-links.
   children?: NavChild[];
+  // Match this path exactly (don't also light up on its sub-routes). Use when a
+  // sibling owns a sub-route, e.g. /attendance vs /attendance/report.
+  exact?: boolean;
 };
 
 type NavGroup = { label: string; items: NavItem[] };
@@ -94,6 +98,13 @@ const NAV: NavGroup[] = [
         title: "Mark attendance",
         href: "/attendance",
         icon: CalendarCheck2,
+        roles: ["Super Admin"],
+        exact: true, // /attendance/report is a sibling, not a sub-page of this
+      },
+      {
+        title: "Report",
+        href: "/attendance/report",
+        icon: ClipboardList,
         roles: ["Super Admin"],
       },
     ],
@@ -192,16 +203,22 @@ function visibleGroups(roles: string[]): NavGroup[] {
 // the nav config so it always matches the real navigation. Falls back to the
 // last path segment for pages not in the nav (e.g. a future detail route).
 function useBreadcrumbs(pathname: string): Array<{ label: string; href?: string }> {
+  // Pick the most specific match (longest href), so /attendance/report resolves
+  // to "Report", not its parent "Mark attendance".
+  let best: { group: NavGroup; item: NavItem } | null = null;
   for (const group of NAV) {
-    const item = group.items.find(
-      (i) => pathname === i.href || pathname.startsWith(`${i.href}/`),
-    );
-    if (item) {
-      // The "Today" group is a single overview; don't prefix it with its label.
-      return group.label === "Today"
-        ? [{ label: item.title }]
-        : [{ label: group.label }, { label: item.title, href: item.href }];
+    for (const item of group.items) {
+      const isMatch = pathname === item.href || pathname.startsWith(`${item.href}/`);
+      if (isMatch && (!best || item.href.length > best.item.href.length)) {
+        best = { group, item };
+      }
     }
+  }
+  if (best) {
+    // The "Today" group is a single overview; don't prefix it with its label.
+    return best.group.label === "Today"
+      ? [{ label: best.item.title }]
+      : [{ label: best.group.label }, { label: best.item.title, href: best.item.href }];
   }
   const last = pathname.split("/").filter(Boolean).at(-1) ?? "";
   return [{ label: last.charAt(0).toUpperCase() + last.slice(1) }];
@@ -242,9 +259,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </SidebarGroupLabel>
               <SidebarMenu>
                 {group.items.map((item) => {
-                  // Overview is exact; section pages also match their sub-routes.
+                  // Exact items (Overview, or a parent with a sibling sub-route)
+                  // match only themselves; others also light up on sub-routes.
                   const active =
-                    item.href === "/dashboard"
+                    item.exact || item.href === "/dashboard"
                       ? pathname === item.href
                       : pathname === item.href || pathname.startsWith(`${item.href}/`);
                   const Icon = item.icon;

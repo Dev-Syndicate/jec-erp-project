@@ -11,6 +11,7 @@ import {
   LayoutDashboard,
   Building2,
   CalendarDays,
+  CalendarCheck2,
   Users,
   GraduationCap,
   BookOpen,
@@ -85,6 +86,17 @@ const NAV: NavGroup[] = [
     items: [{ title: "Overview", href: "/dashboard", icon: LayoutDashboard }],
   },
   {
+    label: "Attendance",
+    items: [
+      {
+        title: "Mark attendance",
+        href: "/attendance",
+        icon: CalendarCheck2,
+        roles: ["Super Admin"],
+      },
+    ],
+  },
+  {
     label: "Structure",
     items: [
       {
@@ -121,13 +133,13 @@ const NAV: NavGroup[] = [
         title: "Students",
         href: "/students",
         icon: Users,
-        roles: ["Super Admin"],
+        roles: ["Super Admin", "HOD"],
       },
       {
         title: "Faculty",
         href: "/faculty",
         icon: GraduationCap,
-        roles: ["Super Admin"],
+        roles: ["Super Admin", "HOD"],
       },
     ],
   },
@@ -138,13 +150,13 @@ const NAV: NavGroup[] = [
         title: "Subjects",
         href: "/subjects",
         icon: BookOpen,
-        roles: ["Super Admin"],
+        roles: ["Super Admin", "HOD"],
       },
       {
         title: "Timetable",
         href: "/timetable",
         icon: CalendarClock,
-        roles: ["Super Admin"],
+        roles: ["Super Admin", "HOD"],
       },
     ],
   },

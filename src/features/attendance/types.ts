@@ -1,2 +1,66 @@
-// Types owned by the attendance feature. Shared/cross-feature DTOs go in src/types/.
-export {};
+// Types owned by the Attendance feature — mark a class's attendance for one
+// (date, period). The marking unit is a single period: pick class + date, the
+// weekday resolves (a Saturday borrows a weekday's grid via `followsDay`), then
+// mark the roster for a scheduled period. Period 1 also sets the day's official
+// MasterAttendance (handled server-side). Kept local — no cross-feature imports.
+
+export type AttendanceStatus = "PRESENT" | "ABSENT" | "OD" | "EXCUSED";
+export const STATUSES: AttendanceStatus[] = ["PRESENT", "ABSENT", "OD", "EXCUSED"];
+
+export type Weekday = "MON" | "TUE" | "WED" | "THU" | "FRI";
+export const WEEKDAYS: Weekday[] = ["MON", "TUE", "WED", "THU", "FRI"];
+
+// A student on the class's active-year roster.
+export type RosterStudent = {
+  studentId: string;
+  registerNumber: string;
+  rollNumber: string | null;
+  displayName: string;
+};
+
+// One scheduled period of the day (from the timetable for the effective weekday).
+export type DayPeriod = {
+  period: number;
+  subjectId: string;
+  subjectCode: string;
+  subjectName: string;
+  facultyId: string;
+  facultyName: string;
+};
+
+// A mark already saved for this date (used to prefill the grid).
+export type ExistingMark = { studentId: string; period: number; status: AttendanceStatus };
+
+// The whole marking context for one (class, date).
+export type RosterView = {
+  classId: string;
+  classLabel: string; // "B.E · CSE · II-A"
+  date: string; // YYYY-MM-DD
+  weekday: Weekday; // resolved (Sat → the borrowed weekday)
+  semesterId: string;
+  semesterLabel: string; // "2025-2026 · Odd"
+  periods: DayPeriod[];
+  roster: RosterStudent[];
+  marks: ExistingMark[];
+};
+
+// Body for POST /api/attendance — save one period's marks.
+export type MarkInput = {
+  classId: string;
+  date: string;
+  period: number;
+  followsDay?: Weekday; // required when the date is a Saturday
+  entries: Array<{ studentId: string; status: AttendanceStatus }>;
+};
+
+export type SaveResult = { saved: number; setDayAttendance: boolean };
+
+// This feature's own read-only class fetch (features don't import each other).
+export type ClassOption = {
+  id: string;
+  label: string; // full: "B.E · CSE · II-A"
+  shortLabel: string; // within a program: "II-A"
+  programId: string;
+  programLabel: string; // "B.E · CSE"
+  isActive: boolean;
+};

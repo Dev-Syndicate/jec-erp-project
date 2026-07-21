@@ -1,7 +1,8 @@
 // /api/classes — list + create Classes. A Class is a group WITHIN a Program: a
-// year + section (e.g. II-A), optionally an advisor. Structure is INSTITUTION-
-// scoped, so these are Super-Admin only (no program filter — the same rule
-// assertProgramScope encodes for scoped roles).
+// year + section (e.g. II-A), optionally an advisor. Creating a class is
+// structural (INSTITUTION-scoped) → Super-Admin only. The GET is also read by
+// scoped roles (an HOD's class dropdown for enrollment / timetable), so it allows
+// HOD but filters to their own program; Super Admin sees all.
 //
 // Auth is the CLAUDE.md two-step: authenticate() (who) then requireRole() (may).
 // The role check is the current stopgap until the CASL factory (src/lib/rbac) lands.
@@ -77,9 +78,15 @@ function parseClassBody(
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
+
+    // Super Admin: all classes. Scoped roles: only classes in their own program.
+    const where = ctx.roles.includes("Super Admin")
+      ? {}
+      : { programId: ctx.user.programId ?? "__none__" };
 
     const classes = await db.class.findMany({
+      where,
       include: CLASS_INCLUDE,
       orderBy: [{ isActive: "desc" }, { year: "asc" }, { section: "asc" }],
     });

@@ -1,7 +1,9 @@
 // /api/programs — list + create Programs. A Program is a Degree × Branch pairing
 // (e.g. B.E × CSE) — it has no name/code of its own; it IS the pairing, and the
-// scoping key every class, student and subject belongs to. Structure is
-// INSTITUTION-scoped, so these are Super-Admin only (no program filter).
+// scoping key every class, student and subject belongs to. Creating a program is
+// structural (INSTITUTION-scoped) → Super-Admin only. The GET is also read by
+// scoped roles (an HOD's program dropdown), so it allows HOD but filters to their
+// own program; Super Admin sees all.
 //
 // Auth is the CLAUDE.md two-step: authenticate() (who) then requireRole() (may).
 import { authenticate, requireRole, toAuthResponse } from "@/lib/auth";
@@ -58,9 +60,16 @@ function parseCreateBody(body: unknown): { data: { degreeId: string; branchId: s
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
+
+    // Super Admin: all programs. Scoped roles: only their own program (a Program
+    // IS the scoping key, so it filters on the id itself).
+    const where = ctx.roles.includes("Super Admin")
+      ? {}
+      : { id: ctx.user.programId ?? "__none__" };
 
     const programs = await db.program.findMany({
+      where,
       include: { degree: true, branch: true, _count: { select: { classes: true } } },
       orderBy: [{ isActive: "desc" }, { createdAt: "asc" }],
     });

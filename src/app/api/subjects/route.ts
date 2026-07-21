@@ -1,6 +1,7 @@
 // /api/subjects — list + create subjects. A Subject is a per-program curriculum
-// entry keyed by semesterNumber (1..2×durationYears). Super-Admin only for now,
-// program-scoped via assertProgramScope so it stays correct when HOD/RBAC land.
+// entry keyed by semesterNumber (1..2×durationYears). Open to Super Admin (all
+// programs) and HOD (their own program only), program-scoped via the `where` +
+// assertProgramScope below.
 //
 // Auth is the CLAUDE.md two-step: authenticate() (who) then requireRole() (may).
 import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
@@ -36,7 +37,7 @@ function parseSubjectBody(body: unknown): { data: ParsedSubject } | { error: str
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
 
     // Super Admin: all subjects. Scoped roles: only their own program.
     const where = ctx.roles.includes("Super Admin")
@@ -58,7 +59,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
 
     const body = await req.json().catch(() => null);
     const parsed = parseSubjectBody(body);

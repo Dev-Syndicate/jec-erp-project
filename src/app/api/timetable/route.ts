@@ -1,5 +1,6 @@
 // /api/timetable — read a class's weekly grid (GET ?classId=) + upsert one cell
-// (POST). Super-Admin only, program-scoped. The grid is always for the ACTIVE
+// (POST). Open to Super Admin (all programs) and HOD (their own program only),
+// program-scoped via assertProgramScope. The grid is always for the ACTIVE
 // semester; a slot's subject must be in the class's program and its faculty must
 // be an active user of that program.
 //
@@ -24,7 +25,7 @@ function activeSemester() {
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
 
     const classId = new URL(req.url).searchParams.get("classId")?.trim();
     if (!classId) return Response.json({ error: "Select a class." }, { status: 400 });
@@ -65,7 +66,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
 
     const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
     const classId = typeof body?.classId === "string" ? body.classId.trim() : "";

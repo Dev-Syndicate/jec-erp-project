@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
     const { id } = await params;
 
     const student = await db.student.findUnique({

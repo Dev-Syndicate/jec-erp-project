@@ -3,8 +3,8 @@
 // Neon rows in a transaction (src/lib/provisioning.ts), rolling back Firebase if
 // the DB write fails. Program-scoped: Super Admin sees all; others their program.
 //
-// Gated Super-Admin-only for now (like the other setup slices) but the program
-// scope is applied via assertProgramScope so it stays correct when HOD/RBAC land.
+// Open to Super Admin (all programs) and HOD (their own program only), enforced
+// by the program-scoped `where` + assertProgramScope below.
 import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
@@ -72,7 +72,7 @@ function isFirebaseEmailTaken(e: unknown): boolean {
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
 
     // Super Admin: all students. Scoped roles: only their own program.
     const where = ctx.roles.includes("Super Admin")
@@ -94,7 +94,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
 
     const body = await req.json().catch(() => null);
     const parsed = parseStudentBody(body);

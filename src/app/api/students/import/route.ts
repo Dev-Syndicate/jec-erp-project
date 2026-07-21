@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
 
     let form: FormData;
     try {

@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
     const { id } = await params;
 
     const slot = await db.timetableSlot.findUnique({

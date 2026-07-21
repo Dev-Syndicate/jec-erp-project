@@ -64,7 +64,7 @@ function parsePatchBody(body: unknown): { data: StudentPatch } | { error: string
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
     const { id } = await params;
 
     const body = await req.json().catch(() => null);

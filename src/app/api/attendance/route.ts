@@ -240,22 +240,30 @@ export async function POST(req: Request) {
         },
       }),
     );
+    // Period 1 seeds the official day record — but must NOT overwrite a row the
+    // class teacher has manually corrected (manuallyAdjusted). So: create any
+    // missing rows, then update only the auto (non-adjusted) ones.
     const masterOps =
       period === 1
-        ? entries.map((e) =>
-            db.masterAttendance.upsert({
-              where: { studentId_date: { studentId: e.studentId, date } },
-              update: { status: e.status as never, markedById },
-              create: {
+        ? [
+            db.masterAttendance.createMany({
+              data: entries.map((e) => ({
                 studentId: e.studentId,
                 classId,
                 semesterId,
                 date,
                 status: e.status as never,
                 markedById,
-              },
+              })),
+              skipDuplicates: true,
             }),
-          )
+            ...entries.map((e) =>
+              db.masterAttendance.updateMany({
+                where: { studentId: e.studentId, date, manuallyAdjusted: false },
+                data: { status: e.status as never, markedById },
+              }),
+            ),
+          ]
         : [];
     await db.$transaction([...periodOps, ...masterOps]);
 

@@ -8,6 +8,8 @@ import { apiFetch } from "@/lib/api-client";
 import type {
   AttendanceReport,
   ClassOption,
+  DayInput,
+  DayView,
   MarkInput,
   RosterView,
   SaveResult,
@@ -35,6 +37,20 @@ export function saveAttendance(input: MarkInput): Promise<SaveResult> {
 
 export function fetchAttendanceReport(classId: string): Promise<AttendanceReport> {
   return apiFetch<AttendanceReport>(`/api/attendance/report?classId=${encodeURIComponent(classId)}`);
+}
+
+// Day (Master) attendance — the class teacher's review + correction of the
+// official day record.
+export function fetchDayAttendance(classId: string, date: string): Promise<DayView> {
+  const q = new URLSearchParams({ classId, date });
+  return apiFetch<DayView>(`/api/attendance/master?${q.toString()}`);
+}
+
+export function saveDayAttendance(input: DayInput): Promise<{ saved: number }> {
+  return apiFetch<{ saved: number }>("/api/attendance/master", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
 }
 
 type RawClass = {

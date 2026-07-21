@@ -102,6 +102,12 @@ const NAV: NavGroup[] = [
         exact: true, // /attendance/report is a sibling, not a sub-page of this
       },
       {
+        title: "Day attendance",
+        href: "/attendance/day",
+        icon: CalendarDays,
+        roles: ["Super Admin"],
+      },
+      {
         title: "Report",
         href: "/attendance/report",
         icon: ClipboardList,

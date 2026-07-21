@@ -65,6 +65,33 @@ export type ClassOption = {
   isActive: boolean;
 };
 
+// --- Day attendance (class-teacher correction) ----------------------------
+// The official DAY (Master) record for a class on a date. Auto-seeded from period
+// 1, but the class teacher can correct it here — a corrected row is
+// `manuallyAdjusted` and the period-1 seed won't overwrite it.
+export type DayStudent = {
+  studentId: string;
+  registerNumber: string;
+  rollNumber: string | null;
+  displayName: string;
+  status: AttendanceStatus | null; // null = no day record yet
+  manuallyAdjusted: boolean;
+};
+
+export type DayView = {
+  classId: string;
+  classLabel: string;
+  date: string; // YYYY-MM-DD
+  roster: DayStudent[];
+};
+
+// Body for POST /api/attendance/master — correct the day record.
+export type DayInput = {
+  classId: string;
+  date: string;
+  entries: Array<{ studentId: string; status: AttendanceStatus }>;
+};
+
 // --- Reports --------------------------------------------------------------
 // The attendance percentages for a class in the active semester. `pct` is null
 // when nothing has been marked yet (no denominator). PRESENT + OD = attended.

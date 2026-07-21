@@ -5,12 +5,14 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { MarkInput, Weekday } from "@/features/attendance/types";
+import type { DayInput, MarkInput, Weekday } from "@/features/attendance/types";
 import {
   fetchAttendanceReport,
   fetchClassOptions,
+  fetchDayAttendance,
   fetchRoster,
   saveAttendance,
+  saveDayAttendance,
 } from "@/features/attendance/api/attendance-api";
 
 // `enabled` is decided by the caller — a Saturday must have chosen its followsDay
@@ -48,5 +50,23 @@ export function useSaveAttendance() {
       qc.invalidateQueries({
         queryKey: ["attendance", "roster", input.classId, input.date, input.followsDay ?? null],
       }),
+  });
+}
+
+// `enabled` is decided by the caller — both a class and a date are needed.
+export function useDayAttendance(classId: string | null, date: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["attendance", "day", classId, date],
+    queryFn: () => fetchDayAttendance(classId as string, date),
+    enabled,
+  });
+}
+
+export function useSaveDayAttendance() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: DayInput) => saveDayAttendance(input),
+    onSuccess: (_data, input) =>
+      qc.invalidateQueries({ queryKey: ["attendance", "day", input.classId, input.date] }),
   });
 }

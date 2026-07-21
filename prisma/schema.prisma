@@ -487,7 +487,9 @@ model TimetableSlot {
 // ---------------------------------------------------------------------------
 
 // The official day attendance — one row per student per day, drives overall
-// attendance %. Set from period 1: present in the first period -> present today.
+// attendance %. Auto-seeded from period 1 (present in the first period -> present
+// today), but the class teacher (advisor) can correct it: a corrected row sets
+// manuallyAdjusted=true, which the period-1 auto-seed then leaves untouched.
 model MasterAttendance {
   id         String           @id @default(cuid())
   studentId  String
@@ -498,6 +500,9 @@ model MasterAttendance {
   semester   Semester         @relation(fields: [semesterId], references: [id])
   date       DateTime         @db.Date
   status     AttendanceStatus
+  // True once the class teacher has manually set this day's record — the period-1
+  // auto-seed skips these so a re-mark of period 1 can't clobber a correction.
+  manuallyAdjusted Boolean    @default(false)
   markedById String
   markedBy   User             @relation("MasterMarkedBy", fields: [markedById], references: [id])
 

@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/features/attendance/components/form-select";
+import { STATUS_META } from "@/features/attendance/components/status-meta";
 import {
   STATUSES,
   WEEKDAYS,
@@ -39,17 +40,6 @@ const WEEKDAY_LABEL: Record<Weekday, string> = {
   WED: "Wednesday",
   THU: "Thursday",
   FRI: "Friday",
-};
-
-// Fixed (non-brand) status colors — attendance status encodes meaning, not theme.
-const STATUS_META: Record<
-  AttendanceStatus,
-  { label: string; short: string; active: string }
-> = {
-  PRESENT: { label: "Present", short: "P", active: "border-emerald-600 bg-emerald-600 text-white" },
-  ABSENT: { label: "Absent", short: "A", active: "border-red-600 bg-red-600 text-white" },
-  OD: { label: "OD", short: "OD", active: "border-amber-500 bg-amber-500 text-white" },
-  EXCUSED: { label: "Excused", short: "EX", active: "border-violet-600 bg-violet-600 text-white" },
 };
 
 const DOW = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] as const;

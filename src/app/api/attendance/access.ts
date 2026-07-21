@@ -49,3 +49,16 @@ export function assertMarksPeriod(
   if (slotFacultyId === ctx.user.id) return;
   throw new AuthError(403, "You can only mark attendance for a period you teach.");
 }
+
+/**
+ * Day-record level: may this user correct the official DAY (Master) attendance?
+ * The day record is the class teacher's domain, so this is STRICTER than
+ * assertTeachesOrAdvises — only `manage Attendance` (HOD/SA) or the class advisor
+ * pass; a plain subject teacher can mark their period but not override the day
+ * record. Throws 403 otherwise.
+ */
+export function assertOwnsDayRecord(ctx: AuthContext, advisorId: string | null): void {
+  if (ctx.ability.can("manage", "Attendance")) return;
+  if (advisorId && advisorId === ctx.user.id) return;
+  throw new AuthError(403, "Only the class teacher (or an admin) can correct the day attendance.");
+}

@@ -5,8 +5,8 @@
 // deliver it before closing. Faculty log in with their email; no enrollment.
 "use client";
 
-import { useState } from "react";
-import { Plus, Pencil, KeyRound, Copy, Check } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Plus, Pencil, KeyRound, Copy, Check, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,13 +28,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/app/(app)/page-header";
-import type { Faculty, Gender, MaritalStatus } from "@/features/faculty/types";
+import type { Faculty, Gender, MaritalStatus, Role } from "@/features/faculty/types";
 import { FormSelect } from "@/features/faculty/components/form-select";
 import {
   useCreateFaculty,
   useFaculty,
   useProgramOptions,
   useRegeneratePassword,
+  useRoles,
   useUpdateFaculty,
 } from "@/features/faculty/hooks/use-faculty";
 
@@ -43,6 +44,8 @@ function errorMessage(e: unknown): string {
   return "Something went wrong. Try again.";
 }
 const isoToDateInput = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
+const sameSet = (a: string[], b: string[]) =>
+  a.length === b.length && [...a].sort().join() === [...b].sort().join();
 
 const GENDER_OPTIONS = [
   { value: "MALE", label: "Male" },
@@ -83,6 +86,33 @@ function StatusPill({ faculty }: { faculty: Faculty }) {
   );
 }
 
+// A single toggle in the role filter row. Active reads as a filled brand pill;
+// inactive is a quiet outline.
+function RolePill({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={
+        active
+          ? "inline-flex items-center rounded-full bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground"
+          : "inline-flex items-center rounded-full px-3 py-1.5 text-xs font-medium text-muted-foreground ring-1 ring-foreground/10 transition-colors hover:bg-muted"
+      }
+    >
+      {label}
+    </button>
+  );
+}
+
 function FormError({ children }: { children: React.ReactNode }) {
   return (
     <p
@@ -91,6 +121,42 @@ function FormError({ children }: { children: React.ReactNode }) {
     >
       {children}
     </p>
+  );
+}
+
+// Multi-select role picker (toggle pills). Roles are configurable data, so this
+// renders whatever /api/roles returns — the seeded HOD/Faculty now, plus any
+// custom role the admin adds later. A faculty member can hold more than one.
+function RoleChecklist({
+  roles,
+  selected,
+  onToggle,
+  loading,
+}: {
+  roles: Role[];
+  selected: string[];
+  onToggle: (id: string) => void;
+  loading: boolean;
+}) {
+  if (loading) return <p className="text-sm text-muted-foreground">Loading roles…</p>;
+  if (roles.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No assignable roles yet. Seed the RBAC roles first.
+      </p>
+    );
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5" role="group" aria-label="Roles">
+      {roles.map((r) => (
+        <RolePill
+          key={r.id}
+          label={r.name}
+          active={selected.includes(r.id)}
+          onClick={() => onToggle(r.id)}
+        />
+      ))}
+    </div>
   );
 }
 
@@ -132,6 +198,32 @@ export function FacultyManager() {
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Faculty | null>(null);
   const [resetting, setResetting] = useState<Faculty | null>(null);
+  const [query, setQuery] = useState("");
+  const [roleFilter, setRoleFilter] = useState("ALL");
+
+  // The distinct RBAC roles actually present in the list, so the filter only
+  // ever offers roles that would return results (e.g. "HOD", "Faculty").
+  const roles = useMemo(() => {
+    const set = new Set<string>();
+    (faculty ?? []).forEach((f) => f.roles.forEach((r) => set.add(r)));
+    return [...set].sort();
+  }, [faculty]);
+
+  // Client-side filter: text search across the visible fields, intersected with
+  // the selected role (or all roles when "ALL").
+  const filtered = useMemo(() => {
+    if (!faculty) return [];
+    const q = query.trim().toLowerCase();
+    return faculty.filter((f) => {
+      const matchesRole = roleFilter === "ALL" || f.roles.includes(roleFilter);
+      const matchesQuery =
+        q === "" ||
+        [f.staffId, f.displayName, f.email, f.programLabel, f.designation]
+          .filter(Boolean)
+          .some((field) => field!.toLowerCase().includes(q));
+      return matchesRole && matchesQuery;
+    });
+  }, [faculty, query, roleFilter]);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -162,20 +254,50 @@ export function FacultyManager() {
           </Button>
         </div>
       ) : (
-        <div className="rounded-xl ring-1 ring-foreground/10">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Staff ID</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Program</TableHead>
-                <TableHead>Designation</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-0 text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {faculty.map((f) => (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="relative w-full max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search by name, staff ID, email, program…"
+                aria-label="Search faculty"
+                className="h-10! pl-9"
+              />
+            </div>
+            {roles.length > 1 && (
+              <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter by role">
+                <RolePill label="All" active={roleFilter === "ALL"} onClick={() => setRoleFilter("ALL")} />
+                {roles.map((r) => (
+                  <RolePill key={r} label={r} active={roleFilter === r} onClick={() => setRoleFilter(r)} />
+                ))}
+              </div>
+            )}
+          </div>
+
+          {filtered.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border py-16 text-center">
+              <p className="text-sm text-muted-foreground">
+                No faculty match the current filters.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl ring-1 ring-foreground/10">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Staff ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Program</TableHead>
+                    <TableHead>Designation</TableHead>
+                    <TableHead>Roles</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-0 text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filtered.map((f) => (
                 <TableRow key={f.id}>
                   <TableCell className="font-mono text-xs">{f.staffId}</TableCell>
                   <TableCell>
@@ -186,6 +308,22 @@ export function FacultyManager() {
                   </TableCell>
                   <TableCell className="text-muted-foreground">{f.programLabel ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{f.designation}</TableCell>
+                  <TableCell>
+                    {f.roles.length ? (
+                      <div className="flex flex-wrap gap-1">
+                        {f.roles.map((r) => (
+                          <span
+                            key={r}
+                            className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground"
+                          >
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell>
                     <StatusPill faculty={f} />
                   </TableCell>
@@ -213,9 +351,11 @@ export function FacultyManager() {
                     </div>
                   </TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </div>
       )}
 
@@ -229,7 +369,9 @@ export function FacultyManager() {
 function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateFaculty();
   const programs = useProgramOptions();
+  const roles = useRoles();
   const activePrograms = (programs.data ?? []).filter((p) => p.isActive);
+  const roleOptions = roles.data ?? [];
 
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
@@ -241,6 +383,16 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
   const [gender, setGender] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [maritalStatus, setMaritalStatus] = useState("");
+  // null = untouched → default to the "Faculty" role once roles load (derived,
+  // so no setState-in-effect). Toggling sets an explicit list.
+  const [roleIds, setRoleIds] = useState<string[] | null>(null);
+  const facultyRoleId = roleOptions.find((r) => r.name === "Faculty")?.id ?? "";
+  const selectedRoleIds = roleIds ?? (facultyRoleId ? [facultyRoleId] : []);
+  const toggleRole = (id: string) =>
+    setRoleIds((prev) => {
+      const base = prev ?? (facultyRoleId ? [facultyRoleId] : []);
+      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    });
 
   // On success we swap the form for the one-time password reveal.
   const created = create.data;
@@ -251,7 +403,8 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
     programId !== "" &&
     staffId.trim() !== "" &&
     designation.trim() !== "" &&
-    phone.trim() !== "";
+    phone.trim() !== "" &&
+    selectedRoleIds.length > 0;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -260,6 +413,7 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
       email: email.trim(),
       displayName: displayName.trim(),
       programId,
+      roleIds: selectedRoleIds,
       staffId: staffId.trim(),
       designation: designation.trim(),
       phone: phone.trim(),
@@ -315,6 +469,15 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
                 <Label htmlFor="f-staff">Staff ID</Label>
                 <Input id="f-staff" value={staffId} onChange={(e) => setStaffId(e.target.value)} className="h-10!" required />
               </div>
+              <div className="col-span-2 flex flex-col gap-2">
+                <Label>Roles</Label>
+                <RoleChecklist
+                  roles={roleOptions}
+                  selected={selectedRoleIds}
+                  onToggle={toggleRole}
+                  loading={roles.isPending}
+                />
+              </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-designation">Designation</Label>
                 <Input id="f-designation" value={designation} onChange={(e) => setDesignation(e.target.value)} className="h-10!" required />
@@ -363,6 +526,8 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
 function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: () => void }) {
   const update = useUpdateFaculty();
   const programs = useProgramOptions();
+  const roles = useRoles();
+  const roleOptions = roles.data ?? [];
   const [programId, setProgramId] = useState(faculty.programId ?? "");
   const [displayName, setDisplayName] = useState(faculty.displayName);
   const [designation, setDesignation] = useState(faculty.designation);
@@ -373,8 +538,24 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
   const [maritalStatus, setMaritalStatus] = useState(faculty.maritalStatus ?? "");
   const [status, setStatus] = useState<"ACTIVE" | "INACTIVE">(faculty.status);
 
+  // Current roles are stored as names on the faculty row; map to ids via the
+  // loaded role list. null = untouched → show the current set (derived, no effect).
+  const initialRoleIds = roleOptions.filter((r) => faculty.roles.includes(r.name)).map((r) => r.id);
+  const [roleIds, setRoleIds] = useState<string[] | null>(null);
+  const selectedRoleIds = roleIds ?? initialRoleIds;
+  const toggleRole = (id: string) =>
+    setRoleIds((prev) => {
+      const base = prev ?? initialRoleIds;
+      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id];
+    });
+  const rolesChanged = roleIds !== null && !sameSet(selectedRoleIds, initialRoleIds);
+
   const valid =
-    displayName.trim() !== "" && designation.trim() !== "" && phone.trim() !== "" && programId !== "";
+    displayName.trim() !== "" &&
+    designation.trim() !== "" &&
+    phone.trim() !== "" &&
+    programId !== "" &&
+    selectedRoleIds.length > 0;
 
   // Only include programId when it actually changed — a program move re-scopes the
   // account and busts the auth cache, so don't trigger it needlessly.
@@ -396,6 +577,7 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
           maritalStatus: (maritalStatus || null) as MaritalStatus | null,
           status,
           ...(programId && programId !== faculty.programId ? { programId } : {}),
+          ...(rolesChanged ? { roleIds: selectedRoleIds } : {}),
         },
       },
       { onSuccess: onClose },
@@ -451,6 +633,15 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
           <div className="flex flex-col gap-2">
             <Label htmlFor="ef-marital">Marital status</Label>
             <FormSelect id="ef-marital" value={maritalStatus} onChange={setMaritalStatus} options={MARITAL_OPTIONS} placeholder="Select" />
+          </div>
+          <div className="col-span-2 flex flex-col gap-2">
+            <Label>Roles</Label>
+            <RoleChecklist
+              roles={roleOptions}
+              selected={selectedRoleIds}
+              onToggle={toggleRole}
+              loading={roles.isPending}
+            />
           </div>
           <div className="col-span-2 flex flex-col gap-2">
             <Label htmlFor="ef-status">Status</Label>

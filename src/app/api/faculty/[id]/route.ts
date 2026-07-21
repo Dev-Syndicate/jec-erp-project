@@ -10,7 +10,7 @@
 // it takes effect immediately rather than after the TTL.
 import { authenticate, assertProgramScope, invalidateAuthUser, requireRole, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { FACULTY_INCLUDE, toFacultyDto } from "../dto";
+import { FACULTY_INCLUDE, toFacultyDto, validateAssignableRoles } from "../dto";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +26,7 @@ type FacultyPatch = {
   motherName?: string | null;
   status?: "ACTIVE" | "INACTIVE";
   programId?: string;
+  roleIds?: string[];
 };
 
 function parsePatchBody(body: unknown): { data: FacultyPatch } | { error: string } {
@@ -92,6 +93,16 @@ function parsePatchBody(body: unknown): { data: FacultyPatch } | { error: string
     if (!v) return { error: "Program can't be empty." };
     data.programId = v;
   }
+  if (b.roleIds !== undefined) {
+    if (!Array.isArray(b.roleIds)) return { error: "Roles must be a list." };
+    const ids = [...new Set(
+      b.roleIds
+        .filter((r): r is string => typeof r === "string" && r.trim() !== "")
+        .map((r) => r.trim()),
+    )];
+    if (ids.length === 0) return { error: "A faculty member needs at least one role." };
+    data.roleIds = ids;
+  }
 
   if (Object.keys(data).length === 0) return { error: "Nothing to update." };
   return { data };
@@ -100,7 +111,7 @@ function parsePatchBody(body: unknown): { data: FacultyPatch } | { error: string
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
     const { id } = await params;
 
     const body = await req.json().catch(() => null);
@@ -114,7 +125,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!existing) return Response.json({ error: "Faculty not found." }, { status: 404 });
     assertProgramScope(ctx, existing.user.programId);
 
-    const { status, programId, dateOfBirth, ...facultyFields } = parsed.data;
+    const { status, programId, dateOfBirth, roleIds, ...facultyFields } = parsed.data;
 
     // Moving to another program: the target must exist and be within your scope
     // (a scoped user can't move a faculty into a program they don't own).
@@ -124,15 +135,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       assertProgramScope(ctx, programId);
     }
 
+    // Reassigning roles (e.g. HOD rotation): validate they're assignable first.
+    let validRoleIds: string[] | undefined;
+    if (roleIds !== undefined) {
+      const roleCheck = await validateAssignableRoles(roleIds);
+      if ("error" in roleCheck) return Response.json({ error: roleCheck.error }, { status: 400 });
+      validRoleIds = roleCheck.ok;
+    }
+
     // User-side fields (login status + scoping key) vs profile fields.
     const userData: { status?: "ACTIVE" | "INACTIVE"; programId?: string } = {};
     if (status) userData.status = status;
     if (programId !== undefined) userData.programId = programId;
 
-    // Keep the User (status/program) and the profile in sync (atomic), then map.
+    // Keep the User (status/program/roles) and the profile in sync (atomic), then map.
     const updated = await db.$transaction(async (tx) => {
       if (Object.keys(userData).length > 0) {
         await tx.user.update({ where: { id: existing.user.id }, data: userData });
+      }
+      // Role reassignment = replace the whole set (delete then recreate).
+      if (validRoleIds) {
+        await tx.userRole.deleteMany({ where: { userId: existing.user.id } });
+        await tx.userRole.createMany({
+          data: validRoleIds.map((roleId) => ({ userId: existing.user.id, roleId })),
+        });
       }
       return tx.facultyProfile.update({
         where: { id },
@@ -144,9 +170,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       });
     });
 
-    // A login enable/disable OR a program move changes authorization — reflect it
-    // immediately instead of waiting out the auth-cache TTL.
-    if (status || programId !== undefined) invalidateAuthUser(existing.user.firebaseUid);
+    // A login enable/disable, program move, OR role change alters authorization —
+    // reflect it immediately instead of waiting out the auth-cache TTL.
+    if (status || programId !== undefined || validRoleIds) {
+      invalidateAuthUser(existing.user.firebaseUid);
+    }
 
     return Response.json(toFacultyDto(updated));
   } catch (err) {

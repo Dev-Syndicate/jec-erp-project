@@ -57,7 +57,17 @@ const PERMISSIONS: Array<{ action: string; subject: string }> = [
 // The four baseline roles. isSystem=true means the UI can't delete them.
 // Permission composition beyond Super Admin is intentionally left to the admin
 // console (RBAC is configurable) — we only guarantee Super Admin can bootstrap.
-const SYSTEM_ROLES = ["Super Admin", "HOD", "Faculty", "Student"] as const;
+//
+// SCOPE MATTERS: Super Admin is INSTITUTION (spans every program, bootstrap-only,
+// never hand-assigned); the rest are PROGRAM (act within their own program). The
+// faculty role picker relies on this — it only offers PROGRAM-scoped roles, so a
+// mis-scoped Super Admin would wrongly appear as assignable.
+const SYSTEM_ROLES = [
+  { name: "Super Admin", scope: "INSTITUTION" },
+  { name: "HOD", scope: "PROGRAM" },
+  { name: "Faculty", scope: "PROGRAM" },
+  { name: "Student", scope: "PROGRAM" },
+] as const;
 
 async function seedRbac() {
   for (const p of PERMISSIONS) {
@@ -68,11 +78,11 @@ async function seedRbac() {
     });
   }
 
-  for (const name of SYSTEM_ROLES) {
+  for (const r of SYSTEM_ROLES) {
     await db.role.upsert({
-      where: { name },
-      update: { isSystem: true },
-      create: { name, isSystem: true },
+      where: { name: r.name },
+      update: { isSystem: true, scope: r.scope },
+      create: { name: r.name, isSystem: true, scope: r.scope },
     });
   }
 

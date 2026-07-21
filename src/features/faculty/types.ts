@@ -31,12 +31,22 @@ export type Faculty = {
   updatedAt: string;
 };
 
+// An assignable RBAC role (from /api/roles) — configurable data, so the picker
+// is driven by this list, not a hardcoded Faculty/HOD toggle.
+export type Role = {
+  id: string;
+  name: string; // "HOD", "Faculty", …
+  description: string | null;
+  scope: "PROGRAM" | "INSTITUTION";
+};
+
 // Body for POST /api/faculty (provision an account). The server generates the
 // temp password and forces a reset on first login.
 export type FacultyInput = {
   email: string;
   displayName: string;
   programId: string;
+  roleIds: string[]; // one or more assignable roles
   staffId: string;
   designation: string;
   phone: string;
@@ -68,6 +78,7 @@ export type FacultyPatch = {
   motherName?: string | null;
   status?: "ACTIVE" | "INACTIVE";
   programId?: string; // reassign to a different program (the scoping key)
+  roleIds?: string[]; // replace the whole role set (e.g. HOD rotation)
 };
 
 // --- Picker options (this feature's own read-only fetch, to honour the

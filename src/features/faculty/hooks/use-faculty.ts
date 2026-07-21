@@ -10,6 +10,7 @@ import {
   createFaculty,
   fetchFaculty,
   fetchProgramOptions,
+  fetchRoles,
   regeneratePassword,
   updateFaculty,
 } from "@/features/faculty/api/faculty-api";
@@ -26,6 +27,10 @@ export function useProgramOptions() {
     queryFn: fetchProgramOptions,
     staleTime: 5 * 60_000,
   });
+}
+
+export function useRoles() {
+  return useQuery({ queryKey: ["faculty", "roles"], queryFn: fetchRoles, staleTime: 5 * 60_000 });
 }
 
 function useInvalidateFaculty() {

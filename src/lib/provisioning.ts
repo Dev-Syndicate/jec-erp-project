@@ -98,7 +98,7 @@ export type FacultyAnchor = {
   email: string;
   displayName: string;
   programId: string;
-  roleId: string; // the seeded "Faculty" (or "HOD") Role id
+  roleIds: string[]; // one or more assignable Role ids (validated by the caller)
   staffId: string; // college-assigned id — required, unique
   designation: string; // HR title, e.g. "Asst. Professor"
   phone: string;
@@ -140,7 +140,7 @@ export async function provisionFacultyAccount(anchor: FacultyAnchor): Promise<Pr
           displayName: anchor.displayName,
           programId: anchor.programId,
           mustChangePassword: true,
-          roles: { create: { roleId: anchor.roleId } },
+          roles: { create: anchor.roleIds.map((roleId) => ({ roleId })) },
           facultyProfile: {
             create: {
               staffId: anchor.staffId,

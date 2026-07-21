@@ -5,6 +5,33 @@
 // separate lifecycle field like Student has).
 import "server-only";
 
+import { db } from "@/lib/db";
+
+/**
+ * Validate a set of role ids for assignment to a STAFF account. All must exist
+ * and be assignable — i.e. PROGRAM-scoped and not the student-only "Student"
+ * role (institution-scoped Super Admin is never hand-assigned). Returns the
+ * de-duplicated ids on success, or a user-facing error string. Shared by the
+ * create + edit routes so both enforce the same rule.
+ */
+export async function validateAssignableRoles(
+  roleIds: string[],
+): Promise<{ ok: string[] } | { error: string }> {
+  const ids = [...new Set(roleIds)];
+  if (ids.length === 0) return { error: "Select at least one role." };
+
+  const roles = await db.role.findMany({
+    where: { id: { in: ids } },
+    select: { id: true, name: true, scope: true },
+  });
+  if (roles.length !== ids.length) return { error: "One or more roles no longer exist." };
+
+  const bad = roles.find((r) => r.scope === "INSTITUTION" || r.name === "Student");
+  if (bad) return { error: "That role can't be assigned to a faculty account." };
+
+  return { ok: roles.map((r) => r.id) };
+}
+
 // The include that produces a faculty row with its user, program and roles.
 // Pass to findMany/findUnique.
 export const FACULTY_INCLUDE = {

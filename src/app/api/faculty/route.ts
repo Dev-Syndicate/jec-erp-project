@@ -4,13 +4,13 @@
 // back Firebase if the DB write fails. Program-scoped: Super Admin sees all;
 // others their program. Faculty log in with email (no register number).
 //
-// Gated Super-Admin-only for now (like the other setup slices) but the program
-// scope is applied via assertProgramScope so it stays correct when HOD/RBAC land.
+// Open to Super Admin (all programs) and HOD (their own program only), enforced
+// by the program-scoped `where` + assertProgramScope below.
 import { authenticate, assertProgramScope, requireRole, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
 import { provisionFacultyAccount } from "@/lib/provisioning";
-import { FACULTY_INCLUDE, toFacultyDto } from "./dto";
+import { FACULTY_INCLUDE, toFacultyDto, validateAssignableRoles } from "./dto";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +20,7 @@ type ParsedFaculty = {
   email: string;
   displayName: string;
   programId: string;
+  roleIds: string[];
   staffId: string;
   designation: string;
   phone: string;
@@ -43,6 +44,15 @@ function parseFacultyBody(body: unknown): { data: ParsedFaculty } | { error: str
 
   const programId = typeof b.programId === "string" ? b.programId.trim() : "";
   if (!programId) return { error: "Program is required." };
+
+  const roleIds = Array.isArray(b.roleIds)
+    ? [...new Set(
+        b.roleIds
+          .filter((r): r is string => typeof r === "string" && r.trim() !== "")
+          .map((r) => r.trim()),
+      )]
+    : [];
+  if (roleIds.length === 0) return { error: "Select at least one role." };
 
   const staffId = typeof b.staffId === "string" ? b.staffId.trim() : "";
   if (!staffId) return { error: "Staff ID is required." };
@@ -84,6 +94,7 @@ function parseFacultyBody(body: unknown): { data: ParsedFaculty } | { error: str
       email,
       displayName,
       programId,
+      roleIds,
       staffId,
       designation,
       phone,
@@ -110,7 +121,7 @@ function isFirebaseEmailTaken(e: unknown): boolean {
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
 
     // Super Admin: all faculty. Scoped roles: only their own program.
     const where = ctx.roles.includes("Super Admin")
@@ -132,7 +143,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const ctx = await authenticate(req);
-    requireRole(ctx, "Super Admin");
+    requireRole(ctx, "Super Admin", "HOD");
 
     const body = await req.json().catch(() => null);
     const parsed = parseFacultyBody(body);
@@ -141,10 +152,9 @@ export async function POST(req: Request) {
     // Can only provision into a program you're allowed to act in.
     assertProgramScope(ctx, parsed.data.programId);
 
-    const facultyRole = await db.role.findUnique({ where: { name: "Faculty" }, select: { id: true } });
-    if (!facultyRole) {
-      return Response.json({ error: "Faculty role is not seeded. Run the seed." }, { status: 500 });
-    }
+    // Validate the chosen roles are assignable (exist, PROGRAM-scoped, not Student).
+    const roleCheck = await validateAssignableRoles(parsed.data.roleIds);
+    if ("error" in roleCheck) return Response.json({ error: roleCheck.error }, { status: 400 });
 
     // Guard the program exists (a clean 400 rather than a provisioning failure
     // after the Firebase user is already created).
@@ -160,7 +170,7 @@ export async function POST(req: Request) {
         email: parsed.data.email,
         displayName: parsed.data.displayName,
         programId: parsed.data.programId,
-        roleId: facultyRole.id,
+        roleIds: roleCheck.ok,
         staffId: parsed.data.staffId,
         designation: parsed.data.designation,
         phone: parsed.data.phone,

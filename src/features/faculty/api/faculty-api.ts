@@ -12,6 +12,7 @@ import type {
   FacultyPatch,
   ProgramOption,
   ProvisionResult,
+  Role,
 } from "@/features/faculty/types";
 
 // --- Faculty --------------------------------------------------------------
@@ -37,6 +38,12 @@ export function regeneratePassword(id: string): Promise<{ tempPassword: string }
   return apiFetch<{ tempPassword: string }>(`/api/faculty/${id}/regenerate-password`, {
     method: "POST",
   });
+}
+
+// Assignable roles for the role picker (dynamic — reflects any roles the admin
+// creates). Returned as-is; the shape already matches the client Role type.
+export function fetchRoles(): Promise<Role[]> {
+  return apiFetch<Role[]>("/api/roles");
 }
 
 // --- Picker options (mapped from the shared structure endpoint) -----------

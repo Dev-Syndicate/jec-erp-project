@@ -36,6 +36,10 @@ export type StudentAnchor = {
   dateOfBirth: string; // ISO yyyy-mm-dd
   phone: string;
   gender?: "MALE" | "FEMALE" | "OTHER" | null;
+  // Optional: place the student in a class for an academic year in the SAME
+  // transaction, so a newly-added student is enrolled immediately (no separate
+  // step, no "Not enrolled" limbo). The caller validates the class + active year.
+  enrollment?: { classId: string; academicYearId: string };
 };
 
 export type ProvisionedStudent = {
@@ -76,6 +80,16 @@ export async function provisionStudentAccount(anchor: StudentAnchor): Promise<Pr
               dateOfBirth: new Date(anchor.dateOfBirth),
               phone: anchor.phone,
               gender: anchor.gender ?? null,
+              ...(anchor.enrollment
+                ? {
+                    enrollments: {
+                      create: {
+                        classId: anchor.enrollment.classId,
+                        academicYearId: anchor.enrollment.academicYearId,
+                      },
+                    },
+                  }
+                : {}),
             },
           },
         },

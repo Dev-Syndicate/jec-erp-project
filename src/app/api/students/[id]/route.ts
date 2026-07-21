@@ -19,6 +19,7 @@ type StudentPatch = {
   gender?: "MALE" | "FEMALE" | "OTHER" | null;
   dateOfBirth?: string;
   status?: "ACTIVE" | "GRADUATED" | "DROPPED" | "TRANSFERRED";
+  classId?: string; // move the student to this class for the active year
 };
 
 function parsePatchBody(body: unknown): { data: StudentPatch } | { error: string } {
@@ -56,6 +57,10 @@ function parsePatchBody(body: unknown): { data: StudentPatch } | { error: string
     }
     data.status = b.status as StudentPatch["status"];
   }
+  // Only acts when non-empty — the class is edited alongside the other details.
+  if (b.classId !== undefined && typeof b.classId === "string" && b.classId.trim() !== "") {
+    data.classId = b.classId.trim();
+  }
 
   if (Object.keys(data).length === 0) return { error: "Nothing to update." };
   return { data };
@@ -78,17 +83,48 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!existing) return Response.json({ error: "Student not found." }, { status: 404 });
     assertProgramScope(ctx, existing.user.programId);
 
-    const { status, ...studentFields } = parsed.data;
+    const { status, classId, ...studentFields } = parsed.data;
     // A non-ACTIVE lifecycle status also disables the login; ACTIVE restores it.
     const userStatusUpdate =
       status === undefined ? undefined : status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
 
-    // Keep the login flag and the student status consistent (atomic), then map.
+    // If the class changed, it must be in the student's program; the enrollment
+    // moves to it for the active academic year. Validate up front for clean 400s.
+    let enrollTarget: { classId: string; academicYearId: string } | undefined;
+    if (classId) {
+      const klass = await db.class.findUnique({ where: { id: classId }, select: { programId: true } });
+      if (!klass || klass.programId !== existing.user.programId) {
+        return Response.json({ error: "Select a valid class in this program." }, { status: 400 });
+      }
+      const activeYear = await db.academicYear.findFirst({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      if (!activeYear) {
+        return Response.json(
+          { error: "No academic year is active. Activate one before placing students in a class." },
+          { status: 400 },
+        );
+      }
+      enrollTarget = { classId, academicYearId: activeYear.id };
+    }
+
+    // Keep the login flag, student status and enrollment consistent (atomic). The
+    // student.update runs last so the returned row reflects the moved enrollment.
     const updated = await db.$transaction(async (tx) => {
       if (userStatusUpdate) {
         await tx.user.update({
           where: { id: existing.user.id },
           data: { status: userStatusUpdate },
+        });
+      }
+      if (enrollTarget) {
+        await tx.enrollment.upsert({
+          where: {
+            studentId_academicYearId: { studentId: id, academicYearId: enrollTarget.academicYearId },
+          },
+          update: { classId: enrollTarget.classId },
+          create: { studentId: id, classId: enrollTarget.classId, academicYearId: enrollTarget.academicYearId },
         });
       }
       return tx.student.update({

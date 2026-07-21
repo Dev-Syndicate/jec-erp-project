@@ -45,35 +45,31 @@ export function regeneratePassword(id: string): Promise<{ tempPassword: string }
   });
 }
 
-export function enrollStudent(id: string, classId: string): Promise<Student> {
-  return apiFetch<Student>(`/api/students/${id}/enroll`, {
-    method: "POST",
-    body: JSON.stringify({ classId }),
-  });
-}
-
 // --- Bulk import ----------------------------------------------------------
 // FormData bodies: apiFetch leaves Content-Type unset so the browser adds the
 // multipart boundary. dryRun=true parses only (preview); omitting it commits.
-function importForm(file: File, programId: string, dryRun: boolean): FormData {
+function importForm(file: File, programId: string, classId: string, dryRun: boolean): FormData {
   const form = new FormData();
   form.append("file", file);
   form.append("programId", programId);
+  if (classId) form.append("classId", classId);
   if (dryRun) form.append("dryRun", "true");
   return form;
 }
 
+// Preview only parses — no class needed yet.
 export function previewImport(file: File, programId: string): Promise<ImportPreview> {
   return apiFetch<ImportPreview>("/api/students/import", {
     method: "POST",
-    body: importForm(file, programId, true),
+    body: importForm(file, programId, "", true),
   });
 }
 
-export function commitImport(file: File, programId: string): Promise<ImportResult> {
+// Commit provisions + enrolls every row into the chosen class.
+export function commitImport(file: File, programId: string, classId: string): Promise<ImportResult> {
   return apiFetch<ImportResult>("/api/students/import", {
     method: "POST",
-    body: importForm(file, programId, false),
+    body: importForm(file, programId, classId, false),
   });
 }
 

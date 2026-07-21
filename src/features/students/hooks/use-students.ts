@@ -10,7 +10,6 @@ import type { StudentInput, StudentPatch } from "@/features/students/types";
 import {
   commitImport,
   createStudent,
-  enrollStudent,
   fetchClassOptions,
   fetchProgramOptions,
   fetchStudents,
@@ -64,14 +63,6 @@ export function useRegeneratePassword() {
   return useMutation({ mutationFn: (id: string) => regeneratePassword(id) });
 }
 
-export function useEnrollStudent() {
-  const invalidate = useInvalidateStudents();
-  return useMutation({
-    mutationFn: ({ id, classId }: { id: string; classId: string }) => enrollStudent(id, classId),
-    onSuccess: invalidate,
-  });
-}
-
 // Preview parses only — no list change.
 export function useImportPreview() {
   return useMutation({
@@ -80,12 +71,12 @@ export function useImportPreview() {
   });
 }
 
-// Commit provisions rows — refresh the list once done.
+// Commit provisions rows + enrolls them into the chosen class — refresh once done.
 export function useImportCommit() {
   const invalidate = useInvalidateStudents();
   return useMutation({
-    mutationFn: ({ file, programId }: { file: File; programId: string }) =>
-      commitImport(file, programId),
+    mutationFn: ({ file, programId, classId }: { file: File; programId: string; classId: string }) =>
+      commitImport(file, programId, classId),
     onSuccess: invalidate,
   });
 }

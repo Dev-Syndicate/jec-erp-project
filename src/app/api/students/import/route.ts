@@ -51,7 +51,30 @@ export async function POST(req: Request) {
       return Response.json({ error: "Student role is not seeded. Run the seed." }, { status: 500 });
     }
 
-    const outcomes = await provisionRows(parsed.rows, { programId, roleId: studentRole.id });
+    // Every imported student joins one class (chosen once in the UI) for the
+    // active year — so an import lands enrolled, not in limbo.
+    const classId = String(form.get("classId") ?? "").trim();
+    if (!classId) return Response.json({ error: "Choose a class for the import." }, { status: 400 });
+    const klass = await db.class.findUnique({ where: { id: classId }, select: { programId: true } });
+    if (!klass || klass.programId !== programId) {
+      return Response.json({ error: "Select a valid class in this program." }, { status: 400 });
+    }
+    const activeYear = await db.academicYear.findFirst({
+      where: { isActive: true },
+      select: { id: true },
+    });
+    if (!activeYear) {
+      return Response.json(
+        { error: "No academic year is active. Activate one before importing students." },
+        { status: 400 },
+      );
+    }
+
+    const outcomes = await provisionRows(parsed.rows, {
+      programId,
+      roleId: studentRole.id,
+      enrollment: { classId, academicYearId: activeYear.id },
+    });
 
     return Response.json({
       outcomes,

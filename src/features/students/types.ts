@@ -44,6 +44,7 @@ export type StudentInput = {
   email: string;
   displayName: string;
   programId: string;
+  classId?: string; // optional: place in this class for the active year on create
   registerNumber: string;
   rollNumber?: string | null;
   dateOfBirth: string; // yyyy-mm-dd
@@ -66,6 +67,7 @@ export type StudentPatch = {
   gender?: Gender | null;
   dateOfBirth?: string;
   status?: StudentStatus;
+  classId?: string; // move to this class for the active year (edited inline)
 };
 
 // --- Picker options (this feature's own read-only fetches, to honour the

@@ -201,7 +201,13 @@ export type ImportOutcome = {
  */
 export async function provisionRows(
   rows: ParsedRow[],
-  opts: { programId: string; roleId: string },
+  opts: {
+    programId: string;
+    roleId: string;
+    // Optional: enroll every provisioned row into this class for the active
+    // year, in the same transaction as the account (no "Not enrolled" limbo).
+    enrollment?: { classId: string; academicYearId: string };
+  },
 ): Promise<ImportOutcome[]> {
   const outcomes: ImportOutcome[] = [];
 
@@ -217,6 +223,7 @@ export async function provisionRows(
         dateOfBirth: row.dateOfBirth,
         phone: row.phone,
         gender: row.gender || null,
+        enrollment: opts.enrollment,
       });
       outcomes.push({
         rowNumber: row.rowNumber,

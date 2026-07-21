@@ -6,7 +6,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Upload, Pencil, KeyRound, GraduationCap, Copy, Check, Search } from "lucide-react";
+import { Plus, Upload, Pencil, KeyRound, Copy, Check, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,11 +30,11 @@ import {
 import { PageHeader } from "@/app/(app)/page-header";
 import type { Gender, Student, StudentStatus } from "@/features/students/types";
 import { FormSelect } from "@/features/students/components/form-select";
+import { ClassCascade } from "@/features/students/components/class-cascade";
 import { ImportStudentsDialog } from "@/features/students/components/import-students-dialog";
 import {
   useClassOptions,
   useCreateStudent,
-  useEnrollStudent,
   useProgramOptions,
   useRegeneratePassword,
   useStudents,
@@ -132,7 +132,6 @@ export function StudentManager() {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
-  const [enrolling, setEnrolling] = useState<Student | null>(null);
   const [resetting, setResetting] = useState<Student | null>(null);
   const [query, setQuery] = useState("");
 
@@ -241,15 +240,6 @@ export function StudentManager() {
                   </TableCell>
                   <TableCell>
                     <div className="flex items-center justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setEnrolling(s)}
-                        aria-label="Enroll student"
-                        title="Enroll in a class"
-                      >
-                        <GraduationCap />
-                      </Button>
                       {s.mustChangePassword && s.userStatus === "ACTIVE" && (
                         <Button
                           variant="ghost"
@@ -283,7 +273,6 @@ export function StudentManager() {
       {creating && <CreateStudentDialog onClose={() => setCreating(false)} />}
       {importing && <ImportStudentsDialog onClose={() => setImporting(false)} />}
       {editing && <EditStudentDialog student={editing} onClose={() => setEditing(null)} />}
-      {enrolling && <EnrollDialog student={enrolling} onClose={() => setEnrolling(null)} />}
       {resetting && <RegenerateDialog student={resetting} onClose={() => setResetting(null)} />}
     </div>
   );
@@ -292,16 +281,21 @@ export function StudentManager() {
 function CreateStudentDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateStudent();
   const programs = useProgramOptions();
+  const classes = useClassOptions();
   const activePrograms = (programs.data ?? []).filter((p) => p.isActive);
 
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [programId, setProgramId] = useState("");
+  const [classId, setClassId] = useState("");
   const [registerNumber, setRegisterNumber] = useState("");
   const [rollNumber, setRollNumber] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [phone, setPhone] = useState("");
   const [gender, setGender] = useState("");
+
+  // Classes for the chosen program feed the Year → Section cascade.
+  const classesInProgram = (classes.data ?? []).filter((c) => c.isActive && c.programId === programId);
 
   // On success we swap the form for the one-time password reveal.
   const created = create.data;
@@ -321,6 +315,7 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
       email: email.trim(),
       displayName: displayName.trim(),
       programId,
+      classId: classId || undefined, // optional — enrol now, or place later
       registerNumber: registerNumber.trim(),
       rollNumber: rollNumber.trim() || null,
       dateOfBirth,
@@ -331,7 +326,7 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>{created ? "Student created" : "Add student"}</DialogTitle>
           <DialogDescription>
@@ -350,7 +345,8 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
           </>
         ) : (
           <>
-            <form id="student-form" onSubmit={submit} className="flex flex-col gap-4">
+            {/* Landscape 2-column layout so the form stays short. */}
+            <form id="student-form" onSubmit={submit} className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="s-name">Full name</Label>
                 <Input id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" autoFocus required />
@@ -360,40 +356,56 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
                 <Input id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="h-10!" required />
               </div>
               <div className="flex flex-col gap-2">
-                <Label htmlFor="s-program">Program</Label>
-                <FormSelect
-                  id="s-program"
-                  value={programId}
-                  onChange={setProgramId}
-                  options={activePrograms.map((p) => ({ value: p.id, label: p.label }))}
-                  placeholder={programs.isPending ? "Loading…" : "Select a program"}
-                />
+                <Label htmlFor="s-reg">Register number</Label>
+                <Input id="s-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} className="h-10!" required />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="s-reg">Register number</Label>
-                  <Input id="s-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} className="h-10!" required />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="s-roll">Roll number (optional)</Label>
-                  <Input id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
-                </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="s-roll">Roll number (optional)</Label>
+                <Input id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="s-dob">Date of birth</Label>
-                  <Input id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" required />
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label htmlFor="s-phone">Phone</Label>
-                  <Input id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
-                </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="s-dob">Date of birth</Label>
+                <Input id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" required />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="s-phone">Phone</Label>
+                <Input id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="s-gender">Gender (optional)</Label>
                 <FormSelect id="s-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
               </div>
-              {create.isError && <FormError>{errorMessage(create.error)}</FormError>}
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="s-program">Program</Label>
+                <FormSelect
+                  id="s-program"
+                  value={programId}
+                  onChange={(v) => {
+                    setProgramId(v);
+                    setClassId(""); // classes differ per program — reset the choice
+                  }}
+                  options={activePrograms.map((p) => ({ value: p.id, label: p.label }))}
+                  placeholder={programs.isPending ? "Loading…" : "Select a program"}
+                />
+              </div>
+              {/* Class is optional — place them now (Year + Section) or later via
+                  "Change class". Spans both columns as its own Year | Section pair. */}
+              <div className="col-span-2 flex flex-col gap-2">
+                <Label>Class (optional)</Label>
+                <ClassCascade
+                  key={programId || "none"}
+                  classes={classesInProgram}
+                  onChange={setClassId}
+                  loading={classes.isPending}
+                  disabled={programId === ""}
+                  idPrefix="s"
+                />
+              </div>
+              {create.isError && (
+                <div className="col-span-2">
+                  <FormError>{errorMessage(create.error)}</FormError>
+                </div>
+              )}
             </form>
             <DialogFooter>
               <Button variant="outline" onClick={onClose} disabled={create.isPending}>
@@ -412,12 +424,20 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
 
 function EditStudentDialog({ student, onClose }: { student: Student; onClose: () => void }) {
   const update = useUpdateStudent();
+  const classes = useClassOptions();
   const [displayName, setDisplayName] = useState(student.displayName);
   const [rollNumber, setRollNumber] = useState(student.rollNumber ?? "");
   const [phone, setPhone] = useState(student.phone);
   const [dateOfBirth, setDateOfBirth] = useState(isoToDateInput(student.dateOfBirth));
   const [gender, setGender] = useState(student.gender ?? "");
   const [status, setStatus] = useState<StudentStatus>(student.status);
+  // Class (enrollment) is edited inline here. Preselect the current class; only
+  // send it on save when it actually changed.
+  const currentClassId = student.currentEnrollment?.classId ?? "";
+  const [classId, setClassId] = useState(currentClassId);
+  const classesInProgram = (classes.data ?? []).filter(
+    (c) => c.isActive && c.programId === student.programId,
+  );
 
   const valid = displayName.trim() !== "" && phone.trim() !== "" && dateOfBirth !== "";
 
@@ -434,6 +454,7 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
           dateOfBirth,
           gender: (gender || null) as Gender | null,
           status,
+          ...(classId && classId !== currentClassId ? { classId } : {}),
         },
       },
       { onSuccess: onClose },
@@ -442,40 +463,48 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>Edit {student.displayName}</DialogTitle>
           <DialogDescription>
-            Update details or lifecycle status. A non-active status disables sign-in until set back
-            to Active. Register number and email aren’t editable here.
+            Update details, class or lifecycle status. A non-active status disables sign-in until set
+            back to Active. Register number and email aren’t editable here.
           </DialogDescription>
         </DialogHeader>
-        <form id="edit-student-form" onSubmit={submit} className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2">
+        {/* Landscape 2-column layout so the form stays short. */}
+        <form id="edit-student-form" onSubmit={submit} className="grid grid-cols-2 gap-4">
+          <div className="col-span-2 flex flex-col gap-2">
             <Label htmlFor="e-name">Full name</Label>
             <Input id="e-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" required />
           </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="e-roll">Roll number</Label>
-              <Input id="e-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="e-phone">Phone</Label>
-              <Input id="e-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="e-dob">Date of birth</Label>
-              <Input id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" required />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="e-gender">Gender</Label>
-              <FormSelect id="e-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
-            </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="e-roll">Roll number</Label>
+            <Input id="e-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
           </div>
           <div className="flex flex-col gap-2">
+            <Label htmlFor="e-phone">Phone</Label>
+            <Input id="e-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="e-dob">Date of birth</Label>
+            <Input id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" required />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="e-gender">Gender</Label>
+            <FormSelect id="e-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
+          </div>
+          {/* Class (enrollment) for the active year — edited alongside details. */}
+          <div className="col-span-2 flex flex-col gap-2">
+            <Label>Class</Label>
+            <ClassCascade
+              classes={classesInProgram}
+              initialClassId={currentClassId}
+              onChange={setClassId}
+              loading={classes.isPending}
+              idPrefix="e"
+            />
+          </div>
+          <div className="col-span-2 flex flex-col gap-2">
             <Label htmlFor="e-status">Status</Label>
             <FormSelect
               id="e-status"
@@ -485,7 +514,11 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
               placeholder="Select"
             />
           </div>
-          {update.isError && <FormError>{errorMessage(update.error)}</FormError>}
+          {update.isError && (
+            <div className="col-span-2">
+              <FormError>{errorMessage(update.error)}</FormError>
+            </div>
+          )}
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={update.isPending}>
@@ -493,95 +526,6 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
           </Button>
           <Button type="submit" form="edit-student-form" disabled={!valid || update.isPending}>
             {update.isPending ? "Saving…" : "Save changes"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
-const roman = (n: number) => ROMAN[n] ?? String(n);
-
-function EnrollDialog({ student, onClose }: { student: Student; onClose: () => void }) {
-  const enroll = useEnrollStudent();
-  const classes = useClassOptions();
-  // Only active classes in the student's own program are valid targets. The
-  // program is already fixed by the student, so within it a class is just
-  // year × section — drill down Year → Section rather than one long flat list
-  // (a program can have up to durationYears × sections classes).
-  const inProgram = (classes.data ?? []).filter(
-    (c) => c.isActive && c.programId === student.programId,
-  );
-
-  const current = inProgram.find((c) => c.id === student.currentEnrollment?.classId);
-  const [year, setYear] = useState<string>(current ? String(current.year) : "");
-  const [classId, setClassId] = useState(current?.id ?? "");
-
-  const years = [...new Set(inProgram.map((c) => c.year))].sort((a, b) => a - b);
-  const sections = inProgram
-    .filter((c) => String(c.year) === year)
-    .sort((a, b) => a.section.localeCompare(b.section));
-
-  return (
-    <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Enroll {student.displayName}</DialogTitle>
-          <DialogDescription>
-            Place the student in a class for the active academic year. Re-enrolling moves them to a
-            different class for this year.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="enroll-year">Year</Label>
-            <FormSelect
-              id="enroll-year"
-              value={year}
-              onChange={(v) => {
-                setYear(v);
-                setClassId(""); // sections differ per year — reset the choice
-              }}
-              options={years.map((y) => ({ value: String(y), label: `Year ${roman(y)}` }))}
-              placeholder={
-                classes.isPending
-                  ? "Loading…"
-                  : years.length === 0
-                    ? "No classes yet"
-                    : "Select year"
-              }
-              disabled={years.length === 0}
-            />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="enroll-section">Section</Label>
-            <FormSelect
-              id="enroll-section"
-              value={classId}
-              onChange={setClassId}
-              options={sections.map((c) => ({ value: c.id, label: `Section ${c.section}` }))}
-              placeholder={
-                year === ""
-                  ? "Pick a year first"
-                  : sections.length === 0
-                    ? "No sections"
-                    : "Select section"
-              }
-              disabled={year === ""}
-            />
-          </div>
-        </div>
-        {enroll.isError && <FormError>{errorMessage(enroll.error)}</FormError>}
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={enroll.isPending}>
-            Cancel
-          </Button>
-          <Button
-            disabled={classId === "" || enroll.isPending}
-            onClick={() => enroll.mutate({ id: student.id, classId }, { onSuccess: onClose })}
-          >
-            {enroll.isPending ? "Enrolling…" : "Enroll"}
           </Button>
         </DialogFooter>
       </DialogContent>

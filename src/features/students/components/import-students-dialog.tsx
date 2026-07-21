@@ -21,7 +21,13 @@ import {
 } from "@/components/ui/dialog";
 import type { ImportOutcome, ImportRowError } from "@/features/students/types";
 import { FormSelect } from "@/features/students/components/form-select";
-import { useImportCommit, useImportPreview, useProgramOptions } from "@/features/students/hooks/use-students";
+import { ClassCascade } from "@/features/students/components/class-cascade";
+import {
+  useClassOptions,
+  useImportCommit,
+  useImportPreview,
+  useProgramOptions,
+} from "@/features/students/hooks/use-students";
 
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -92,24 +98,29 @@ type Phase = "select" | "preview" | "results";
 
 export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
   const programs = useProgramOptions();
+  const classes = useClassOptions();
   const activePrograms = (programs.data ?? []).filter((p) => p.isActive);
   const preview = useImportPreview();
   const commit = useImportCommit();
 
   const [phase, setPhase] = useState<Phase>("select");
   const [programId, setProgramId] = useState("");
+  const [classId, setClassId] = useState("");
   const [file, setFile] = useState<File | null>(null);
+
+  const classesInProgram = (classes.data ?? []).filter((c) => c.isActive && c.programId === programId);
+  const canProceed = !!file && !!programId && !!classId;
 
   const previewData = preview.data;
   const resultData = commit.data;
 
   function runPreview() {
-    if (!file || !programId) return;
-    preview.mutate({ file, programId }, { onSuccess: () => setPhase("preview") });
+    if (!canProceed) return;
+    preview.mutate({ file: file!, programId }, { onSuccess: () => setPhase("preview") });
   }
   function runCommit() {
-    if (!file || !programId) return;
-    commit.mutate({ file, programId }, { onSuccess: () => setPhase("results") });
+    if (!canProceed) return;
+    commit.mutate({ file: file!, programId, classId }, { onSuccess: () => setPhase("results") });
   }
   function backToSelect() {
     preview.reset();
@@ -123,7 +134,8 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
           <DialogTitle>Import students</DialogTitle>
           <DialogDescription>
             Upload a CSV or Excel file with columns: name, email, registerNumber, rollNumber,
-            dateOfBirth, phone, gender. All rows are added to the program you pick.
+            dateOfBirth, phone, gender. All rows are added to the program + class you pick, for the
+            active academic year.
           </DialogDescription>
         </DialogHeader>
 
@@ -135,11 +147,23 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
                 <FormSelect
                   id="import-program"
                   value={programId}
-                  onChange={setProgramId}
+                  onChange={(v) => {
+                    setProgramId(v);
+                    setClassId(""); // classes differ per program — reset the choice
+                  }}
                   options={activePrograms.map((p) => ({ value: p.id, label: p.label }))}
                   placeholder={programs.isPending ? "Loading…" : "Select a program"}
                 />
               </div>
+              {/* Every imported student joins this class for the active year. */}
+              <ClassCascade
+                key={programId || "none"}
+                classes={classesInProgram}
+                onChange={setClassId}
+                loading={classes.isPending}
+                disabled={programId === ""}
+                idPrefix="import"
+              />
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between">
                   <Label htmlFor="import-file">Spreadsheet</Label>
@@ -177,7 +201,7 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
               </Button>
               <Button
                 onClick={runPreview}
-                disabled={!file || !programId || preview.isPending}
+                disabled={!canProceed || preview.isPending}
                 data-icon="inline-start"
               >
                 <Upload />

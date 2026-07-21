@@ -19,6 +19,7 @@ type ParsedStudent = {
   email: string;
   displayName: string;
   programId: string;
+  classId: string;
   registerNumber: string;
   rollNumber: string | null;
   dateOfBirth: string;
@@ -39,6 +40,10 @@ function parseStudentBody(body: unknown): { data: ParsedStudent } | { error: str
   const programId = typeof b.programId === "string" ? b.programId.trim() : "";
   if (!programId) return { error: "Program is required." };
 
+  // Class is optional — placing the student now is the common path (one step),
+  // but they can be added first and placed later via "Change class".
+  const classId = typeof b.classId === "string" ? b.classId.trim() : "";
+
   const registerNumber = typeof b.registerNumber === "string" ? b.registerNumber.trim() : "";
   if (!registerNumber) return { error: "Register number is required." };
 
@@ -55,7 +60,7 @@ function parseStudentBody(body: unknown): { data: ParsedStudent } | { error: str
     b.gender === "MALE" || b.gender === "FEMALE" || b.gender === "OTHER" ? b.gender : null;
 
   return {
-    data: { email, displayName, programId, registerNumber, rollNumber, dateOfBirth: dob, phone, gender },
+    data: { email, displayName, programId, classId, registerNumber, rollNumber, dateOfBirth: dob, phone, gender },
   };
 }
 
@@ -116,6 +121,30 @@ export async function POST(req: Request) {
     });
     if (!program) return Response.json({ error: "Select a valid program." }, { status: 400 });
 
+    // If a class was chosen, validate it's in the same program and enroll the
+    // student for the active academic year — atomically with the account.
+    let enrollment: { classId: string; academicYearId: string } | undefined;
+    if (parsed.data.classId) {
+      const klass = await db.class.findUnique({
+        where: { id: parsed.data.classId },
+        select: { programId: true },
+      });
+      if (!klass || klass.programId !== parsed.data.programId) {
+        return Response.json({ error: "Select a valid class in this program." }, { status: 400 });
+      }
+      const activeYear = await db.academicYear.findFirst({
+        where: { isActive: true },
+        select: { id: true },
+      });
+      if (!activeYear) {
+        return Response.json(
+          { error: "No academic year is active. Activate one before placing students in a class." },
+          { status: 400 },
+        );
+      }
+      enrollment = { classId: parsed.data.classId, academicYearId: activeYear.id };
+    }
+
     let result;
     try {
       result = await provisionStudentAccount({
@@ -128,6 +157,7 @@ export async function POST(req: Request) {
         dateOfBirth: parsed.data.dateOfBirth,
         phone: parsed.data.phone,
         gender: parsed.data.gender,
+        enrollment,
       });
     } catch (e) {
       if (isFirebaseEmailTaken(e)) {

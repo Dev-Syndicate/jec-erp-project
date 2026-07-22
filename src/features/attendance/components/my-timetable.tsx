@@ -77,16 +77,18 @@ export function MyTimetable() {
               </thead>
               <tbody>
                 {PERIODS.map((p) => (
-                  <tr key={p} className="border-b border-foreground/10 last:border-b-0">
-                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">P{p}</td>
+                  // Fixed row height + centered content so every period row is the
+                  // same size, whether or not the hour has a class.
+                  <tr key={p} className="h-20 border-b border-foreground/10 last:border-b-0">
+                    <td className="px-3 align-middle font-mono text-xs text-muted-foreground">P{p}</td>
                     {WEEKDAYS.map((d) => {
                       const slot = byCell.get(`${d}-${p}`);
                       return (
-                        <td key={d} className="px-2 py-1.5 align-top">
+                        <td key={d} className="p-2 align-middle">
                           {slot ? (
                             <Cell slot={slot} />
                           ) : (
-                            <span className="px-1 text-muted-foreground/40">—</span>
+                            <span className="flex justify-center text-muted-foreground/40">—</span>
                           )}
                         </td>
                       );

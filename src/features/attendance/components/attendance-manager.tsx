@@ -78,28 +78,41 @@ export function AttendanceManager() {
 
   const activeClasses = (classes.data ?? []).filter((c) => c.isActive);
 
-  // Program options derived from the classes that exist — no extra endpoint.
+  // Program options derived from the classes the viewer can reach — no extra
+  // endpoint. The class list is already scoped server-side, so a faculty's is
+  // usually a single program (often a single class).
   const programOptions = [
     ...new Map(activeClasses.map((c) => [c.programId, c.programLabel])).entries(),
   ].map(([id, label]) => ({ value: id, label }));
 
-  const classesInProgram = activeClasses.filter((c) => c.programId === programId);
+  // Collapse ceremony when there's nothing to choose: auto-select the sole option
+  // and hide that picker. A faculty scoped to one program (and often one class)
+  // then just sees Date + their periods; admins with many still get both pickers.
+  const singleProgram = programOptions.length === 1;
+  const effProgramId = singleProgram ? programOptions[0].value : programId;
+
+  const classesInProgram = activeClasses.filter((c) => c.programId === effProgramId);
+  const singleClass = classesInProgram.length === 1;
+  const effClassId = singleClass ? classesInProgram[0].id : classId;
 
   const dn = dayNameOf(date);
   const isSat = dn === "SAT";
   const isSun = dn === "SUN";
   const needsFollows = isSat && followsDay === "";
 
-  const queryEnabled = !!classId && !!date && !isSun && !needsFollows;
+  const queryEnabled = !!effClassId && !!date && !isSun && !needsFollows;
   const view = useRoster(
-    classId || null,
+    effClassId || null,
     date,
     isSat && followsDay !== "" ? followsDay : undefined,
     queryEnabled,
   );
 
   const periods = view.data?.periods ?? [];
-  const activePeriod = selectedPeriod ?? periods[0]?.period ?? null;
+  // Land on the first period the viewer can actually mark (their own hour),
+  // falling back to the first scheduled period if they can mark none.
+  const defaultPeriod = (periods.find((p) => p.canMark) ?? periods[0])?.period ?? null;
+  const activePeriod = selectedPeriod ?? defaultPeriod;
   const activePeriodInfo = periods.find((p) => p.period === activePeriod) ?? null;
 
   function resetPeriod() {
@@ -114,43 +127,48 @@ export function AttendanceManager() {
         description="Pick a class and date, then mark the roster period by period. Marking period 1 also sets the day's overall attendance."
       />
 
-      {/* Pickers */}
+      {/* Pickers — a single-option Program/Class is auto-selected and its picker
+          hidden, so a faculty (one program, often one class) sees only Date. */}
       <div className="flex flex-wrap items-end gap-4">
-        <Field label="Program">
-          <div className="w-56">
-            <FormSelect
-              value={programId}
-              onChange={(v) => {
-                setProgramId(v);
-                setClassId("");
-                resetPeriod();
-              }}
-              options={programOptions}
-              placeholder={classes.isPending ? "Loading…" : "Select a program"}
-            />
-          </div>
-        </Field>
+        {!singleProgram && (
+          <Field label="Program">
+            <div className="w-56">
+              <FormSelect
+                value={programId}
+                onChange={(v) => {
+                  setProgramId(v);
+                  setClassId("");
+                  resetPeriod();
+                }}
+                options={programOptions}
+                placeholder={classes.isPending ? "Loading…" : "Select a program"}
+              />
+            </div>
+          </Field>
+        )}
 
-        <Field label="Class">
-          <div className="w-40">
-            <FormSelect
-              value={classId}
-              onChange={(v) => {
-                setClassId(v);
-                resetPeriod();
-              }}
-              options={classesInProgram.map((c) => ({ value: c.id, label: c.shortLabel }))}
-              placeholder={
-                programId === ""
-                  ? "Pick a program first"
-                  : classesInProgram.length === 0
-                    ? "No classes"
-                    : "Select a class"
-              }
-              disabled={programId === ""}
-            />
-          </div>
-        </Field>
+        {!singleClass && (
+          <Field label="Class">
+            <div className="w-40">
+              <FormSelect
+                value={classId}
+                onChange={(v) => {
+                  setClassId(v);
+                  resetPeriod();
+                }}
+                options={classesInProgram.map((c) => ({ value: c.id, label: c.shortLabel }))}
+                placeholder={
+                  effProgramId === ""
+                    ? "Pick a program first"
+                    : classesInProgram.length === 0
+                      ? "No classes"
+                      : "Select a class"
+                }
+                disabled={effProgramId === ""}
+              />
+            </div>
+          </Field>
+        )}
 
         <Field label="Date">
           <input
@@ -193,8 +211,16 @@ export function AttendanceManager() {
       {/* Body */}
       {isSun ? (
         <p className="text-sm text-muted-foreground">Sunday isn&apos;t a working day — nothing to mark.</p>
-      ) : classId === "" ? (
-        <p className="text-sm text-muted-foreground">Pick a program, then a class, to mark attendance.</p>
+      ) : classes.isPending ? (
+        <p className="text-sm text-muted-foreground">Loading your classes…</p>
+      ) : effClassId === "" ? (
+        <p className="text-sm text-muted-foreground">
+          {activeClasses.length === 0
+            ? "You don't teach or advise any class this semester."
+            : singleProgram
+              ? "Pick a class to mark attendance."
+              : "Pick a program, then a class, to mark attendance."}
+        </p>
       ) : needsFollows ? (
         <p className="text-sm text-muted-foreground">
           Choose which weekday this Saturday follows to load the timetable.

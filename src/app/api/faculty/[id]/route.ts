@@ -138,7 +138,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // Reassigning roles (e.g. HOD rotation): validate they're assignable first.
     let validRoleIds: string[] | undefined;
     if (roleIds !== undefined) {
-      const roleCheck = await validateAssignableRoles(roleIds);
+      const roleCheck = await validateAssignableRoles(roleIds, ctx);
       if ("error" in roleCheck) return Response.json({ error: roleCheck.error }, { status: 400 });
       validRoleIds = roleCheck.ok;
     }

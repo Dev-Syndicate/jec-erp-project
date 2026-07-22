@@ -6,28 +6,54 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import type { AuthContext } from "@/lib/auth";
 
 /**
  * Validate a set of role ids for assignment to a STAFF account. All must exist
  * and be assignable — i.e. PROGRAM-scoped and not the student-only "Student"
- * role (institution-scoped Super Admin is never hand-assigned). Returns the
- * de-duplicated ids on success, or a user-facing error string. Shared by the
- * create + edit routes so both enforce the same rule.
+ * role (institution-scoped Super Admin is never hand-assigned).
+ *
+ * No privilege escalation: the actor may only confer a role whose permissions
+ * they themselves hold. Otherwise an HOD (who has `manage Faculty`) could assign
+ * a role carrying `manage Role` or other access they lack, minting a more
+ * powerful account than themselves. Super Admin (`manage all`) can assign any
+ * assignable role. Returns the de-duplicated ids on success, or a user-facing
+ * error. Shared by the create + edit routes so both enforce the same rule.
  */
 export async function validateAssignableRoles(
   roleIds: string[],
+  ctx: AuthContext,
 ): Promise<{ ok: string[] } | { error: string }> {
   const ids = [...new Set(roleIds)];
   if (ids.length === 0) return { error: "Select at least one role." };
 
   const roles = await db.role.findMany({
     where: { id: { in: ids } },
-    select: { id: true, name: true, scope: true },
+    select: {
+      id: true,
+      name: true,
+      scope: true,
+      permissions: { select: { permission: { select: { action: true, subject: true } } } },
+    },
   });
   if (roles.length !== ids.length) return { error: "One or more roles no longer exist." };
 
   const bad = roles.find((r) => r.scope === "INSTITUTION" || r.name === "Student");
   if (bad) return { error: "That role can't be assigned to a faculty account." };
+
+  // Subset rule — skipped for a full admin (manage/all).
+  if (!ctx.ability.can("manage", "all")) {
+    for (const role of roles) {
+      const overreach = role.permissions.find(
+        (rp) => !ctx.ability.can(rp.permission.action, rp.permission.subject),
+      );
+      if (overreach) {
+        return {
+          error: `You can't assign the "${role.name}" role — it grants access you don't have.`,
+        };
+      }
+    }
+  }
 
   return { ok: roles.map((r) => r.id) };
 }

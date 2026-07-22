@@ -152,8 +152,9 @@ export async function POST(req: Request) {
     // Can only provision into a program you're allowed to act in.
     assertProgramScope(ctx, parsed.data.programId);
 
-    // Validate the chosen roles are assignable (exist, PROGRAM-scoped, not Student).
-    const roleCheck = await validateAssignableRoles(parsed.data.roleIds);
+    // Validate the chosen roles are assignable (exist, PROGRAM-scoped, not Student)
+    // and don't grant more than the actor has.
+    const roleCheck = await validateAssignableRoles(parsed.data.roleIds, ctx);
     if ("error" in roleCheck) return Response.json({ error: roleCheck.error }, { status: 400 });
 
     // Guard the program exists (a clean 400 rather than a provisioning failure

@@ -16,8 +16,8 @@
 // (SA/HOD/Faculty). The GET returns the WHOLE-CLASS roster + everyone's marks, so
 // it must NOT use plain `read Attendance`, which the Student role also holds (that
 // grant is for a future per-student self-view, not the class roster). Both are
-// program-scoped via assertProgramScope on the class's program.
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+// program-scoped via a scoped authorize on the class's program.
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { assertMarksPeriod, assertTeachesOrAdvises } from "./access";
 import { isStatus, parseDateOnly, resolveWeekday, roman } from "./dto";
@@ -62,7 +62,7 @@ export async function GET(req: Request) {
 
     const klass = await loadClass(classId);
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    assertProgramScope(ctx, klass.programId);
+    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
 
     const day = resolveWeekday(date, followsDay);
     if ("error" in day) return Response.json({ error: day.error }, { status: 400 });
@@ -176,7 +176,7 @@ export async function POST(req: Request) {
       select: { programId: true, advisorId: true },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    assertProgramScope(ctx, klass.programId);
+    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
 
     const day = resolveWeekday(date, followsDay);
     if ("error" in day) return Response.json({ error: day.error }, { status: 400 });

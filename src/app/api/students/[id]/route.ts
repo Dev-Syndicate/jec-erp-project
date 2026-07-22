@@ -6,7 +6,7 @@
 // non-ACTIVE status also disables the login (User.status = INACTIVE) so a
 // graduated/dropped student can't sign in; reactivating restores it. The auth
 // cache is busted so it takes effect immediately rather than after the TTL.
-import { authenticate, assertProgramScope, invalidateAuthUser, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, invalidateAuthUser, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { STUDENT_INCLUDE, toStudentDto } from "../dto";
 
@@ -81,7 +81,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       include: { user: { select: { id: true, firebaseUid: true, programId: true } } },
     });
     if (!existing) return Response.json({ error: "Student not found." }, { status: 404 });
-    assertProgramScope(ctx, existing.user.programId);
+    authorize(ctx, "manage", "Student", { programId: existing.user.programId });
 
     const { status, classId, ...studentFields } = parsed.data;
     // A non-ACTIVE lifecycle status also disables the login; ACTIVE restores it.

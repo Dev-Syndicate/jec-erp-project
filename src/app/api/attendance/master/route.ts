@@ -10,7 +10,7 @@
 // This is the class teacher's domain: authorization needs `mark Attendance` +
 // program scope + assertOwnsDayRecord (manage Attendance OR the class advisor) —
 // a plain subject teacher can mark their period but not override the day record.
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { assertOwnsDayRecord } from "../access";
 import { isStatus, parseDateOnly, roman } from "../dto";
@@ -43,7 +43,7 @@ export async function GET(req: Request) {
 
     const klass = await loadClass(classId);
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    assertProgramScope(ctx, klass.programId);
+    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
     assertOwnsDayRecord(ctx, klass.advisorId);
 
     // Roster = students enrolled in this class for the active academic year.
@@ -124,7 +124,7 @@ export async function POST(req: Request) {
       select: { programId: true, advisorId: true },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    assertProgramScope(ctx, klass.programId);
+    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
     assertOwnsDayRecord(ctx, klass.advisorId);
 
     const semester = await db.semester.findFirst({ where: { isActive: true }, select: { id: true } });

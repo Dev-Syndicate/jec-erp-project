@@ -1,10 +1,10 @@
 // /api/subjects — list + create subjects. A Subject is a per-program curriculum
 // entry keyed by semesterNumber (1..2×durationYears). Open to Super Admin (all
-// programs) and HOD (their own program only), program-scoped via the `where` +
-// assertProgramScope below.
+// programs) and HOD (their own program only), program-scoped via the `where` + a scoped
+// authorize below.
 //
 // Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isForeignKeyViolation, isUniqueViolation } from "@/lib/prisma-errors";
 import { SUBJECT_INCLUDE, toSubjectDto } from "./dto";
@@ -65,7 +65,7 @@ export async function POST(req: Request) {
     const parsed = parseSubjectBody(body);
     if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 });
 
-    assertProgramScope(ctx, parsed.data.programId);
+    authorize(ctx, "manage", "Subject", { programId: parsed.data.programId });
 
     // semesterNumber is bounded by the program's degree duration (1..2×years).
     const program = await db.program.findUnique({

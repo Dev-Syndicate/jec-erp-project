@@ -1,7 +1,7 @@
 // /api/branches — list + create Branches. A Branch (CSE, ECE, MECH…) is a
 // discipline in the Structure backbone; it pairs with a Degree to form a Program.
 // Structure is INSTITUTION-scoped, so these are Super-Admin only (no program
-// filter — the same rule assertProgramScope encodes for scoped roles).
+// filter — the same rule the ability's program conditions encode for scoped roles).
 //
 // Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";

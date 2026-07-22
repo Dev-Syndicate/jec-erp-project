@@ -1,6 +1,6 @@
 // DELETE /api/timetable/[id] — clear one timetable cell. Super-Admin only,
 // program-scoped. params is a Promise in Next 16 — await it.
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +16,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       include: { class: { select: { programId: true } } },
     });
     if (!slot) return Response.json({ error: "Slot not found." }, { status: 404 });
-    assertProgramScope(ctx, slot.class.programId);
+    authorize(ctx, "manage", "Timetable", { programId: slot.class.programId });
 
     await db.timetableSlot.delete({ where: { id } });
     return Response.json({ ok: true });

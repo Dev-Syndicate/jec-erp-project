@@ -4,8 +4,8 @@
 // the DB write fails. Program-scoped: Super Admin sees all; others their program.
 //
 // Open to Super Admin (all programs) and HOD (their own program only), enforced
-// by the program-scoped `where` + assertProgramScope below.
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+// by the program-scoped `where` + a scoped authorize below.
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
 import { provisionStudentAccount } from "@/lib/provisioning";
@@ -106,7 +106,7 @@ export async function POST(req: Request) {
     if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 });
 
     // Can only provision into a program you're allowed to act in.
-    assertProgramScope(ctx, parsed.data.programId);
+    authorize(ctx, "manage", "Student", { programId: parsed.data.programId });
 
     const studentRole = await db.role.findUnique({ where: { name: "Student" }, select: { id: true } });
     if (!studentRole) {

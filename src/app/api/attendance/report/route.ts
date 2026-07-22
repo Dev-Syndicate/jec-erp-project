@@ -9,7 +9,7 @@
 // Attendance`, which the Student role also holds (for a future self-view). Gating
 // the class report on `read` would let any enrolled student pull their whole
 // class's records. Program-scoped on the class's program.
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { assertTeachesOrAdvises } from "../access";
 import { roman } from "../dto";
@@ -33,7 +33,7 @@ export async function GET(req: Request) {
       include: { program: { include: { degree: true, branch: true } } },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    assertProgramScope(ctx, klass.programId);
+    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
 
     const semester = await db.semester.findFirst({
       where: { isActive: true },

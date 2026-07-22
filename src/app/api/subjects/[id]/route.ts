@@ -5,7 +5,7 @@
 // Delete is deactivate-primary: hard delete only when nothing depends on the
 // subject (faculty assignments, timetable slots, attendance, marks); otherwise a
 // clean 409 telling the admin to deactivate instead.
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isNotFound, isUniqueViolation } from "@/lib/prisma-errors";
 import { SUBJECT_INCLUDE, toSubjectDto } from "../dto";
@@ -60,7 +60,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       include: { program: { include: { degree: { select: { durationYears: true } } } } },
     });
     if (!existing) return Response.json({ error: "Subject not found." }, { status: 404 });
-    assertProgramScope(ctx, existing.programId);
+    authorize(ctx, "manage", "Subject", { programId: existing.programId });
 
     // Re-bound semesterNumber against this subject's program duration.
     if (parsed.data.semesterNumber !== undefined) {
@@ -115,7 +115,7 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
       },
     });
     if (!subject) return Response.json({ error: "Subject not found." }, { status: 404 });
-    assertProgramScope(ctx, subject.programId);
+    authorize(ctx, "manage", "Subject", { programId: subject.programId });
 
     const dependents =
       subject._count.facultyAssignments +

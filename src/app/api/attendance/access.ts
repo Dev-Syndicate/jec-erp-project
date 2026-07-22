@@ -5,7 +5,7 @@
 // period they teach. The class advisor (class teacher) owns the whole class (any
 // period), since they own the day/Master attendance record.
 //
-// Program scope (assertProgramScope) is enforced separately in the routes; this
+// Program scope is enforced separately in the routes (the resource-form authorize); this
 // module adds the "which class within the program" layer.
 import "server-only";
 

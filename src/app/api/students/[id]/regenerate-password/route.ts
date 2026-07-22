@@ -5,7 +5,7 @@
 // Only valid while the student is still on their temp password (mustChangePassword
 // = true). Once they've set their own, regenerating is refused — that's a proper
 // account-recovery flow, not this admin convenience (matches provisioning.ts).
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { regenerateTempPassword } from "@/lib/provisioning";
 
@@ -24,7 +24,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       },
     });
     if (!student) return Response.json({ error: "Student not found." }, { status: 404 });
-    assertProgramScope(ctx, student.user.programId);
+    authorize(ctx, "manage", "Student", { programId: student.user.programId });
 
     if (!student.user.mustChangePassword) {
       return Response.json(

@@ -2,12 +2,14 @@
 //
 // Flow (CLAUDE.md security boundary): read the Bearer ID token → verify it with
 // Firebase Admin → resolve the Neon User (with roles + granted permissions) that
-// the firebaseUid links to. Authorization is step two (authorize / assertProgramScope
-// in the route), built from the CASL ability this returns.
+// the firebaseUid links to. Authorization is step two (`authorize` in the route),
+// built from the CASL ability this returns.
 //
 // A verified token whose uid has no active User row is REJECTED — a Firebase
 // identity alone grants nothing; the User row in Neon is what authorizes.
 import "server-only";
+
+import { subject as asSubject } from "@casl/ability";
 
 import { db } from "@/lib/db";
 import { verifyIdToken } from "@/lib/firebase-admin";
@@ -109,12 +111,16 @@ export async function authenticate(req: Request) {
   if (!user) throw new AuthError(403, "No account is provisioned for this identity.");
   if (user.status !== "ACTIVE") throw new AuthError(403, "This account is inactive.");
 
-  // Flatten every role's granted permissions into the CASL ability. Duplicate
-  // grants across roles are harmless (CASL collapses them).
+  // Flatten every role's granted permissions into the CASL ability. A grant from
+  // a PROGRAM-scoped role is conditioned on the user's own programId (so it only
+  // applies to resources in that program); INSTITUTION grants are unconditional.
+  // Duplicate grants across roles are harmless (CASL collapses them).
   const grants: Grant[] = user.roles.flatMap((ur) =>
     ur.role.permissions.map((rp) => ({
       action: rp.permission.action,
       subject: rp.permission.subject,
+      conditions:
+        ur.role.scope === "PROGRAM" ? { programId: user.programId } : undefined,
     })),
   );
 
@@ -123,7 +129,8 @@ export async function authenticate(req: Request) {
     uid,
     roles: user.roles.map((r) => r.role.name),
     // An INSTITUTION-scoped role (Super Admin) acts across every program; PROGRAM
-    // roles are confined to their own program by assertProgramScope.
+    // roles are confined to their own program by the ability's programId conditions
+    // (still exposed as a flag for the list `where` filters).
     isInstitutionScoped: user.roles.some((r) => r.role.scope === "INSTITUTION"),
     ability: defineAbilityFor(grants),
     mustChangePassword: user.mustChangePassword,
@@ -133,33 +140,40 @@ export async function authenticate(req: Request) {
 // ---------------------------------------------------------------------------
 // Authorization (step two). `authorize` is the CASL-backed permission check that
 // replaced the requireRole role-name stopgap: it asks the ability built from the
-// user's DB grants whether they may perform `action` on `subject`. Program
-// scoping (a PROGRAM role acts only within its own program) is layered on top by
-// assertProgramScope, keyed off role scope rather than a role name.
+// user's DB grants whether they may perform `action` on `subject`. Passing a
+// `resource` also enforces the grant's program condition (a PROGRAM role acts only
+// within its own program) — folding what used to be a separate assertProgramScope
+// call into the same check.
 // ---------------------------------------------------------------------------
 
 /**
  * Throw 403 unless the user's granted permissions allow `action` on `subject`.
+ *
+ * Without `resource` this is a CAPABILITY check ("may this role do X at all?").
+ * With `resource` (an object carrying `programId`) it is an INSTANCE check that
+ * also enforces the grant's program condition — so a PROGRAM-scoped user is
+ * confined to their own program, an INSTITUTION user (Super Admin) is not. Prefer
+ * the resource form whenever the target's programId is known.
+ *
  * `manage` covers every action on a subject and the `all` subject covers every
  * subject, so `authorize(ctx, "manage", "all")` means "must be a full/institution
- * admin". This reads the DB-driven grants — edits in the /access console take
- * effect (subject to the 30s auth cache; invalidateAuthUser for instant).
+ * admin". Reads the DB-driven grants — edits in the /access console take effect
+ * (subject to the 30s auth cache; invalidateAuthUser for instant).
  */
-export function authorize(ctx: AuthContext, action: string, subject: string): void {
-  if (!ctx.ability.can(action, subject)) {
+export function authorize(
+  ctx: AuthContext,
+  action: string,
+  subject: string,
+  resource?: { programId: string | null },
+): void {
+  // asSubject tags the resource with its subject type so CASL evaluates the
+  // grant's conditions against it (cast: the tag adds a hidden symbol prop).
+  const target =
+    resource === undefined
+      ? subject
+      : (asSubject(subject, resource) as unknown as Record<PropertyKey, unknown>);
+  if (!ctx.ability.can(action, target)) {
     throw new AuthError(403, "You don't have permission to do this.");
-  }
-}
-
-/**
- * Enforce program scoping: an INSTITUTION-scoped user (Super Admin) is unscoped
- * (any program), everyone else may only act within their own program. Throws 403
- * on a cross-program action by a program-scoped user.
- */
-export function assertProgramScope(ctx: AuthContext, targetProgramId: string | null): void {
-  if (ctx.isInstitutionScoped) return; // no program filter
-  if (!ctx.user.programId || ctx.user.programId !== targetProgramId) {
-    throw new AuthError(403, "That's outside your program.");
   }
 }
 

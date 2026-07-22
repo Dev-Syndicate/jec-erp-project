@@ -1,11 +1,11 @@
 // /api/timetable — read a class's weekly grid (GET ?classId=) + upsert one cell
 // (POST). Open to Super Admin (all programs) and HOD (their own program only),
-// program-scoped via assertProgramScope. The grid is always for the ACTIVE
+// program-scoped via a scoped authorize (resource form). The grid is always for the ACTIVE
 // semester; a slot's subject must be in the class's program and its faculty must
 // be an active user of that program.
 //
 // Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { curriculumSemester, roman, SLOT_INCLUDE, toSlotDto } from "./dto";
 
@@ -35,7 +35,7 @@ export async function GET(req: Request) {
       include: { program: { include: { degree: true, branch: true } } },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    assertProgramScope(ctx, klass.programId);
+    authorize(ctx, "manage", "Timetable", { programId: klass.programId });
 
     const semester = await activeSemester();
     if (!semester) {
@@ -85,7 +85,7 @@ export async function POST(req: Request) {
 
     const klass = await db.class.findUnique({ where: { id: classId }, select: { programId: true } });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    assertProgramScope(ctx, klass.programId);
+    authorize(ctx, "manage", "Timetable", { programId: klass.programId });
 
     const semester = await activeSemester();
     if (!semester) {

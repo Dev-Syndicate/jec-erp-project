@@ -1,7 +1,7 @@
 // /api/degrees — list + create Degrees. A Degree (B.E, B.Tech, MBA…) is the top
 // of the Structure backbone; its durationYears bounds every Program's year and
 // semester ranges. Structure is INSTITUTION-scoped, so these are Super-Admin only
-// (no program filter — the same rule assertProgramScope encodes for scoped roles).
+// (no program filter — the same rule the ability's program conditions encode for scoped roles).
 //
 // Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";

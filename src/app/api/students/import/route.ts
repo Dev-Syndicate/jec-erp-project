@@ -9,7 +9,7 @@
 //
 // The parse + provision logic lives in src/lib/student-import.ts; this route only
 // handles auth, the upload, and the program/role lookups.
-import { authenticate, assertProgramScope, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { parseStudentSheet, provisionRows } from "@/lib/student-import";
 
@@ -32,7 +32,7 @@ export async function POST(req: Request) {
 
     const programId = String(form.get("programId") ?? "").trim();
     if (!programId) return Response.json({ error: "Choose a program for the import." }, { status: 400 });
-    assertProgramScope(ctx, programId);
+    authorize(ctx, "manage", "Student", { programId: programId });
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = parseStudentSheet(buffer);

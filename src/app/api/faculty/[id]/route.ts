@@ -8,7 +8,7 @@
 // status to INACTIVE disables the login (User.status = INACTIVE) so a departed
 // faculty member can't sign in; reactivating restores it — also cache-busted so
 // it takes effect immediately rather than after the TTL.
-import { authenticate, assertProgramScope, invalidateAuthUser, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, invalidateAuthUser, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { FACULTY_INCLUDE, toFacultyDto, validateAssignableRoles } from "../dto";
 
@@ -123,7 +123,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       include: { user: { select: { id: true, firebaseUid: true, programId: true } } },
     });
     if (!existing) return Response.json({ error: "Faculty not found." }, { status: 404 });
-    assertProgramScope(ctx, existing.user.programId);
+    authorize(ctx, "manage", "Faculty", { programId: existing.user.programId });
 
     const { status, programId, dateOfBirth, roleIds, ...facultyFields } = parsed.data;
 
@@ -132,7 +132,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (programId !== undefined) {
       const program = await db.program.findUnique({ where: { id: programId }, select: { id: true } });
       if (!program) return Response.json({ error: "Select a valid program." }, { status: 400 });
-      assertProgramScope(ctx, programId);
+      authorize(ctx, "manage", "Faculty", { programId: programId });
     }
 
     // Reassigning roles (e.g. HOD rotation): validate they're assignable first.

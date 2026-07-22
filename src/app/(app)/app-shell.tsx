@@ -98,20 +98,20 @@ const NAV: NavGroup[] = [
         title: "Mark attendance",
         href: "/attendance",
         icon: CalendarCheck2,
-        roles: ["Super Admin"],
+        roles: ["Super Admin", "HOD", "Faculty"],
         exact: true, // /attendance/report is a sibling, not a sub-page of this
       },
       {
         title: "Day attendance",
         href: "/attendance/day",
         icon: CalendarDays,
-        roles: ["Super Admin"],
+        roles: ["Super Admin", "HOD", "Faculty"],
       },
       {
         title: "Report",
         href: "/attendance/report",
         icon: ClipboardList,
-        roles: ["Super Admin"],
+        roles: ["Super Admin", "HOD", "Faculty"],
       },
     ],
   },

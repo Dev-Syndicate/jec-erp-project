@@ -63,7 +63,10 @@ type RawClass = {
 };
 
 export async function fetchClassOptions(): Promise<ClassOption[]> {
-  const classes = await apiFetch<RawClass[]>("/api/classes");
+  // /api/attendance/classes (not /api/classes) so the picker is scoped to the
+  // classes the caller can actually work with: all program classes for HOD/SA,
+  // only taught/advised classes for a Faculty.
+  const classes = await apiFetch<RawClass[]>("/api/attendance/classes");
   return classes.map((c) => ({
     id: c.id,
     label: `${c.programLabel} · ${roman(c.year)}-${c.section}`,

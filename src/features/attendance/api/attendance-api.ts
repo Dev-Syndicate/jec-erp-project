@@ -62,11 +62,13 @@ type RawClass = {
   isActive: boolean;
 };
 
-export async function fetchClassOptions(): Promise<ClassOption[]> {
+export async function fetchClassOptions(scope?: "day"): Promise<ClassOption[]> {
   // /api/attendance/classes (not /api/classes) so the picker is scoped to the
   // classes the caller can actually work with: all program classes for HOD/SA,
-  // only taught/advised classes for a Faculty.
-  const classes = await apiFetch<RawClass[]>("/api/attendance/classes");
+  // only taught/advised classes for a Faculty. `scope=day` narrows a Faculty to
+  // classes they ADVISE (the day-record correction screen).
+  const qs = scope === "day" ? "?scope=day" : "";
+  const classes = await apiFetch<RawClass[]>(`/api/attendance/classes${qs}`);
   return classes.map((c) => ({
     id: c.id,
     label: `${c.programLabel} · ${roman(c.year)}-${c.section}`,

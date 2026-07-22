@@ -68,12 +68,18 @@ import type { AuthUser } from "@/features/auth/types";
 
 type NavChild = { title: string; href: string };
 
+type NavFlags = { roles: string[]; advisesClass: boolean };
+
 type NavItem = {
   title: string;
   href: string;
   icon: React.ComponentType<{ className?: string }>;
   // Roles allowed to see this item; undefined = everyone signed in.
   roles?: string[];
+  // Finer visibility beyond role names, evaluated with live profile flags. When
+  // present it REPLACES the role check for this item (e.g. "Day attendance" needs
+  // a manage role OR advising a class).
+  gate?: (flags: NavFlags) => boolean;
   // If present, the item is a collapsible parent revealing these sub-links.
   children?: NavChild[];
   // Match this path exactly (don't also light up on its sub-routes). Use when a
@@ -105,7 +111,10 @@ const NAV: NavGroup[] = [
         title: "Day attendance",
         href: "/attendance/day",
         icon: CalendarDays,
-        roles: ["Super Admin", "HOD", "Faculty"],
+        // The class teacher's job: HOD/SA (manage), or a Faculty who advises a
+        // class. A plain subject teacher who advises none doesn't see it.
+        gate: ({ roles, advisesClass }) =>
+          roles.includes("Super Admin") || roles.includes("HOD") || advisesClass,
       },
       {
         title: "Report",
@@ -198,10 +207,12 @@ const NAV: NavGroup[] = [
   },
 ];
 
-function visibleGroups(roles: string[]): NavGroup[] {
+function visibleGroups(flags: NavFlags): NavGroup[] {
   return NAV.map((g) => ({
     ...g,
-    items: g.items.filter((i) => !i.roles || i.roles.some((r) => roles.includes(r))),
+    items: g.items.filter((i) =>
+      i.gate ? i.gate(flags) : !i.roles || i.roles.some((r) => flags.roles.includes(r)),
+    ),
   })).filter((g) => g.items.length > 0);
 }
 
@@ -234,7 +245,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const { firebaseUser } = useFirebaseUser();
   const me = useMe(!!firebaseUser);
   const profile = me.data;
-  const roles = profile?.roles ?? [];
+  const navFlags: NavFlags = {
+    roles: profile?.roles ?? [],
+    advisesClass: profile?.advisesClass ?? false,
+  };
   const pathname = usePathname();
   const crumbs = useBreadcrumbs(pathname);
 
@@ -258,7 +272,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </SidebarHeader>
 
         <SidebarContent>
-          {visibleGroups(roles).map((group) => (
+          {visibleGroups(navFlags).map((group) => (
             <SidebarGroup key={group.label}>
               <SidebarGroupLabel className="font-mono text-[0.65rem] uppercase tracking-[0.18em]">
                 {group.label}

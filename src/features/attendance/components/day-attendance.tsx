@@ -51,7 +51,8 @@ function todayStr(): string {
 }
 
 export function DayAttendance() {
-  const classes = useClassOptions();
+  // `day` scope: only classes the viewer can correct (advises, or manages).
+  const classes = useClassOptions("day");
   const [programId, setProgramId] = useState("");
   const [classId, setClassId] = useState("");
   const [date, setDate] = useState(todayStr);
@@ -60,10 +61,17 @@ export function DayAttendance() {
   const programOptions = [
     ...new Map(activeClasses.map((c) => [c.programId, c.programLabel])).entries(),
   ].map(([id, label]) => ({ value: id, label }));
-  const classesInProgram = activeClasses.filter((c) => c.programId === programId);
 
-  const enabled = !!classId && !!date;
-  const view = useDayAttendance(classId || null, date, enabled);
+  // Auto-select and hide a single-option picker (a class teacher usually advises
+  // just one class → straight to Date); admins keep both.
+  const singleProgram = programOptions.length === 1;
+  const effProgramId = singleProgram ? programOptions[0].value : programId;
+  const classesInProgram = activeClasses.filter((c) => c.programId === effProgramId);
+  const singleClass = classesInProgram.length === 1;
+  const effClassId = singleClass ? classesInProgram[0].id : classId;
+
+  const enabled = !!effClassId && !!date;
+  const view = useDayAttendance(effClassId || null, date, enabled);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -74,36 +82,40 @@ export function DayAttendance() {
       />
 
       <div className="flex flex-wrap items-end gap-4">
-        <Field label="Program">
-          <div className="w-56">
-            <FormSelect
-              value={programId}
-              onChange={(v) => {
-                setProgramId(v);
-                setClassId("");
-              }}
-              options={programOptions}
-              placeholder={classes.isPending ? "Loading…" : "Select a program"}
-            />
-          </div>
-        </Field>
-        <Field label="Class">
-          <div className="w-40">
-            <FormSelect
-              value={classId}
-              onChange={setClassId}
-              options={classesInProgram.map((c) => ({ value: c.id, label: c.shortLabel }))}
-              placeholder={
-                programId === ""
-                  ? "Pick a program first"
-                  : classesInProgram.length === 0
-                    ? "No classes"
-                    : "Select a class"
-              }
-              disabled={programId === ""}
-            />
-          </div>
-        </Field>
+        {!singleProgram && (
+          <Field label="Program">
+            <div className="w-56">
+              <FormSelect
+                value={programId}
+                onChange={(v) => {
+                  setProgramId(v);
+                  setClassId("");
+                }}
+                options={programOptions}
+                placeholder={classes.isPending ? "Loading…" : "Select a program"}
+              />
+            </div>
+          </Field>
+        )}
+        {!singleClass && (
+          <Field label="Class">
+            <div className="w-40">
+              <FormSelect
+                value={classId}
+                onChange={setClassId}
+                options={classesInProgram.map((c) => ({ value: c.id, label: c.shortLabel }))}
+                placeholder={
+                  effProgramId === ""
+                    ? "Pick a program first"
+                    : classesInProgram.length === 0
+                      ? "No classes"
+                      : "Select a class"
+                }
+                disabled={effProgramId === ""}
+              />
+            </div>
+          </Field>
+        )}
         <Field label="Date">
           <input
             type="date"
@@ -114,14 +126,22 @@ export function DayAttendance() {
         </Field>
       </div>
 
-      {classId === "" ? (
-        <p className="text-sm text-muted-foreground">Pick a program, then a class, to review the day attendance.</p>
+      {classes.isPending ? (
+        <p className="text-sm text-muted-foreground">Loading your classes…</p>
+      ) : effClassId === "" ? (
+        <p className="text-sm text-muted-foreground">
+          {activeClasses.length === 0
+            ? "You're not the class teacher for any class, so there's no day attendance to correct."
+            : singleProgram
+              ? "Pick a class to review the day attendance."
+              : "Pick a program, then a class, to review the day attendance."}
+        </p>
       ) : view.isPending ? (
         <p className="text-sm text-muted-foreground">Loading day attendance…</p>
       ) : view.isError ? (
         <FormError>{errorMessage(view.error)}</FormError>
       ) : view.data ? (
-        <Loaded key={`${classId}-${date}`} view={view.data} />
+        <Loaded key={`${effClassId}-${date}`} view={view.data} />
       ) : null}
     </div>
   );

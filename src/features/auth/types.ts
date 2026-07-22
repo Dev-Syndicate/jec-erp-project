@@ -8,4 +8,7 @@ export type AuthUser = {
   programId: string | null;
   roles: string[];
   mustChangePassword: boolean;
+  // True when the user advises ≥1 active class (is a class teacher). Gates the
+  // "Day attendance" nav for a plain Faculty; HOD/SA see it via their role.
+  advisesClass: boolean;
 };

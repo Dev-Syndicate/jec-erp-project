@@ -30,8 +30,14 @@ export function useRoster(
   });
 }
 
-export function useClassOptions() {
-  return useQuery({ queryKey: ["attendance", "classes"], queryFn: fetchClassOptions, staleTime: 5 * 60_000 });
+// `scope=day` returns only classes the Faculty advises (the day-record screen);
+// omit it for the marking/report pickers (taught or advised).
+export function useClassOptions(scope?: "day") {
+  return useQuery({
+    queryKey: ["attendance", "classes", scope ?? "mark"],
+    queryFn: () => fetchClassOptions(scope),
+    staleTime: 5 * 60_000,
+  });
 }
 
 export function useAttendanceReport(classId: string | null) {

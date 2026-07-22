@@ -5,6 +5,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   onAuthStateChanged,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updatePassword,
@@ -62,6 +63,38 @@ export function useSignIn() {
       return signInWithEmailAndPassword(auth, email, input.password);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "me"] }),
+  });
+}
+
+/**
+ * Send a Firebase password-reset email. Staff pass their email; students pass a
+ * register number we first resolve to the Firebase email (same as sign-in).
+ *
+ * Non-enumeration (matches /api/auth/resolve-roll's stance): an unknown account
+ * must be indistinguishable from a real send, so a failed register lookup and
+ * Firebase's user-not-found/invalid-email are swallowed and reported as success.
+ * Only operational errors the user can act on (network, rate-limit) surface.
+ */
+type ResetInput =
+  | { kind: "email"; email: string }
+  | { kind: "register"; registerNumber: string };
+
+export function useSendPasswordReset() {
+  return useMutation({
+    mutationFn: async (input: ResetInput) => {
+      const email =
+        input.kind === "register"
+          ? await resolveRegisterToEmail(input.registerNumber).catch(() => null)
+          : input.email;
+      if (!email) return; // unknown register number — stay generic, don't leak
+      try {
+        await sendPasswordResetEmail(auth, email);
+      } catch (e) {
+        const code =
+          e && typeof e === "object" && "code" in e && typeof e.code === "string" ? e.code : "";
+        if (code !== "auth/user-not-found" && code !== "auth/invalid-email") throw e;
+      }
+    },
   });
 }
 

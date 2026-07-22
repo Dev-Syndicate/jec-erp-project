@@ -13,12 +13,44 @@ import {
   useChangePassword,
   useFirebaseUser,
   useMe,
+  useSendPasswordReset,
   useSignIn,
   useSignOut,
 } from "@/features/auth/hooks/use-auth";
 
+// Firebase surfaces raw codes like "auth/invalid-credential" on its errors;
+// showing those verbatim leaks implementation detail and reads as a system
+// crash to the user. Map the codes people can actually hit to plain guidance,
+// and keep the wrong-identifier/wrong-password cases deliberately merged so we
+// don't reveal which accounts exist (same stance as /api/auth/resolve-roll).
+function firebaseErrorCode(e: unknown): string | null {
+  if (e && typeof e === "object" && "code" in e && typeof e.code === "string") {
+    return e.code;
+  }
+  return null;
+}
+
 function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
+  switch (firebaseErrorCode(e)) {
+    case "auth/invalid-credential":
+    case "auth/invalid-email":
+    case "auth/user-not-found":
+    case "auth/wrong-password":
+      return "Those credentials don’t match. Check them and try again.";
+    case "auth/user-disabled":
+      return "This account has been deactivated. Contact your department admin.";
+    case "auth/too-many-requests":
+      return "Too many attempts. Wait a moment and try again.";
+    case "auth/network-request-failed":
+      return "Network error. Check your connection and try again.";
+    case "auth/weak-password":
+      return "That password is too weak. Use at least 8 characters.";
+    case "auth/requires-recent-login":
+      return "For security, sign in again before changing your password.";
+  }
+  // Non-Firebase errors (e.g. resolve-roll's generic failure) already carry a
+  // user-safe message; anything else falls back to a neutral line.
+  if (e instanceof Error && !e.message.startsWith("Firebase:")) return e.message;
   return "Something went wrong. Try again.";
 }
 
@@ -139,7 +171,21 @@ export function LoginForm() {
     return <RedirectToDashboard name={me.data.displayName} />;
   }
 
-  return <SignInStep />;
+  return <EntryFlow />;
+}
+
+// The unauthenticated entry: sign in, or the forgot-password detour. Mode
+// (staff/student) is held here so switching views keeps the chosen identifier
+// type — a student on the reset screen stays a student when they go back.
+function EntryFlow() {
+  const [view, setView] = useState<"signin" | "forgot">("signin");
+  const [mode, setMode] = useState<SignInMode>("staff");
+
+  return view === "forgot" ? (
+    <ForgotPasswordStep mode={mode} setMode={setMode} onBack={() => setView("signin")} />
+  ) : (
+    <SignInStep mode={mode} setMode={setMode} onForgot={() => setView("forgot")} />
+  );
 }
 
 // Brief transition shown while we navigate away from /login after a successful
@@ -195,9 +241,16 @@ function ModeToggle({ mode, onChange }: { mode: SignInMode; onChange: (m: SignIn
   );
 }
 
-function SignInStep() {
+function SignInStep({
+  mode,
+  setMode,
+  onForgot,
+}: {
+  mode: SignInMode;
+  setMode: (m: SignInMode) => void;
+  onForgot: () => void;
+}) {
   const signIn = useSignIn();
-  const [mode, setMode] = useState<SignInMode>("staff");
   const [email, setEmail] = useState("");
   const [registerNumber, setRegisterNumber] = useState("");
   const [password, setPassword] = useState("");
@@ -266,9 +319,13 @@ function SignInStep() {
           label="Password"
           htmlFor="password"
           trailing={
-            <span className="font-mono text-[0.7rem] text-muted-foreground">
-              temporary on first login
-            </span>
+            <button
+              type="button"
+              onClick={onForgot}
+              className="font-mono text-[0.7rem] uppercase tracking-wider text-primary transition-colors hover:text-primary/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 rounded-sm"
+            >
+              Forgot password?
+            </button>
           }
         >
           <PasswordInput
@@ -286,6 +343,109 @@ function SignInStep() {
       <p className="text-sm text-muted-foreground">
         No account yet? Your department admin creates it and emails your first password.
       </p>
+    </div>
+  );
+}
+
+// Forgot-password detour. Reuses the staff/student toggle so the identifier
+// matches how the person signs in. We never confirm whether the account exists
+// (no enumeration) — a successful submit always shows the same "check your
+// inbox" note, whether or not a matching account was found.
+function ForgotPasswordStep({
+  mode,
+  setMode,
+  onBack,
+}: {
+  mode: SignInMode;
+  setMode: (m: SignInMode) => void;
+  onBack: () => void;
+}) {
+  const sendReset = useSendPasswordReset();
+  const [email, setEmail] = useState("");
+  const [registerNumber, setRegisterNumber] = useState("");
+  const isStudent = mode === "student";
+
+  if (sendReset.isSuccess) {
+    return (
+      <div className="flex w-full flex-col gap-7">
+        <StepHeading
+          step="Access · Reset password"
+          title="Check your inbox"
+          hint="If an account matches what you entered, we’ve emailed a link to reset its password. It may take a minute to arrive — check spam too."
+        />
+        <Button type="button" size="lg" variant="outline" onClick={onBack} className="h-11">
+          Back to sign in
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex w-full flex-col gap-7">
+      <StepHeading
+        step="Access · Reset password"
+        title="Reset your password"
+        hint={
+          isStudent
+            ? "Enter your register number and we’ll email a reset link to your college email."
+            : "Enter your college email and we’ll send you a reset link."
+        }
+      />
+      <ModeToggle
+        mode={mode}
+        onChange={(m) => {
+          setMode(m);
+          sendReset.reset();
+        }}
+      />
+      <form
+        className="flex flex-col gap-5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          sendReset.mutate(
+            isStudent
+              ? { kind: "register", registerNumber }
+              : { kind: "email", email },
+          );
+        }}
+      >
+        {isStudent ? (
+          <Field label="Register number" htmlFor="reset-register">
+            <Input
+              id="reset-register"
+              type="text"
+              inputMode="text"
+              autoComplete="username"
+              autoCapitalize="characters"
+              value={registerNumber}
+              onChange={(e) => setRegisterNumber(e.target.value)}
+              required
+              placeholder="e.g. 422021104042"
+              className="h-10"
+            />
+          </Field>
+        ) : (
+          <Field label="College email" htmlFor="reset-email">
+            <Input
+              id="reset-email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              placeholder="name@jeppiaar.edu.in"
+              className="h-10"
+            />
+          </Field>
+        )}
+        {sendReset.isError && <FormError>{errorMessage(sendReset.error)}</FormError>}
+        <Button type="submit" size="lg" disabled={sendReset.isPending} className="mt-1 h-11">
+          {sendReset.isPending ? "Sending…" : "Send reset link"}
+        </Button>
+        <Button type="button" variant="ghost" onClick={onBack}>
+          Back to sign in
+        </Button>
+      </form>
     </div>
   );
 }

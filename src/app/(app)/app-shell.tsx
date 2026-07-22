@@ -48,14 +48,6 @@ import {
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbLink,
@@ -104,7 +96,9 @@ const NAV: NavGroup[] = [
         title: "My timetable",
         href: "/attendance/timetable",
         icon: CalendarClock,
-        roles: ["Super Admin", "HOD", "Faculty"],
+        // Program staff who actually teach — not the institution admin (Super
+        // Admin never has a personal timetable).
+        roles: ["HOD", "Faculty"],
       },
       {
         title: "Mark attendance",
@@ -425,6 +419,7 @@ function CollapsibleNavItem({
 
 function UserMenu({ profile }: { profile: AuthUser | undefined }) {
   const router = useRouter();
+  const pathname = usePathname();
   const signOut = useSignOut();
   const initials = (profile?.displayName ?? "· ·")
     .split(" ")
@@ -440,41 +435,30 @@ function UserMenu({ profile }: { profile: AuthUser | undefined }) {
     <SidebarMenu>
       <SidebarMenuItem>
         <div className="flex items-center gap-1">
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <SidebarMenuButton size="lg" className="flex-1 gap-2.5">
-                  <span className="grid size-7 shrink-0 place-items-center rounded-md bg-sidebar-accent font-mono text-[0.65rem] font-semibold text-sidebar-accent-foreground">
-                    {initials}
-                  </span>
-                  <span className="flex flex-1 flex-col overflow-hidden text-left leading-tight group-data-[collapsible=icon]:hidden">
-                    <span className="truncate text-sm font-medium text-sidebar-foreground">
-                      {profile?.displayName ?? "…"}
-                    </span>
-                    <span className="truncate font-mono text-[0.65rem] text-muted-foreground">
-                      {profile?.roles[0] ?? "No role"}
-                    </span>
-                  </span>
-                </SidebarMenuButton>
-              }
-            />
-            <DropdownMenuContent side="top" align="start" className="w-56">
-              <DropdownMenuLabel className="flex flex-col gap-0.5">
-                <span className="truncate text-sm">{profile?.email ?? "…"}</span>
-                <span className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
-                  {profile?.roles.join(" · ") || "No roles"}
-                </span>
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={signOutNow}>
-                <LogOut className="size-4" />
-                Sign out
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          {/* The user chip opens the profile page. Sign-out is the icon button
+              beside it (and, on the profile page, in the shell as well). */}
+          <SidebarMenuButton
+            size="lg"
+            isActive={pathname === "/profile"}
+            tooltip="Your profile"
+            className="flex-1 gap-2.5"
+            render={<Link href="/profile" />}
+          >
+            <span className="grid size-7 shrink-0 place-items-center rounded-md bg-sidebar-accent font-mono text-[0.65rem] font-semibold text-sidebar-accent-foreground">
+              {initials}
+            </span>
+            <span className="flex flex-1 flex-col overflow-hidden text-left leading-tight group-data-[collapsible=icon]:hidden">
+              <span className="truncate text-sm font-medium text-sidebar-foreground">
+                {profile?.displayName ?? "…"}
+              </span>
+              <span className="truncate font-mono text-[0.65rem] text-muted-foreground">
+                {profile?.roles[0] ?? "No role"}
+              </span>
+            </span>
+          </SidebarMenuButton>
 
           {/* Direct sign-out beside the user chip. Hidden when the rail collapses
-              to icons — use the chip's menu there. */}
+              to icons — expand the rail (or use the profile page) to sign out. */}
           <button
             type="button"
             onClick={signOutNow}

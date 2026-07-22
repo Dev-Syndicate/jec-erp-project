@@ -5,7 +5,7 @@
 // once on create/regenerate — the admin must deliver it before closing.
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Plus, Upload, Pencil, KeyRound, Copy, Check, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,17 @@ function errorMessage(e: unknown): string {
 }
 const isoToDateInput = (iso: string) => (iso ? iso.slice(0, 10) : "");
 const PAGE_SIZE = 50;
+
+// Debounce a fast-changing value (the search box) so we don't hit the API on
+// every keystroke.
+function useDebounced<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setDebounced(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return debounced;
+}
 
 const GENDER_OPTIONS = [
   { value: "MALE", label: "Male" },
@@ -129,7 +140,6 @@ function TempPasswordPanel({ name, password }: { name: string; password: string 
 }
 
 export function StudentManager() {
-  const { data: students, isPending, isError, error } = useStudents();
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
@@ -137,28 +147,16 @@ export function StudentManager() {
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
 
-  // Client-side filter across the fields shown in the table — matches any of
-  // register number, name, email, program, or class (year-section).
-  const filtered = useMemo(() => {
-    if (!students) return [];
-    const q = query.trim().toLowerCase();
-    if (!q) return students;
-    return students.filter((s) => {
-      const enrollment = s.currentEnrollment
-        ? `${s.currentEnrollment.year}-${s.currentEnrollment.section}`
-        : "";
-      return [s.registerNumber, s.displayName, s.email, s.programLabel, enrollment]
-        .filter(Boolean)
-        .some((field) => field!.toLowerCase().includes(q));
-    });
-  }, [students, query]);
+  // Server-side search + pagination: one page (50 rows) + a total, so the list
+  // scales to thousands of students instead of downloading them all.
+  const debouncedQuery = useDebounced(query.trim(), 300);
+  const { data, isPending, isError, error, isPlaceholderData } = useStudents(page, debouncedQuery);
 
-  // Paginate the filtered rows (50/page). currentPage is clamped so it stays
-  // valid when the filter shrinks the list under the current page.
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const startIdx = (currentPage - 1) * PAGE_SIZE;
-  const pageItems = filtered.slice(startIdx, startIdx + PAGE_SIZE);
+  const students = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const startIdx = (page - 1) * PAGE_SIZE;
+  const searching = debouncedQuery !== "";
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -184,7 +182,7 @@ export function StudentManager() {
         <p className="text-sm text-muted-foreground">Loading students…</p>
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
-      ) : students.length === 0 ? (
+      ) : total === 0 && !searching ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
           <p className="text-sm text-muted-foreground">No students yet.</p>
           <Button variant="outline" onClick={() => setCreating(true)} data-icon="inline-start">
@@ -202,20 +200,22 @@ export function StudentManager() {
                 setQuery(e.target.value);
                 setPage(1);
               }}
-              placeholder="Search by name, register no., email, program…"
+              placeholder="Search by name, register no. or email…"
               aria-label="Search students"
               className="h-10! pl-9"
             />
           </div>
 
-          {filtered.length === 0 ? (
+          {students.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border py-16 text-center">
               <p className="text-sm text-muted-foreground">
-                No students match “{query.trim()}”.
+                {searching ? `No students match “${debouncedQuery}”.` : "No students on this page."}
               </p>
             </div>
           ) : (
-            <div className="rounded-xl ring-1 ring-foreground/10">
+            <div
+              className={`rounded-xl ring-1 ring-foreground/10 ${isPlaceholderData ? "opacity-60" : ""}`}
+            >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -228,7 +228,7 @@ export function StudentManager() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {pageItems.map((s) => (
+                  {students.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
                   <TableCell>
@@ -280,28 +280,28 @@ export function StudentManager() {
             </div>
           )}
 
-          {filtered.length > PAGE_SIZE && (
+          {total > PAGE_SIZE && (
             <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
               <span>
-                Showing {startIdx + 1}–{startIdx + pageItems.length} of {filtered.length}
+                Showing {startIdx + 1}–{startIdx + students.length} of {total}
               </span>
               <div className="flex items-center gap-2">
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
+                  disabled={page <= 1 || isPlaceholderData}
                 >
                   Previous
                 </Button>
                 <span className="font-mono text-xs">
-                  Page {currentPage} of {pageCount}
+                  Page {page} of {pageCount}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                  disabled={currentPage >= pageCount}
+                  disabled={page >= pageCount || isPlaceholderData}
                 >
                   Next
                 </Button>

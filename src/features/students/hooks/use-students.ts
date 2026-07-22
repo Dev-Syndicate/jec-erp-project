@@ -4,7 +4,7 @@
 // to populate the create + enroll dialogs.
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { StudentInput, StudentPatch } from "@/features/students/types";
 import {
@@ -20,8 +20,16 @@ import {
 
 const STUDENTS_KEY = ["students", "list"] as const;
 
-export function useStudents() {
-  return useQuery({ queryKey: STUDENTS_KEY, queryFn: fetchStudents, staleTime: 30_000 });
+// Server-side paginated + searched. keepPreviousData avoids a blank flash while
+// the next page/search loads. Mutations invalidate the STUDENTS_KEY prefix, which
+// covers every (page, q) variant.
+export function useStudents(page: number, q: string) {
+  return useQuery({
+    queryKey: [...STUDENTS_KEY, page, q],
+    queryFn: () => fetchStudents(page, q),
+    staleTime: 30_000,
+    placeholderData: keepPreviousData,
+  });
 }
 
 export function useProgramOptions() {

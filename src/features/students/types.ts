@@ -38,6 +38,14 @@ export type Student = {
   updatedAt: string;
 };
 
+// One server-side page of the students list (only these rows are fetched).
+export type StudentPage = {
+  items: Student[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
 // Body for POST /api/students (provision an account). The server generates the
 // temp password and forces a reset on first login.
 export type StudentInput = {

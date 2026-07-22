@@ -14,15 +14,22 @@ import type {
   ProvisionResult,
   Student,
   StudentInput,
+  StudentPage,
   StudentPatch,
 } from "@/features/students/types";
+
+export const STUDENTS_PAGE_SIZE = 50;
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 const roman = (n: number) => ROMAN[n] ?? String(n);
 
 // --- Students -------------------------------------------------------------
-export function fetchStudents(): Promise<Student[]> {
-  return apiFetch<Student[]>("/api/students");
+// One server-side page (50 rows) + a total. `q` searches register/roll number,
+// name and email server-side, so the whole list is never downloaded.
+export function fetchStudents(page: number, q: string): Promise<StudentPage> {
+  const params = new URLSearchParams({ page: String(page), pageSize: String(STUDENTS_PAGE_SIZE) });
+  if (q) params.set("q", q);
+  return apiFetch<StudentPage>(`/api/students?${params.toString()}`);
 }
 
 export function createStudent(input: StudentInput): Promise<ProvisionResult> {

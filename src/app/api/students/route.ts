@@ -79,18 +79,42 @@ export async function GET(req: Request) {
     const ctx = await authenticate(req);
     authorize(ctx, "manage", "Student");
 
+    const url = new URL(req.url);
+    const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+    const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize")) || 50));
+    const q = url.searchParams.get("q")?.trim() || "";
+
     // Super Admin: all students. Scoped roles: only their own program.
-    const where = ctx.isInstitutionScoped
+    const scope = ctx.isInstitutionScoped
       ? {}
       : { user: { programId: ctx.user.programId ?? "__none__" } };
+    // Server-side search over register/roll number, name and email (so the client
+    // never has to download the whole list to filter it).
+    const search = q
+      ? {
+          OR: [
+            { registerNumber: { contains: q, mode: "insensitive" as const } },
+            { rollNumber: { contains: q, mode: "insensitive" as const } },
+            { user: { displayName: { contains: q, mode: "insensitive" as const } } },
+            { user: { email: { contains: q, mode: "insensitive" as const } } },
+          ],
+        }
+      : {};
+    const where = { AND: [scope, search] };
 
-    const students = await db.student.findMany({
-      where,
-      include: STUDENT_INCLUDE,
-      orderBy: { registerNumber: "asc" },
-    });
+    // One page of rows + the total (for the pager), in parallel.
+    const [total, students] = await Promise.all([
+      db.student.count({ where }),
+      db.student.findMany({
+        where,
+        include: STUDENT_INCLUDE,
+        orderBy: { registerNumber: "asc" },
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+    ]);
 
-    return Response.json(students.map(toStudentDto));
+    return Response.json({ items: students.map(toStudentDto), total, page, pageSize });
   } catch (err) {
     return toAuthResponse(err);
   }

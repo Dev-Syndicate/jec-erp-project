@@ -2,8 +2,9 @@
 // the `mark Attendance` capability. `manage Attendance` (HOD/Super Admin) works
 // with any class in program scope; a plain `mark Attendance` holder (Faculty) is
 // confined to a class they teach or advise, and — when marking — to the specific
-// period they teach. The class advisor (class teacher) owns the whole class (any
-// period), since they own the day/Master attendance record.
+// period they teach. The class advisor (class teacher) can VIEW the whole class and
+// owns the DAY (Master) record (assertOwnsDayRecord), but period (subject) marking
+// stays with each period's own teacher — the advisor is NOT a wildcard there.
 //
 // Program scope is enforced separately in the routes (the resource-form authorize); this
 // module adds the "which class within the program" layer.
@@ -35,18 +36,22 @@ export async function assertTeachesOrAdvises(
 }
 
 /**
- * Mark-level: may this user mark THIS period? Passes for `manage Attendance`, the
- * class advisor, or the faculty assigned to this period's timetable slot. Throws
- * 403 otherwise.
+ * Mark-level predicate: may this user mark THIS period? Period (subject) attendance
+ * belongs to the subject teacher, so true ONLY for `manage Attendance` (HOD/SA — the
+ * substitute/override valve) or the faculty assigned to this period's timetable
+ * slot. The class advisor is deliberately NOT special here: they own the DAY
+ * (Master) record (assertOwnsDayRecord), not other teachers' subject hours.
+ *
+ * The GET uses this per period to tell the UI which periods are editable, so the
+ * grid never presents an hour the user can't save (avoiding an edit-then-403).
  */
-export function assertMarksPeriod(
-  ctx: AuthContext,
-  advisorId: string | null,
-  slotFacultyId: string,
-): void {
-  if (ctx.ability.can("manage", "Attendance")) return;
-  if (advisorId && advisorId === ctx.user.id) return;
-  if (slotFacultyId === ctx.user.id) return;
+export function canMarkPeriod(ctx: AuthContext, slotFacultyId: string): boolean {
+  return ctx.ability.can("manage", "Attendance") || slotFacultyId === ctx.user.id;
+}
+
+/** The throwing form of {@link canMarkPeriod}, gating the POST. */
+export function assertMarksPeriod(ctx: AuthContext, slotFacultyId: string): void {
+  if (canMarkPeriod(ctx, slotFacultyId)) return;
   throw new AuthError(403, "You can only mark attendance for a period you teach.");
 }
 

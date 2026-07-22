@@ -26,6 +26,9 @@ export type DayPeriod = {
   subjectName: string;
   facultyId: string;
   facultyName: string;
+  // Whether the current viewer may mark this period (server-computed: they hold
+  // `manage Attendance`, or they teach this period). The UI locks the rest.
+  canMark: boolean;
 };
 
 // A mark already saved for this date (used to prefill the grid).

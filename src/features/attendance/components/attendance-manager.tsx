@@ -3,12 +3,13 @@
 // Flow: pick a Program → Class → Date. The weekday resolves from the date; a
 // working Saturday borrows a weekday's timetable (a "follows" picker), Sunday is
 // off. Then pick one of the day's scheduled periods and mark the roster. Saving
-// period 1 also sets the day's official attendance (server-side). Super-Admin
-// only (the API re-checks); program-scoped.
+// period 1 also sets the day's official attendance (server-side). Open to staff
+// who mark attendance (Super Admin / HOD / Faculty); a Faculty can only mark the
+// periods they teach — other hours open read-only (the API re-checks + scopes).
 "use client";
 
 import { useState } from "react";
-import { CalendarCheck2, Check, Search } from "lucide-react";
+import { CalendarCheck2, Check, Lock, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -269,7 +270,9 @@ function Loaded({
         </FormError>
       ) : (
         <>
-          {/* Period tabs */}
+          {/* Period tabs — hours the viewer can't mark (another teacher's subject)
+              show a lock and open read-only, so the grid never lets them edit an
+              hour they can't save. */}
           <div className="flex flex-wrap gap-2">
             {periods.map((p) => {
               const active = p.period === activePeriod;
@@ -287,26 +290,49 @@ function Loaded({
                   <span className="font-mono text-[0.65rem] uppercase tracking-wide text-muted-foreground">
                     Period {p.period}
                   </span>
-                  <span className="text-sm font-medium">{p.subjectCode}</span>
+                  <span className="inline-flex items-center gap-1 text-sm font-medium">
+                    {p.subjectCode}
+                    {!p.canMark && <Lock className="size-3 text-muted-foreground" />}
+                  </span>
                 </button>
               );
             })}
           </div>
 
-          {activePeriodInfo && (
-            <PeriodMarker
-              // Remount (reset local marks) when the target changes.
-              key={`${view.classId}-${view.date}-${view.weekday}-${activePeriodInfo.period}`}
-              classId={view.classId}
-              date={view.date}
-              followsDay={followsDay}
-              period={activePeriodInfo}
-              roster={view.roster}
-              existing={view.marks.filter((m) => m.period === activePeriodInfo.period)}
-            />
-          )}
+          {activePeriodInfo &&
+            (activePeriodInfo.canMark ? (
+              <PeriodMarker
+                // Remount (reset local marks) when the target changes.
+                key={`${view.classId}-${view.date}-${view.weekday}-${activePeriodInfo.period}`}
+                classId={view.classId}
+                date={view.date}
+                followsDay={followsDay}
+                period={activePeriodInfo}
+                roster={view.roster}
+                existing={view.marks.filter((m) => m.period === activePeriodInfo.period)}
+              />
+            ) : (
+              <LockedPeriod period={activePeriodInfo} />
+            ))}
         </>
       )}
+    </div>
+  );
+}
+
+// Shown when the viewer opens a period they don't teach (and isn't an admin).
+// Period/subject attendance is the subject teacher's to mark; the class advisor
+// corrects the day record elsewhere, and HOD/Super Admin can mark any hour.
+function LockedPeriod({ period }: { period: DayPeriod }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-4 py-10 text-center">
+      <Lock className="size-5 text-muted-foreground" />
+      <p className="text-sm font-medium">
+        Period {period.period} · {period.subjectCode} — {period.subjectName}
+      </p>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        This is {period.facultyName}’s hour. Only the subject teacher (or an admin) can mark it.
+      </p>
     </div>
   );
 }

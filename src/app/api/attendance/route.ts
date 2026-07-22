@@ -19,7 +19,7 @@
 // program-scoped via a scoped authorize on the class's program.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { assertMarksPeriod, assertTeachesOrAdvises } from "./access";
+import { assertMarksPeriod, assertTeachesOrAdvises, canMarkPeriod } from "./access";
 import { isStatus, parseDateOnly, resolveWeekday, roman } from "./dto";
 
 export const dynamic = "force-dynamic";
@@ -122,6 +122,9 @@ export async function GET(req: Request) {
         subjectName: s.subject.name,
         facultyId: s.facultyId,
         facultyName: s.faculty.displayName,
+        // Whether THIS viewer may mark this period, so the UI locks the hours that
+        // aren't theirs instead of letting them edit-then-403.
+        canMark: canMarkPeriod(ctx, s.facultyId),
       })),
       roster: enrollments.map((e) => ({
         studentId: e.student.id,
@@ -173,7 +176,7 @@ export async function POST(req: Request) {
 
     const klass = await db.class.findUnique({
       where: { id: classId },
-      select: { programId: true, advisorId: true },
+      select: { programId: true },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
     authorize(ctx, "mark", "Attendance", { programId: klass.programId });
@@ -204,9 +207,10 @@ export async function POST(req: Request) {
       );
     }
 
-    // A plain `mark` holder (Faculty) may only mark the period they teach; the
-    // advisor and `manage Attendance` (HOD/SA) may mark any period for the class.
-    assertMarksPeriod(ctx, klass.advisorId, slot.facultyId);
+    // A plain `mark` holder (Faculty) may only mark the period they teach;
+    // `manage Attendance` (HOD/SA) may mark any period for the class. The advisor
+    // owns the day record, not other teachers' subject hours (see access.ts).
+    assertMarksPeriod(ctx, slot.facultyId);
 
     // Every marked student must be on this class's active-year roster.
     const enrolled = await db.enrollment.findMany({

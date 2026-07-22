@@ -119,8 +119,12 @@ export async function authenticate(req: Request) {
     ur.role.permissions.map((rp) => ({
       action: rp.permission.action,
       subject: rp.permission.subject,
+      // A PROGRAM role with no programId must match NOTHING (fail closed, like the
+      // old assertProgramScope's `!ctx.user.programId` guard) — a null condition
+      // would otherwise match null-programId resources. The `__none__` sentinel is
+      // the same fence the list `where` filters use.
       conditions:
-        ur.role.scope === "PROGRAM" ? { programId: user.programId } : undefined,
+        ur.role.scope === "PROGRAM" ? { programId: user.programId ?? "__none__" } : undefined,
     })),
   );
 

@@ -45,20 +45,32 @@ field: `User.firebaseUid`.
 - Every API route's **step one** is [`authenticate(req)`](src/lib/auth.ts): verify the token
   with Firebase Admin → resolve the Neon `User` (with roles). A verified token whose uid has no
   **active** `User` row is rejected — a Firebase identity alone grants nothing.
-- **Step two** is authorization in the route (see stopgap below).
+- **Step two** is authorization in the route (see below).
 - `src/lib/db.ts` and `src/lib/firebase-admin.ts` are `server-only` — importing them from client
   code leaks the connection string / service-account key into the bundle. Never do it.
 - `authenticate()` caches the resolved user for **30s** keyed by uid (Neon round-trips are
   expensive). After a mutation that must revoke access instantly (role change, program move,
   deactivation), call `invalidateAuthUser(uid)` rather than waiting out the TTL.
 
-### Authorization is a stopgap right now
-The CASL ability factory (`src/lib/rbac`) is **not built yet**. Until it lands, routes gate with
-[`requireRole(ctx, ...)`](src/lib/auth.ts) and [`assertProgramScope(ctx, targetProgramId)`](src/lib/auth.ts).
-Keep that surface small and mechanical so the eventual swap to CASL is a drop-in — call the
-helpers, never compare raw role-name strings inline. `assertProgramScope` already encodes the
-rule CASL will enforce: **Super Admin is unscoped; everyone else acts only within their own
-`programId`.**
+### Authorization: CASL, data-driven (built)
+Authorization is a CASL ability built per request from the user's DB `role → permission` grants
+(the `/access` console edits these). The factory is [`src/lib/rbac/ability.ts`](src/lib/rbac/ability.ts);
+`authenticate()` attaches the ability to the context. Routes gate with a single helper:
+
+- [`authorize(ctx, action, subject)`](src/lib/auth.ts) — the **capability** check ("may this role
+  do X at all?"). `manage` covers every action on a subject and the `all` subject covers everything,
+  so `authorize(ctx, "manage", "all")` means "full/institution admin" (Super Admin only).
+- [`authorize(ctx, action, subject, { programId })`](src/lib/auth.ts) — the **scoped** check. Grants
+  from a PROGRAM-scoped role carry a `{ programId }` **CASL condition**, so this enforces the rule
+  **Super Admin is unscoped; everyone else acts only within their own `programId`**. Use the resource
+  form whenever the target's programId is known (it replaced the old `assertProgramScope`). ⚠️ The
+  resource arg is optional — omitting it silently degrades to a capability-only (unscoped) check, so
+  pass it on any program-owned resource.
+
+**Never compare raw role-name strings inline** — always go through `authorize`. `ctx.isInstitutionScoped`
+(is Super Admin / any INSTITUTION role) is available for list `where` filters (unscoped → all, else
+`{ programId }`). Finer, resource-specific checks live beside the routes (e.g. attendance's
+[`access.ts`](src/app/api/attendance/access.ts): teaches/advises, per-period ownership).
 
 ## Architecture
 

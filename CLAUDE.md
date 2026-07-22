@@ -7,6 +7,22 @@ client is planned later against the same API. **Start every session by reading
 [docs/SESSION-HANDOFF.md](docs/SESSION-HANDOFF.md)** (current state + next task) and opening
 [docs/schema-design.html](docs/schema-design.html) (the visual source of truth for the data model).
 
+## Current state
+
+Active branch: **`rebuild-core`** (pushed; `main` is behind). The project was reset mid-way to
+be schema-first — anything (docs, memories, recalled context) describing a
+`Department`/`Section`/`Term` model or `assertDeptScope` predates that reset; distrust it.
+
+Built end-to-end (API + feature UI): Structure CRUD (Degree/Branch/Program/Class), faculty +
+student provisioning (temp-password flow, regenerate, CSV/XLSX import, enrollment at create),
+AcademicYear/Semester with activate endpoints, Subjects, Timetable grid, Attendance (period
+marking, period-1 → Master auto-seed, class-teacher day correction, per-class report),
+Promotion (bulk next-year enrollment + graduation), the `/access` RBAC console, and the auth
+flow (login, forced first-login reset, `/api/auth/me`, `resolve-roll`).
+
+Not built yet: internal marks (schema ready — `InternalMark` — no API/UI), leave/OD,
+announcements, audit log, FCM, Cloudinary usage (lib exists, unused), the Flutter app, tests.
+
 ## Commands
 
 ```bash
@@ -52,13 +68,30 @@ field: `User.firebaseUid`.
   expensive). After a mutation that must revoke access instantly (role change, program move,
   deactivation), call `invalidateAuthUser(uid)` rather than waiting out the TTL.
 
-### Authorization is a stopgap right now
-The CASL ability factory (`src/lib/rbac`) is **not built yet**. Until it lands, routes gate with
-[`requireRole(ctx, ...)`](src/lib/auth.ts) and [`assertProgramScope(ctx, targetProgramId)`](src/lib/auth.ts).
-Keep that surface small and mechanical so the eventual swap to CASL is a drop-in — call the
-helpers, never compare raw role-name strings inline. `assertProgramScope` already encodes the
-rule CASL will enforce: **Super Admin is unscoped; everyone else acts only within their own
-`programId`.**
+### Authorization is CASL-backed and DB-driven (the `requireRole` stopgap is gone)
+- **RBAC is data.** `Role` (with `scope` PROGRAM | INSTITUTION, `isSystem`) and `Permission`
+  (CASL-shaped `action`+`subject`, e.g. `mark Attendance`, `manage all`) live in the DB and are
+  edited in the `/access` console. Allow-list semantics: not granted = blocked, no explicit deny.
+  Seeded system roles: Super Admin (INSTITUTION, `manage all`), HOD, Faculty, Student.
+- Routes call [`authorize(ctx, action, subject)`](src/lib/auth.ts) — a check against the CASL
+  ability that `authenticate()` builds from the user's flattened role grants
+  ([src/lib/rbac/ability.ts](src/lib/rbac/ability.ts)). Never compare role-name strings inline.
+- **Program scoping is manual per-route, not in CASL** (deliberate deferral, noted in
+  `ability.ts`): writes call [`assertProgramScope(ctx, targetProgramId)`](src/lib/auth.ts)
+  (INSTITUTION-scoped users are unscoped; everyone else own-program only), and reads build
+  `where: ctx.isInstitutionScoped ? {} : { programId: ctx.user.programId ?? "__none__" }`.
+  Forgetting either is a cross-program data leak — this is the spot to review hardest.
+- **Resource-level gates** layer on where capability + program isn't enough:
+  [src/app/api/attendance/access.ts](src/app/api/attendance/access.ts) — a plain
+  `mark Attendance` holder may only work with classes they teach or advise, mark only the
+  period they teach, and only the class advisor (or `manage Attendance`) may correct the day
+  (Master) record. Attendance authority derives from `TimetableSlot` + `Class.advisorId`,
+  never granted directly.
+- **Role ≠ account.** Roles are `UserRole` rows granted/revoked without touching the `User`;
+  HOD rotation = delete one row, create another; history keeps attributing past actions.
+  Acceptance criteria are the negative tests: faculty marking a non-assigned period must 403,
+  HOD reading another program must 403, revocation takes effect within the 30s auth cache
+  (instantly with `invalidateAuthUser`).
 
 ## Architecture
 
@@ -147,8 +180,11 @@ distinguishes "unknown" from "inactive" — don't add leakage.
 
 ## Working style (from the project owner)
 
-- **One vertical slice at a time**, committed at clean checkpoints. The next slice is the Structure
-  setup (Degree → Branch → Program → Class), then Attendance — see SESSION-HANDOFF.md §2.
+- **One vertical slice at a time**, committed at clean checkpoints. Remaining slices, in
+  dependency order: internal marks (schema ready, gated by `FacultyAssignment`) → leave/OD
+  (two-step approval: class teacher then HOD; only final approval auto-marks OD/Excused in
+  attendance, rejection touches nothing — transactional) → reports/exports (`xlsx` is already a
+  dep) → announcements → media (Cloudinary) → FCM → audit log + bulk ops → Flutter.
 - **Confirm design decisions before writing lots of code.** Decisions already settled are in
   SESSION-HANDOFF.md §4 — don't relitigate them.
 - For browser testing use `test-admin@jeppiaar.local`, **never** the owner's real admin account.

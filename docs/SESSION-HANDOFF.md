@@ -1,6 +1,6 @@
 # JEC ERP — Session Handoff
 
-_Last updated: 2026-07-19 · Branch: `rebuild-core` · HEAD: `f40be85`_
+_Last updated: 2026-07-22 · Branch: `rebuild-core` · HEAD: `4ac8ce3`_
 
 Read this first, then open [docs/schema-design.html](./schema-design.html) (the visual
 source of truth for the data model) in a browser.
@@ -9,40 +9,43 @@ source of truth for the data model) in a browser.
 
 ## 1. Where we are right now
 
-The project was **reset to be schema-first**. We threw away the reactively-built
-pages/APIs and the old Department/Section/Term model, designed the complete core
-data model as a reviewed visual document, locked it, and wrote it as the Prisma
-schema in one clean pass.
+The project was **reset to be schema-first** (old Department/Section/Term model thrown
+away, the 19-table backbone in §3 locked and written in one clean pass), and the core
+has since been **built out slice by slice** on that foundation. Done and committed on
+`rebuild-core` (pushed to origin; `main` is behind):
 
-**Done and committed (`f40be85` on `rebuild-core`, pushed to origin):**
+- ✅ **Structure** — Degree / Branch / Program / Class CRUD (`/structure/*`), class
+  advisor (class teacher) assignment.
+- ✅ **People** — faculty + student provisioning (temp password, regenerate,
+  `mustChangePassword` flow), student CSV/XLSX bulk import, enrollment placed at
+  student create/edit (no separate step).
+- ✅ **Academic time** — AcademicYear + Semester CRUD with activate endpoints
+  (exactly one of each active, app-enforced).
+- ✅ **Subjects** + **Timetable** (Mon–Fri weekly grid per class per semester).
+- ✅ **Attendance (job #1)** — period marking; period 1 auto-seeds MasterAttendance;
+  class-teacher day correction (`manuallyAdjusted` guard); HOD/faculty views scoped
+  to their classes; per-class report (overall + per-subject %).
+- ✅ **Promotion** — bulk next-year enrollment + graduation.
+- ✅ **RBAC enforced via CASL** — `/access` console edits Role/Permission data
+  (Pass A); routes `authorize()` against the DB-driven ability (Pass B — the
+  `requireRole` stopgap is gone). Program scoping stays manual per-route
+  (`assertProgramScope` + scoped `where`).
+- ✅ Auth flow — login, forced first-login reset, `/api/auth/me`,
+  `POST /api/auth/resolve-roll` (register number → email).
 
-- ✅ New Prisma schema — the **19-table backbone** (see §3). Validated, generated,
-  and **pushed to the Neon dev DB** (force-reset; DB is empty except seed data).
-- ✅ Seed runs green: RBAC baseline (roles **Super Admin · HOD · Faculty · Student**)
-  + the bootstrapped **Super Admin** account.
-- ✅ Carried-over foundation code migrated to the new model
-  (`departmentId → programId`, `isActive → status`, `assertDeptScope → assertProgramScope`).
-- ✅ `pnpm exec tsc --noEmit` is **clean**.
-
-**Nothing else is built yet** — there are no management screens or feature APIs.
-The nav is trimmed to just "Today → Overview". This is a bare, correct foundation.
+**Not built yet:** internal marks (job #4 — schema ready, no API/UI), leave/OD,
+announcements, audit log, FCM notifications, Cloudinary usage, Flutter, tests
+(Playwright installed, no runner/scripts).
 
 ---
 
 ## 2. THE NEXT TASK (start here)
 
-Build the **first vertical slice: the Structure setup**, because everything else
-depends on it (you can't mark attendance without a Class to mark).
-
-Order it exactly like the dependency chain:
-
-1. **Degree** — CRUD (name, code, `durationYears`). Super-Admin only.
-2. **Branch** — CRUD (name, code). Super-Admin only.
-3. **Program** — pair a Degree × Branch. `programId` is _the_ scoping key.
-4. **Class** — within a Program: `year` (1…durationYears) + `section` ("A"…"H"),
-   optional `advisorId`. Unique `(program, year, section)`.
-
-Then the actual **Attendance** job can be built on top (job #1, the priority).
+Next slice in dependency order: **Internal marks (job #4)** — entry gated by
+`FacultyAssignment` (who may teach/mark), per student × subject × semester ×
+assessment (IA1/IA2/MODEL/ASSIGNMENT), `InternalMark` table already in the schema.
+After that: leave/OD → reports/exports → announcements → media → FCM → audit log +
+bulk ops → Flutter.
 
 The user's stated preference: **commit at clean checkpoints**, build **one vertical
 slice at a time**, and confirm design decisions before writing lots of code.
@@ -88,11 +91,14 @@ schema itself is [prisma/schema.prisma](../prisma/schema.prisma). Summary:
   PeriodAttendance.
 
 ### RBAC
-- Roles/permissions are **data**, composed in a UI (allow-list: "blocked" = not
-  granted, no explicit deny). CASL abilities are built in code from the
-  `UserRole → Role → Permission` mapping (the CASL factory `src/lib/rbac` is **not
-  built yet** — routes currently gate with the stopgap `requireRole()` /
-  `assertProgramScope()` in [src/lib/auth.ts](../src/lib/auth.ts)).
+- Roles/permissions are **data**, composed in the `/access` console (allow-list:
+  "blocked" = not granted, no explicit deny). CASL abilities are built per request
+  from the `UserRole → Role → Permission` mapping
+  ([src/lib/rbac/ability.ts](../src/lib/rbac/ability.ts)); routes gate with
+  `authorize(ctx, action, subject)` + `assertProgramScope()` in
+  [src/lib/auth.ts](../src/lib/auth.ts). Attendance adds resource-level gates in
+  [src/app/api/attendance/access.ts](../src/app/api/attendance/access.ts)
+  (teaches-or-advises / owns-the-period / advisor-owns-day-record).
 - **Scope:** PROGRAM roles (HOD, Faculty, Student, custom "ERP Coordinator") see only
   their own program; INSTITUTION (Super Admin) spans all.
 - **Super Admin** is bootstrapped in the seed (no higher role can create it).

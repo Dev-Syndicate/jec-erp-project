@@ -46,6 +46,7 @@ function errorMessage(e: unknown): string {
   return "Something went wrong. Try again.";
 }
 const isoToDateInput = (iso: string) => (iso ? iso.slice(0, 10) : "");
+const PAGE_SIZE = 50;
 
 const GENDER_OPTIONS = [
   { value: "MALE", label: "Male" },
@@ -134,6 +135,7 @@ export function StudentManager() {
   const [editing, setEditing] = useState<Student | null>(null);
   const [resetting, setResetting] = useState<Student | null>(null);
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
 
   // Client-side filter across the fields shown in the table — matches any of
   // register number, name, email, program, or class (year-section).
@@ -150,6 +152,13 @@ export function StudentManager() {
         .some((field) => field!.toLowerCase().includes(q));
     });
   }, [students, query]);
+
+  // Paginate the filtered rows (50/page). currentPage is clamped so it stays
+  // valid when the filter shrinks the list under the current page.
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const startIdx = (currentPage - 1) * PAGE_SIZE;
+  const pageItems = filtered.slice(startIdx, startIdx + PAGE_SIZE);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -189,7 +198,10 @@ export function StudentManager() {
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                setPage(1);
+              }}
               placeholder="Search by name, register no., email, program…"
               aria-label="Search students"
               className="h-10! pl-9"
@@ -216,7 +228,7 @@ export function StudentManager() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((s) => (
+                  {pageItems.map((s) => (
                 <TableRow key={s.id}>
                   <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
                   <TableCell>
@@ -265,6 +277,35 @@ export function StudentManager() {
                   ))}
                 </TableBody>
               </Table>
+            </div>
+          )}
+
+          {filtered.length > PAGE_SIZE && (
+            <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
+              <span>
+                Showing {startIdx + 1}–{startIdx + pageItems.length} of {filtered.length}
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1}
+                >
+                  Previous
+                </Button>
+                <span className="font-mono text-xs">
+                  Page {currentPage} of {pageCount}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
+                  disabled={currentPage >= pageCount}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           )}
         </div>

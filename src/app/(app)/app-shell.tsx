@@ -20,7 +20,6 @@ import {
   UsersRound,
   ShieldCheck,
   ChevronsUp,
-  ChevronsUpDown,
   ChevronRight,
   LogOut,
 } from "lucide-react";
@@ -434,46 +433,59 @@ function UserMenu({ profile }: { profile: AuthUser | undefined }) {
     .join("")
     .toUpperCase();
 
+  const signOutNow = () =>
+    signOut.mutate(undefined, { onSuccess: () => router.replace("/login") });
+
   return (
     <SidebarMenu>
       <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <SidebarMenuButton size="lg" className="gap-2.5">
-                <span className="grid size-7 shrink-0 place-items-center rounded-md bg-sidebar-accent font-mono text-[0.65rem] font-semibold text-sidebar-accent-foreground">
-                  {initials}
-                </span>
-                <span className="flex flex-1 flex-col overflow-hidden text-left leading-tight group-data-[collapsible=icon]:hidden">
-                  <span className="truncate text-sm font-medium text-sidebar-foreground">
-                    {profile?.displayName ?? "…"}
+        <div className="flex items-center gap-1">
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <SidebarMenuButton size="lg" className="flex-1 gap-2.5">
+                  <span className="grid size-7 shrink-0 place-items-center rounded-md bg-sidebar-accent font-mono text-[0.65rem] font-semibold text-sidebar-accent-foreground">
+                    {initials}
                   </span>
-                  <span className="truncate font-mono text-[0.65rem] text-muted-foreground">
-                    {profile?.roles[0] ?? "No role"}
+                  <span className="flex flex-1 flex-col overflow-hidden text-left leading-tight group-data-[collapsible=icon]:hidden">
+                    <span className="truncate text-sm font-medium text-sidebar-foreground">
+                      {profile?.displayName ?? "…"}
+                    </span>
+                    <span className="truncate font-mono text-[0.65rem] text-muted-foreground">
+                      {profile?.roles[0] ?? "No role"}
+                    </span>
                   </span>
-                </span>
-                <ChevronsUpDown className="ml-auto size-4 text-muted-foreground group-data-[collapsible=icon]:hidden" />
-              </SidebarMenuButton>
-            }
-          />
-          <DropdownMenuContent side="top" align="start" className="w-56">
-            <DropdownMenuLabel className="flex flex-col gap-0.5">
-              <span className="truncate text-sm">{profile?.email ?? "…"}</span>
-              <span className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
-                {profile?.roles.join(" · ") || "No roles"}
-              </span>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() =>
-                signOut.mutate(undefined, { onSuccess: () => router.replace("/login") })
+                </SidebarMenuButton>
               }
-            >
-              <LogOut className="size-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+            />
+            <DropdownMenuContent side="top" align="start" className="w-56">
+              <DropdownMenuLabel className="flex flex-col gap-0.5">
+                <span className="truncate text-sm">{profile?.email ?? "…"}</span>
+                <span className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                  {profile?.roles.join(" · ") || "No roles"}
+                </span>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={signOutNow}>
+                <LogOut className="size-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Direct sign-out beside the user chip. Hidden when the rail collapses
+              to icons — use the chip's menu there. */}
+          <button
+            type="button"
+            onClick={signOutNow}
+            disabled={signOut.isPending}
+            aria-label="Sign out"
+            title="Sign out"
+            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:opacity-50 group-data-[collapsible=icon]:hidden"
+          >
+            <LogOut className="size-4" />
+          </button>
+        </div>
       </SidebarMenuItem>
     </SidebarMenu>
   );

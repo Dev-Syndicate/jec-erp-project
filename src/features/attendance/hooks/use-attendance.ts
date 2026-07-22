@@ -10,6 +10,7 @@ import {
   fetchAttendanceReport,
   fetchClassOptions,
   fetchDayAttendance,
+  fetchMyTimetable,
   fetchRoster,
   saveAttendance,
   saveDayAttendance,
@@ -36,6 +37,14 @@ export function useClassOptions(scope?: "day") {
   return useQuery({
     queryKey: ["attendance", "classes", scope ?? "mark"],
     queryFn: () => fetchClassOptions(scope),
+    staleTime: 5 * 60_000,
+  });
+}
+
+export function useMyTimetable() {
+  return useQuery({
+    queryKey: ["attendance", "my-timetable"],
+    queryFn: fetchMyTimetable,
     staleTime: 5 * 60_000,
   });
 }

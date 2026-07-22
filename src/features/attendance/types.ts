@@ -95,6 +95,24 @@ export type DayInput = {
   entries: Array<{ studentId: string; status: AttendanceStatus }>;
 };
 
+// --- My timetable ---------------------------------------------------------
+// The signed-in staff member's own weekly teaching schedule for the active
+// semester — one entry per period they're the assigned faculty for.
+export type MyTimetableSlot = {
+  dayOfWeek: Weekday;
+  period: number;
+  subjectCode: string;
+  subjectName: string;
+  classId: string;
+  classLabel: string; // full: "B.E · CSE · II-A"
+  classShort: string; // "II-A"
+};
+
+export type MyTimetable = {
+  semesterLabel: string | null; // null when no semester is active
+  slots: MyTimetableSlot[];
+};
+
 // --- Reports --------------------------------------------------------------
 // The attendance percentages for a class in the active semester. `pct` is null
 // when nothing has been marked yet (no denominator). PRESENT + OD = attended.

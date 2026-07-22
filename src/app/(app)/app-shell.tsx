@@ -101,11 +101,17 @@ const NAV: NavGroup[] = [
     label: "Attendance",
     items: [
       {
+        title: "My timetable",
+        href: "/attendance/timetable",
+        icon: CalendarClock,
+        roles: ["Super Admin", "HOD", "Faculty"],
+      },
+      {
         title: "Mark attendance",
         href: "/attendance",
         icon: CalendarCheck2,
         roles: ["Super Admin", "HOD", "Faculty"],
-        exact: true, // /attendance/report is a sibling, not a sub-page of this
+        exact: true, // /attendance/report and /attendance/timetable are siblings
       },
       {
         title: "Day attendance",

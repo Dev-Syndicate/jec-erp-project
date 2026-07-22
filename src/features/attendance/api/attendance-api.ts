@@ -11,6 +11,7 @@ import type {
   DayInput,
   DayView,
   MarkInput,
+  MyTimetable,
   RosterView,
   SaveResult,
   Weekday,
@@ -37,6 +38,11 @@ export function saveAttendance(input: MarkInput): Promise<SaveResult> {
 
 export function fetchAttendanceReport(classId: string): Promise<AttendanceReport> {
   return apiFetch<AttendanceReport>(`/api/attendance/report?classId=${encodeURIComponent(classId)}`);
+}
+
+// The caller's own weekly teaching schedule for the active semester.
+export function fetchMyTimetable(): Promise<MyTimetable> {
+  return apiFetch<MyTimetable>("/api/attendance/my-timetable");
 }
 
 // Day (Master) attendance — the class teacher's review + correction of the

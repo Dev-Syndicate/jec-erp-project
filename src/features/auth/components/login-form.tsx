@@ -22,15 +22,18 @@ function errorMessage(e: unknown): string {
   return "Something went wrong. Try again.";
 }
 
-// A small labelled slot above each state so the form reads like a step in a
-// verification flow rather than a generic card. Mono eyebrow = system voice.
-function StepHeading({ step, title, hint }: { step: string; title: string; hint: string }) {
+// Heading for each state. The mono eyebrow is OPTIONAL and only used where it
+// encodes real flow state (the forced first-login reset) — a one-step sign-in
+// numbered "step 1 of 1" would be decoration, not information.
+function StepHeading({ step, title, hint }: { step?: string; title: string; hint: string }) {
   return (
     <div className="flex flex-col gap-1.5">
-      <span className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-primary">
-        {step}
-      </span>
-      <h1 className="font-heading text-2xl font-semibold leading-tight text-foreground">
+      {step && (
+        <span className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-primary">
+          {step}
+        </span>
+      )}
+      <h1 className="font-heading text-3xl font-semibold leading-tight tracking-tight text-foreground">
         {title}
       </h1>
       <p className="text-sm text-muted-foreground">{hint}</p>
@@ -159,35 +162,52 @@ function RedirectToDashboard({ name }: { name: string }) {
 
 type SignInMode = "staff" | "student";
 
-// Staff sign in with their email; students with their roll number. The toggle
-// swaps only the identifier field — the password field and flow are shared.
-function ModeToggle({ mode, onChange }: { mode: SignInMode; onChange: (m: SignInMode) => void }) {
-  const tabs: Array<{ id: SignInMode; label: string }> = [
-    { id: "staff", label: "Staff" },
-    { id: "student", label: "Student" },
+// Who's signing in, as two selectable tiles — each names the credential it
+// expects, so the choice teaches the form. Radio semantics, arrow-key friendly.
+function IdentityTiles({
+  mode,
+  onChange,
+}: {
+  mode: SignInMode;
+  onChange: (m: SignInMode) => void;
+}) {
+  const options: Array<{ id: SignInMode; label: string; credential: string }> = [
+    { id: "staff", label: "Staff", credential: "College email" },
+    { id: "student", label: "Student", credential: "Register number" },
   ];
   return (
-    <div
-      role="tablist"
-      aria-label="Sign in as"
-      className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1"
-    >
-      {tabs.map((t) => {
-        const active = mode === t.id;
+    <div role="radiogroup" aria-label="Sign in as" className="grid grid-cols-2 gap-3">
+      {options.map((o) => {
+        const active = mode === o.id;
         return (
           <button
-            key={t.id}
-            role="tab"
+            key={o.id}
+            role="radio"
             type="button"
-            aria-selected={active}
-            onClick={() => onChange(t.id)}
-            className={`rounded-md px-3 py-1 font-mono text-[0.7rem] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
+            aria-checked={active}
+            onClick={() => onChange(o.id)}
+            className={`flex flex-col gap-1 rounded-lg border px-4 py-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
               active
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
+                ? "border-primary bg-primary/5"
+                : "border-border hover:border-muted-foreground/40"
             }`}
           >
-            {t.label}
+            <span className="flex items-center gap-2">
+              <span
+                aria-hidden
+                className={`size-2 rounded-full transition-colors ${
+                  active ? "bg-primary" : "bg-border"
+                }`}
+              />
+              <span
+                className={`text-sm font-semibold ${active ? "text-foreground" : "text-muted-foreground"}`}
+              >
+                {o.label}
+              </span>
+            </span>
+            <span className="pl-4 font-mono text-[0.65rem] uppercase tracking-[0.14em] text-muted-foreground">
+              {o.credential}
+            </span>
           </button>
         );
       })}
@@ -195,6 +215,9 @@ function ModeToggle({ mode, onChange }: { mode: SignInMode; onChange: (m: SignIn
   );
 }
 
+// Staff sign in with their email; students with their register number. The
+// identity choice is two radio tiles that each NAME the credential they expect;
+// the fields below are open underlined lines — no card chrome.
 function SignInStep() {
   const signIn = useSignIn();
   const [mode, setMode] = useState<SignInMode>("staff");
@@ -207,20 +230,8 @@ function SignInStep() {
   return (
     <div className="flex w-full flex-col gap-7">
       <StepHeading
-        step="Access · Step 1 of 1"
-        title="Sign in to JEC ERP"
-        hint={
-          isStudent
-            ? "Use your register number and the password sent to your college email."
-            : "Use the college email your account was created with."
-        }
-      />
-      <ModeToggle
-        mode={mode}
-        onChange={(m) => {
-          setMode(m);
-          signIn.reset();
-        }}
+        title="Welcome back."
+        hint="Choose who you are — the form asks for the right credential."
       />
       <form
         className="flex flex-col gap-5"
@@ -233,6 +244,14 @@ function SignInStep() {
           );
         }}
       >
+        <IdentityTiles
+          mode={mode}
+          onChange={(m) => {
+            setMode(m);
+            signIn.reset();
+          }}
+        />
+
         {isStudent ? (
           <Field label="Register number" htmlFor="register">
             <Input
@@ -244,7 +263,7 @@ function SignInStep() {
               value={registerNumber}
               onChange={(e) => setRegisterNumber(e.target.value)}
               required
-              placeholder="e.g. 422021104042"
+              placeholder="422021104042"
               className="h-10"
             />
           </Field>
@@ -262,15 +281,8 @@ function SignInStep() {
             />
           </Field>
         )}
-        <Field
-          label="Password"
-          htmlFor="password"
-          trailing={
-            <span className="font-mono text-[0.7rem] text-muted-foreground">
-              temporary on first login
-            </span>
-          }
-        >
+
+        <Field label="Password" htmlFor="password">
           <PasswordInput
             id="password"
             value={password}
@@ -278,13 +290,15 @@ function SignInStep() {
             autoComplete="current-password"
           />
         </Field>
+
         {signIn.isError && <FormError>{errorMessage(signIn.error)}</FormError>}
-        <Button type="submit" size="lg" disabled={signIn.isPending} className="mt-1 h-11">
+        <Button type="submit" size="lg" disabled={signIn.isPending} className="h-11">
           {signIn.isPending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
       <p className="text-sm text-muted-foreground">
-        No account yet? Your department admin creates it and emails your first password.
+        New here? Your admin creates your account and emails a temporary password — you&apos;ll
+        set your own the first time you sign in.
       </p>
     </div>
   );

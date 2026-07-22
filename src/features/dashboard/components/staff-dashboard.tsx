@@ -89,7 +89,9 @@ function Content({ data }: { data: StaffOverview }) {
       <Section title="Quick links">
         <div className="flex flex-wrap gap-2">
           <QuickLink href="/attendance" icon={CalendarCheck2} label="Mark attendance" />
-          <QuickLink href="/attendance/timetable" icon={CalendarClock} label="My timetable" />
+          {data.teaches && (
+            <QuickLink href="/attendance/timetable" icon={CalendarClock} label="My timetable" />
+          )}
           {data.advisesClass && <QuickLink href="/my-class" icon={UsersRound} label="My class" />}
           {isAdmin && <QuickLink href="/students" icon={GraduationCap} label="Students" />}
           {isAdmin && <QuickLink href="/structure/degrees" icon={Building2} label="Structure" />}

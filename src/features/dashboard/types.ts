@@ -16,5 +16,6 @@ export type StaffOverview = {
   semesterLabel: string | null;
   todayClasses: TodayClass[];
   advisesClass: boolean;
+  teaches: boolean; // has ≥1 timetable slot this semester (gates My timetable)
   stats: { students: number; faculty: number; classes: number } | null; // admin only
 };

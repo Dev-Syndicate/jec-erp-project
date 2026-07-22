@@ -64,6 +64,14 @@ export async function GET(req: Request) {
       where: { advisorId: ctx.user.id, isActive: true },
     });
 
+    // Does this user teach at all this semester? (Gates the "My timetable" link —
+    // Super Admin / non-teaching staff have no personal timetable.)
+    const teaches = semester
+      ? (await db.timetableSlot.count({
+          where: { facultyId: ctx.user.id, semesterId: semester.id },
+        })) > 0
+      : false;
+
     // Admin snapshot (only for a manage-Student holder), scoped to their program
     // unless they're institution-scoped (Super Admin).
     let stats: { students: number; faculty: number; classes: number } | null = null;
@@ -88,6 +96,7 @@ export async function GET(req: Request) {
       semesterLabel,
       todayClasses,
       advisesClass: advisedCount > 0,
+      teaches,
       stats,
     });
   } catch (err) {

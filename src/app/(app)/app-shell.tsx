@@ -17,6 +17,7 @@ import {
   GraduationCap,
   BookOpen,
   CalendarClock,
+  UsersRound,
   ShieldCheck,
   ChevronsUp,
   ChevronsUpDown,
@@ -169,6 +170,14 @@ const NAV: NavGroup[] = [
   {
     label: "People",
     items: [
+      {
+        title: "My class",
+        href: "/my-class",
+        icon: UsersRound,
+        // The class teacher's roster tool — surfaced only to a class advisor
+        // (HOD/SA manage the full Students list instead).
+        gate: ({ advisesClass }) => advisesClass,
+      },
       {
         title: "Students",
         href: "/students",

@@ -104,11 +104,10 @@ export function MyTimetable() {
 
 function Cell({ slot }: { slot: MyTimetableSlot }) {
   return (
-    <div className="flex flex-col rounded-md bg-primary/5 px-2 py-1.5 ring-1 ring-primary/15">
-      <span className="text-sm font-medium">{slot.subjectCode}</span>
-      <span className="truncate text-xs text-muted-foreground" title={slot.subjectName}>
-        {slot.classShort}
-      </span>
+    <div className="flex flex-col gap-0.5 rounded-md bg-primary/5 px-2 py-1.5 ring-1 ring-primary/15">
+      <span className="text-sm font-medium leading-tight">{slot.subjectCode}</span>
+      <span className="text-xs leading-tight text-foreground/80">{slot.subjectName}</span>
+      <span className="text-[0.7rem] text-muted-foreground">{slot.classShort}</span>
     </div>
   );
 }

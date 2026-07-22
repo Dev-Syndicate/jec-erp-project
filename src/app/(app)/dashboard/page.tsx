@@ -1,8 +1,8 @@
-// Protected landing route. Auth + shell come from the (app) group layout, so
-// this file is just the content. A placeholder overview until the per-role
-// dashboards land (PRD Phase 14).
-import { DashboardHome } from "@/features/auth/components/dashboard-home";
+// Protected landing route. Auth + shell come from the (app) group layout, so this
+// file is thin: it defers to the router, which shows the student portal for a
+// student and the work overview for staff.
+import { DashboardRouter } from "./dashboard-router";
 
 export default function DashboardPage() {
-  return <DashboardHome />;
+  return <DashboardRouter />;
 }

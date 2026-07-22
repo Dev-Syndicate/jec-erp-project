@@ -264,7 +264,7 @@ function SlotDialog({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
             {slot ? "Edit" : "Add"} — {DAY_LABEL[day]} · Period {period}

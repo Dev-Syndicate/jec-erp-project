@@ -30,7 +30,11 @@ export function FormSelect({
   return (
     <Select value={value} onValueChange={(v) => onChange((v as string) ?? "")} disabled={disabled}>
       <SelectTrigger id={id} className="h-10! w-full">
-        <SelectValue placeholder={placeholder}>{label}</SelectValue>
+        {/* min-w-0 + a truncating span so a long option label (e.g. a full lab
+            subject name) ellipsises instead of overflowing into the chevron. */}
+        <SelectValue placeholder={placeholder} className="min-w-0">
+          {(v: unknown) => <span className="min-w-0 flex-1 truncate">{label(v)}</span>}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {options.map((o) => (

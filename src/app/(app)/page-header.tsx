@@ -15,7 +15,7 @@ export function PageHeader({
       <span className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-primary">
         {eyebrow}
       </span>
-      <h1 className="font-heading text-2xl font-semibold text-foreground">{title}</h1>
+      <h1 className="font-heading text-3xl font-semibold tracking-tight text-foreground">{title}</h1>
       <p className="text-sm text-muted-foreground">{description}</p>
     </header>
   );

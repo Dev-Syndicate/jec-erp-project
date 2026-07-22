@@ -215,7 +215,7 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
           <>
             <div className="flex flex-col gap-3">
               <div className="flex gap-2 text-sm">
-                <span className="rounded-md bg-emerald-500/10 px-2 py-1 font-medium text-emerald-600">
+                <span className="rounded-md bg-status-present/10 px-2 py-1 font-medium text-status-present">
                   {previewData.rows.length} ready to import
                 </span>
                 {previewData.errors.length > 0 && (
@@ -247,7 +247,7 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
           <>
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap gap-2 text-sm">
-                <span className="rounded-md bg-emerald-500/10 px-2 py-1 font-medium text-emerald-600">
+                <span className="rounded-md bg-status-present/10 px-2 py-1 font-medium text-status-present">
                   {resultData.outcomes.filter((o) => o.status === "created").length} created
                 </span>
                 <span className="rounded-md bg-muted px-2 py-1 font-medium text-muted-foreground">
@@ -320,7 +320,7 @@ function RowErrorTable({ errors }: { errors: ImportRowError[] }) {
 
 function OutcomeTable({ outcomes }: { outcomes: ImportOutcome[] }) {
   const tone: Record<ImportOutcome["status"], string> = {
-    created: "text-emerald-600",
+    created: "text-status-present",
     skipped: "text-muted-foreground",
     error: "text-destructive",
   };

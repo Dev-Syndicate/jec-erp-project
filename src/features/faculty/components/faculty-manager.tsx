@@ -74,13 +74,13 @@ function StatusPill({ faculty }: { faculty: Faculty }) {
   }
   if (faculty.mustChangePassword) {
     return (
-      <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-amber-600">
+      <span className="inline-flex items-center rounded-full bg-status-od/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-status-od">
         Invited
       </span>
     );
   }
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-emerald-600">
+    <span className="inline-flex items-center rounded-full bg-status-present/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-status-present">
       Active
     </span>
   );

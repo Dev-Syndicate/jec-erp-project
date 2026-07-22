@@ -121,10 +121,10 @@ function StatusPill({ active }: { active: boolean }) {
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider ${
-        active ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
+        active ? "bg-status-present/10 text-status-present" : "bg-muted text-muted-foreground"
       }`}
     >
-      <span className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-muted-foreground"}`} />
+      <span className={`size-1.5 rounded-full ${active ? "bg-status-present" : "bg-muted-foreground"}`} />
       {active ? "Active" : "Inactive"}
     </span>
   );

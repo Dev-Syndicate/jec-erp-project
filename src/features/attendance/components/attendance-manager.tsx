@@ -485,7 +485,7 @@ function PeriodMarker({
           {save.isError ? (
             <span className="text-destructive">{errorMessage(save.error)}</span>
           ) : savedOnce && !save.isPending ? (
-            <span className="inline-flex items-center gap-1.5 text-emerald-600">
+            <span className="inline-flex items-center gap-1.5 text-status-present">
               <Check className="size-4" /> Saved
             </span>
           ) : (

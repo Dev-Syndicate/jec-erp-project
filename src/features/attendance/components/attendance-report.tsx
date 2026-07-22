@@ -32,7 +32,7 @@ function FormError({ children }: { children: React.ReactNode }) {
 // meaning. Null (nothing marked) reads muted.
 function pctTone(pct: number | null, threshold: number): string {
   if (pct === null) return "text-muted-foreground";
-  return pct < threshold ? "text-red-600" : "text-emerald-600";
+  return pct < threshold ? "text-status-absent" : "text-status-present";
 }
 const fmtPct = (pct: number | null) => (pct === null ? "—" : `${pct}%`);
 
@@ -155,7 +155,7 @@ function Loaded({ report, threshold }: { report: AttendanceReport; threshold: nu
           <span className="rounded-md bg-muted px-2.5 py-1 font-medium text-muted-foreground">
             Class average <span className="text-foreground">{fmtPct(avg)}</span>
           </span>
-          <span className="rounded-md bg-red-500/10 px-2.5 py-1 font-medium text-red-600">
+          <span className="rounded-md bg-status-absent/10 px-2.5 py-1 font-medium text-status-absent">
             {defaulters} below {threshold}%
           </span>
           <span className="rounded-md bg-muted px-2.5 py-1 font-medium text-muted-foreground">

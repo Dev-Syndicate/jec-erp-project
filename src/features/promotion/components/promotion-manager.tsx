@@ -164,7 +164,7 @@ function PromotionPanel({ context }: { context: PromotionContext }) {
         <span className="font-medium text-foreground">{sourceClass.label}</span>
         <span className="text-muted-foreground">· {activeYear.name}</span>
         {graduate ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600">
+          <span className="inline-flex items-center gap-1 rounded-full bg-status-od/10 px-2 py-0.5 text-xs font-medium text-status-od">
             <GraduationCap className="size-3.5" /> Final year — graduate
           </span>
         ) : (
@@ -263,7 +263,7 @@ function PromotionPanel({ context }: { context: PromotionContext }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="text-sm text-muted-foreground">
           {result ? (
-            <span className="inline-flex items-center gap-1.5 text-emerald-600">
+            <span className="inline-flex items-center gap-1.5 text-status-present">
               <Check className="size-4" />
               {result.mode === "GRADUATE"
                 ? `Graduated ${result.processed} student${result.processed === 1 ? "" : "s"}.`

@@ -50,6 +50,7 @@ import {
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -240,7 +241,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <SidebarProvider>
-      <Sidebar collapsible="icon">
+      <Sidebar variant="floating" collapsible="icon">
         <SidebarHeader>
           <div className="flex items-center gap-2.5 px-1 py-1.5">
             <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary font-heading text-xs font-semibold text-primary-foreground">
@@ -309,10 +310,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <SidebarRail />
       </Sidebar>
 
-      <SidebarInset>
+      <SidebarInset className="bg-muted">
         {/* Breadcrumb bar — reflects the current page (Group / Page), derived
             from the nav so it's always accurate. Matches the shadcn reference. */}
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
+        <header className="flex h-12 shrink-0 items-center gap-2 px-4">
           <SidebarTrigger className="-ml-1" />
           <Breadcrumb>
             <BreadcrumbList>
@@ -428,12 +429,15 @@ function UserMenu({ profile }: { profile: AuthUser | undefined }) {
             }
           />
           <DropdownMenuContent side="top" align="start" className="w-56">
-            <DropdownMenuLabel className="flex flex-col gap-0.5">
-              <span className="truncate text-sm">{profile?.email ?? "…"}</span>
-              <span className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
-                {profile?.roles.join(" · ") || "No roles"}
-              </span>
-            </DropdownMenuLabel>
+            {/* Base UI: GroupLabel must live inside a Menu.Group (unlike Radix). */}
+            <DropdownMenuGroup>
+              <DropdownMenuLabel className="flex flex-col gap-0.5">
+                <span className="truncate text-sm">{profile?.email ?? "…"}</span>
+                <span className="font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
+                  {profile?.roles.join(" · ") || "No roles"}
+                </span>
+              </DropdownMenuLabel>
+            </DropdownMenuGroup>
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() =>

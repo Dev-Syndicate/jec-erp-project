@@ -238,7 +238,7 @@ function Loaded({ view }: { view: DayView }) {
           {save.isError ? (
             <span className="text-destructive">{errorMessage(save.error)}</span>
           ) : savedOnce && changed.length === 0 && !save.isPending ? (
-            <span className="inline-flex items-center gap-1.5 text-emerald-600">
+            <span className="inline-flex items-center gap-1.5 text-status-present">
               <Check className="size-4" /> Corrections saved
             </span>
           ) : (
@@ -275,7 +275,7 @@ function SourceBadge({
   }
   if (manuallyAdjusted) {
     return (
-      <span className="rounded-md bg-violet-500/10 px-2 py-0.5 text-xs font-medium text-violet-600">
+      <span className="rounded-md bg-status-excused/10 px-2 py-0.5 text-xs font-medium text-status-excused">
         Corrected
       </span>
     );

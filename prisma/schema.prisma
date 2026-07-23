@@ -76,6 +76,23 @@ enum AttendanceStatus {
   EXCUSED
 }
 
+// A leave/OD request kind. OD (on-duty: sports, seminar, college work) counts as
+// present; LEAVE (sick/personal) is excused — neutral to the %.
+enum LeaveType {
+  OD
+  LEAVE
+}
+
+// Two-stage approval workflow: student applies -> class teacher -> HOD -> issued.
+// A rejection at either stage is terminal. Only the final HOD approval writes
+// attendance (OD/EXCUSED across the range).
+enum LeaveStatus {
+  PENDING_TEACHER
+  PENDING_HOD
+  APPROVED
+  REJECTED
+}
+
 // Internal assessment kinds (job 4).
 enum AssessmentType {
   IA1
@@ -172,6 +189,7 @@ model Class {
   timetableSlots     TimetableSlot[]
   masterAttendance   MasterAttendance[]
   periodAttendance   PeriodAttendance[]
+  leaveRequests      LeaveRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -218,6 +236,8 @@ model User {
   markedMaster       MasterAttendance[]  @relation("MasterMarkedBy")
   markedPeriod       PeriodAttendance[]  @relation("PeriodMarkedBy")
   enteredMarks       InternalMark[]      @relation("MarkEnteredBy")
+  leaveTeacherActions LeaveRequest[]     @relation("LeaveTeacherAction") // requests this user approved/rejected as class teacher
+  leaveHodActions     LeaveRequest[]     @relation("LeaveHodAction")     // requests this user approved/rejected as HOD
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -245,6 +265,7 @@ model Student {
   masterAttendance MasterAttendance[]
   periodAttendance PeriodAttendance[]
   internalMarks    InternalMark[]
+  leaveRequests    LeaveRequest[]
 
   // + admission detail (profile, guardians, address, education, banks,
   //   documents) lands in the student-records slice — hangs off studentId.
@@ -369,6 +390,7 @@ model Semester {
   masterAttendance   MasterAttendance[]
   periodAttendance   PeriodAttendance[]
   internalMarks      InternalMark[]
+  leaveRequests      LeaveRequest[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -568,4 +590,49 @@ model InternalMark {
   @@unique([studentId, subjectId, semesterId, assessment])
   @@index([subjectId])
   @@index([semesterId])
+}
+
+// ---------------------------------------------------------------------------
+// Leave / OD — a student's request to be excused (LEAVE) or marked on-duty (OD)
+// over a date range, approved in two stages (class teacher -> HOD). Only the
+// final HOD approval writes attendance (OD -> present, LEAVE -> EXCUSED) across
+// the range, atomically. The class is captured at apply time (the student's
+// active-year enrollment) so the teacher/HOD scope checks and the attendance
+// write both target the right class + semester.
+// ---------------------------------------------------------------------------
+
+model LeaveRequest {
+  id         String      @id @default(cuid())
+  studentId  String
+  student    Student     @relation(fields: [studentId], references: [id])
+  classId    String
+  class      Class       @relation(fields: [classId], references: [id])
+  semesterId String
+  semester   Semester    @relation(fields: [semesterId], references: [id])
+  type       LeaveType
+  fromDate   DateTime    @db.Date
+  toDate     DateTime    @db.Date
+  reason     String
+  status     LeaveStatus @default(PENDING_TEACHER)
+
+  // Stage-1 (class teacher) action audit.
+  teacherActionById String?
+  teacherActionBy   User?     @relation("LeaveTeacherAction", fields: [teacherActionById], references: [id])
+  teacherActionAt   DateTime?
+
+  // Stage-2 (HOD) action audit.
+  hodActionById String?
+  hodActionBy   User?     @relation("LeaveHodAction", fields: [hodActionById], references: [id])
+  hodActionAt   DateTime?
+
+  // Set when rejected at either stage (terminal).
+  rejectionReason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([studentId])
+  @@index([classId])
+  @@index([semesterId])
+  @@index([status])
 }

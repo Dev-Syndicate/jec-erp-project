@@ -67,6 +67,9 @@ const PERMISSIONS: Array<{ action: string; subject: string }> = [
   { action: "read", subject: "Attendance" },
   { action: "enter", subject: "Marks" },
   { action: "read", subject: "Marks" },
+  { action: "apply", subject: "Leave" }, // student raises an OD/leave request
+  { action: "approve", subject: "Leave" }, // class teacher + HOD act on requests (stage decided in-route)
+  { action: "read", subject: "Leave" },
   { action: "manage", subject: "Class" },
   { action: "read", subject: "Class" },
   { action: "manage", subject: "Program" },
@@ -95,6 +98,8 @@ const DEFAULT_GRANTS: Record<string, Array<[string, string]>> = {
     ["read", "Attendance"],
     ["enter", "Marks"],
     ["read", "Marks"],
+    ["approve", "Leave"], // stage-2 approver (HOD)
+    ["read", "Leave"],
     ["read", "Class"],
     ["read", "Program"],
   ],
@@ -107,11 +112,15 @@ const DEFAULT_GRANTS: Record<string, Array<[string, string]>> = {
     ["read", "Attendance"],
     ["enter", "Marks"],
     ["read", "Marks"],
+    ["approve", "Leave"], // stage-1 approver, gated in-route to classes they advise
+    ["read", "Leave"],
   ],
   Student: [
     ["read", "Attendance"],
     ["read", "Marks"],
     ["read", "Timetable"],
+    ["apply", "Leave"],
+    ["read", "Leave"],
   ],
 };
 

@@ -14,6 +14,7 @@ import {
   CalendarCheck2,
   ClipboardList,
   ClipboardPen,
+  CalendarOff,
   Users,
   GraduationCap,
   BookOpen,
@@ -136,6 +137,16 @@ const NAV: NavGroup[] = [
         // to a subject this semester. The picker is empty for a faculty with no
         // assignments, but the nav still shows it (the API is the real gate).
         roles: ["Super Admin", "HOD", "Faculty"],
+      },
+      {
+        title: "Leave & OD",
+        href: "/leave",
+        icon: CalendarOff,
+        // Everyone: a student applies + tracks; a class teacher / HOD approve. The
+        // page is role-aware (the API reports isStudent / canApprove), so one nav
+        // entry serves both. Students have no other nav items, so this is their
+        // first staff-shell link.
+        roles: ["Super Admin", "HOD", "Faculty", "Student"],
       },
     ],
   },

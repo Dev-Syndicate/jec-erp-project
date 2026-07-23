@@ -1,7 +1,12 @@
 // Attendance report — the percentages the two-table design exists to produce.
 // Pick Program → Class; see each student's overall % (from MasterAttendance) for
 // the active semester, flag defaulters under a threshold, and expand a row for
-// the per-subject breakdown (from PeriodAttendance). Super-Admin only.
+// the per-subject breakdown (from PeriodAttendance).
+//
+// The class pickers only appear when the user can reach more than one class
+// (HOD/Super Admin, or a subject teacher spanning several classes). A class
+// teacher who advises exactly one class skips straight to that class's report —
+// no dropdown to choose the only option (same pattern as the My-class roster).
 "use client";
 
 import { useState } from "react";
@@ -43,12 +48,22 @@ export function AttendanceReport() {
   const [threshold, setThreshold] = useState(75);
 
   const activeClasses = (classes.data ?? []).filter((c) => c.isActive);
+
+  // Auto-select and hide a single-option picker: a program-scoped user (HOD) has
+  // just one program, and a class teacher usually one class — so each skips
+  // straight to it. Multiple options keep the relevant dropdown (same pattern as
+  // Mark / Day attendance).
   const programOptions = [
     ...new Map(activeClasses.map((c) => [c.programId, c.programLabel])).entries(),
   ].map(([id, label]) => ({ value: id, label }));
-  const classesInProgram = activeClasses.filter((c) => c.programId === programId);
+  const singleProgram = programOptions.length === 1;
+  const effProgramId = singleProgram ? programOptions[0].value : programId;
 
-  const report = useAttendanceReport(classId || null);
+  const classesInProgram = activeClasses.filter((c) => c.programId === effProgramId);
+  const singleClass = classesInProgram.length === 1;
+  const effClassId = singleClass ? classesInProgram[0].id : classId;
+
+  const report = useAttendanceReport(effClassId || null);
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -59,38 +74,42 @@ export function AttendanceReport() {
       />
 
       <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Program</span>
-          <div className="w-56">
-            <FormSelect
-              value={programId}
-              onChange={(v) => {
-                setProgramId(v);
-                setClassId("");
-              }}
-              options={programOptions}
-              placeholder={classes.isPending ? "Loading…" : "Select a program"}
-            />
+        {!singleProgram && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Program</span>
+            <div className="w-56">
+              <FormSelect
+                value={programId}
+                onChange={(v) => {
+                  setProgramId(v);
+                  setClassId("");
+                }}
+                options={programOptions}
+                placeholder={classes.isPending ? "Loading…" : "Select a program"}
+              />
+            </div>
           </div>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          <span className="text-xs font-medium text-muted-foreground">Class</span>
-          <div className="w-40">
-            <FormSelect
-              value={classId}
-              onChange={setClassId}
-              options={classesInProgram.map((c) => ({ value: c.id, label: c.shortLabel }))}
-              placeholder={
-                programId === ""
-                  ? "Pick a program first"
-                  : classesInProgram.length === 0
-                    ? "No classes"
-                    : "Select a class"
-              }
-              disabled={programId === ""}
-            />
+        )}
+        {!singleClass && (
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Class</span>
+            <div className="w-40">
+              <FormSelect
+                value={classId}
+                onChange={setClassId}
+                options={classesInProgram.map((c) => ({ value: c.id, label: c.shortLabel }))}
+                placeholder={
+                  effProgramId === ""
+                    ? "Pick a program first"
+                    : classesInProgram.length === 0
+                      ? "No classes"
+                      : "Select a class"
+                }
+                disabled={effProgramId === ""}
+              />
+            </div>
           </div>
-        </div>
+        )}
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Defaulter below</span>
           <div className="flex items-center gap-1.5">
@@ -108,8 +127,18 @@ export function AttendanceReport() {
         </div>
       </div>
 
-      {classId === "" ? (
-        <p className="text-sm text-muted-foreground">Pick a program, then a class, to see its attendance.</p>
+      {classes.isPending ? (
+        <p className="text-sm text-muted-foreground">Loading…</p>
+      ) : activeClasses.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          You don’t have any classes to report on.
+        </p>
+      ) : effClassId === "" ? (
+        <p className="text-sm text-muted-foreground">
+          {singleProgram
+            ? "Pick a class to see its attendance."
+            : "Pick a program, then a class, to see its attendance."}
+        </p>
       ) : report.isPending ? (
         <p className="text-sm text-muted-foreground">Loading report…</p>
       ) : report.isError ? (

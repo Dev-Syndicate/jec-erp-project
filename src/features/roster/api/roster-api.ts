@@ -43,3 +43,13 @@ export function updateStudent(studentId: string, patch: StudentPatch): Promise<S
     body: JSON.stringify({ studentId, ...patch }),
   });
 }
+
+// Reissue a one-time temp password for a student in the advised class (only valid
+// while they're still on their temp password). Same endpoint the admin uses; the
+// API re-checks advisor ownership.
+export function regeneratePassword(studentId: string): Promise<{ tempPassword: string }> {
+  return apiFetch<{ tempPassword: string }>(
+    `/api/students/${encodeURIComponent(studentId)}/regenerate-password`,
+    { method: "POST" },
+  );
+}

@@ -19,6 +19,10 @@ export type StudentDetail = {
   dateOfBirth: string; // ISO
   status: StudentStatus;
   userStatus: "ACTIVE" | "INACTIVE";
+  // True while the student is still on their admin-issued temp password (hasn't set
+  // their own yet). Gates the "Reset password" action — once false, regenerating is
+  // refused server-side (it's an account-recovery flow, not this convenience).
+  mustChangePassword: boolean;
   programLabel: string | null;
   currentEnrollment: { classLabel: string; academicYearName: string } | null;
 };

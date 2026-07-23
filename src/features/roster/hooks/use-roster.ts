@@ -7,6 +7,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   fetchAdvisedClasses,
   fetchClassRoster,
+  regeneratePassword,
   updateStudent,
 } from "@/features/roster/api/roster-api";
 import type { StudentPatch } from "@/features/roster/types";
@@ -32,6 +33,16 @@ export function useUpdateStudent(classId: string) {
   return useMutation({
     mutationFn: ({ studentId, patch }: { studentId: string; patch: StudentPatch }) =>
       updateStudent(studentId, patch),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["roster", "class", classId] }),
+  });
+}
+
+export function useRegeneratePassword(classId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (studentId: string) => regeneratePassword(studentId),
+    // The student's mustChangePassword flips back to true — refetch so the button
+    // state stays accurate if the dialog is reopened.
     onSuccess: () => qc.invalidateQueries({ queryKey: ["roster", "class", classId] }),
   });
 }

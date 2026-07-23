@@ -6,7 +6,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Pencil, Search } from "lucide-react";
+import { Check, Copy, KeyRound, Pencil, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +25,7 @@ import type { Gender, StudentDetail } from "@/features/roster/types";
 import {
   useAdvisedClasses,
   useClassRoster,
+  useRegeneratePassword,
   useUpdateStudent,
 } from "@/features/roster/hooks/use-roster";
 
@@ -55,6 +56,41 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
     <div className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
+    </div>
+  );
+}
+
+// The one-time temp-password reveal, shown after a reset. Mirrors the admin's
+// Students panel — the password is shown once; the teacher must deliver it now.
+function TempPasswordPanel({ name, password }: { name: string; password: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="col-span-2 flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+      <p className="text-sm text-muted-foreground">
+        New temporary password for <span className="font-medium text-foreground">{name}</span>. It’s
+        shown once — deliver it now; they’ll set their own on first login.
+      </p>
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-background p-2">
+        <code className="flex-1 px-1 font-mono text-sm text-foreground">{password}</code>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-icon="inline-start"
+          onClick={() => {
+            navigator.clipboard?.writeText(password).then(
+              () => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1500);
+              },
+              () => {},
+            );
+          }}
+        >
+          {copied ? <Check /> : <Copy />}
+          {copied ? "Copied" : "Copy"}
+        </Button>
+      </div>
     </div>
   );
 }
@@ -236,12 +272,20 @@ function StudentDialog({
   onClose: () => void;
 }) {
   const update = useUpdateStudent(classId);
+  const regen = useRegeneratePassword(classId);
 
   const [displayName, setDisplayName] = useState(student.displayName);
   const [rollNumber, setRollNumber] = useState(student.rollNumber ?? "");
   const [phone, setPhone] = useState(student.phone);
   const [gender, setGender] = useState<string>(student.gender ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(isoToDateInput(student.dateOfBirth));
+  // The freshly-issued temp password, revealed once after a reset.
+  const [tempPassword, setTempPassword] = useState<string | null>(null);
+
+  // A reset is only offered while the student is still on their temp password —
+  // once they've set their own, it's an account-recovery flow, not this. The API
+  // enforces this too (409); the button just avoids offering a dead action.
+  const canReset = student.mustChangePassword && student.userStatus === "ACTIVE";
 
   const valid = displayName.trim() !== "" && phone.trim() !== "";
 
@@ -306,15 +350,39 @@ function StudentDialog({
               <FormError>{errorMessage(update.error)}</FormError>
             </div>
           )}
+          {regen.isError && (
+            <div className="col-span-2">
+              <FormError>{errorMessage(regen.error)}</FormError>
+            </div>
+          )}
+          {tempPassword && <TempPasswordPanel name={student.displayName} password={tempPassword} />}
         </form>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose} disabled={update.isPending}>
-            Cancel
-          </Button>
-          <Button type="submit" form="student-form" disabled={!valid || update.isPending}>
-            {update.isPending ? "Saving…" : "Save changes"}
-          </Button>
+        <DialogFooter className="sm:justify-between">
+          {canReset ? (
+            <Button
+              type="button"
+              variant="outline"
+              data-icon="inline-start"
+              onClick={() =>
+                regen.mutate(student.id, { onSuccess: (r) => setTempPassword(r.tempPassword) })
+              }
+              disabled={regen.isPending || update.isPending}
+            >
+              <KeyRound />
+              {regen.isPending ? "Resetting…" : tempPassword ? "Reset again" : "Reset password"}
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose} disabled={update.isPending}>
+              {tempPassword ? "Done" : "Cancel"}
+            </Button>
+            <Button type="submit" form="student-form" disabled={!valid || update.isPending}>
+              {update.isPending ? "Saving…" : "Save changes"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

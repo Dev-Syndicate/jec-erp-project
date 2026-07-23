@@ -181,6 +181,26 @@ export function authorize(
   }
 }
 
+/**
+ * The non-throwing form of {@link authorize} — the same capability/scoped check,
+ * returning a boolean. Use when a route needs to BRANCH on a permission (e.g.
+ * "is this user a program admin for marks?") rather than gate on it. Applies the
+ * identical `asSubject` tagging so a scoped grant's `{ programId }` condition is
+ * evaluated the same way.
+ */
+export function can(
+  ctx: AuthContext,
+  action: string,
+  subject: string,
+  resource?: { programId: string | null },
+): boolean {
+  const target =
+    resource === undefined
+      ? subject
+      : (asSubject(subject, resource) as unknown as Record<PropertyKey, unknown>);
+  return ctx.ability.can(action, target);
+}
+
 /** Map an AuthError (or unexpected error) to a JSON Response for a route. */
 export function toAuthResponse(err: unknown): Response {
   if (err instanceof AuthError) {

@@ -13,6 +13,7 @@ import {
   CalendarDays,
   CalendarCheck2,
   ClipboardList,
+  ClipboardPen,
   Users,
   GraduationCap,
   BookOpen,
@@ -120,6 +121,20 @@ const NAV: NavGroup[] = [
         title: "Report",
         href: "/attendance/report",
         icon: ClipboardList,
+        roles: ["Super Admin", "HOD", "Faculty"],
+      },
+    ],
+  },
+  {
+    label: "Assessment",
+    items: [
+      {
+        title: "Internal marks",
+        href: "/marks",
+        icon: ClipboardPen,
+        // Staff who enter marks: HOD/Super Admin (program), or a Faculty assigned
+        // to a subject this semester. The picker is empty for a faculty with no
+        // assignments, but the nav still shows it (the API is the real gate).
         roles: ["Super Admin", "HOD", "Faculty"],
       },
     ],

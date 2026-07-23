@@ -1,6 +1,6 @@
 # JEC ERP — Session Handoff
 
-_Last updated: 2026-07-19 · Branch: `rebuild-core` · HEAD: `f40be85`_
+_Last updated: 2026-07-23 · Branch: `rebuild-core` · HEAD: `6d1732a`_
 
 Read this first, then open [docs/schema-design.html](./schema-design.html) (the visual
 source of truth for the data model) in a browser.
@@ -9,43 +9,50 @@ source of truth for the data model) in a browser.
 
 ## 1. Where we are right now
 
-The project was **reset to be schema-first**. We threw away the reactively-built
-pages/APIs and the old Department/Section/Term model, designed the complete core
-data model as a reviewed visual document, locked it, and wrote it as the Prisma
-schema in one clean pass.
+The schema-first rebuild is **essentially complete**: every one of the 19 backbone
+tables (§3) now has a working vertical slice — API + feature UI + RBAC scoping.
+`tsc --noEmit`, `eslint`, and `next build` are all green.
 
-**Done and committed (`f40be85` on `rebuild-core`, pushed to origin):**
+**Built and committed on `rebuild-core` (pushed to origin):**
 
-- ✅ New Prisma schema — the **19-table backbone** (see §3). Validated, generated,
-  and **pushed to the Neon dev DB** (force-reset; DB is empty except seed data).
-- ✅ Seed runs green: RBAC baseline (roles **Super Admin · HOD · Faculty · Student**)
-  + the bootstrapped **Super Admin** account.
-- ✅ Carried-over foundation code migrated to the new model
-  (`departmentId → programId`, `isActive → status`, `assertDeptScope → assertProgramScope`).
-- ✅ `pnpm exec tsc --noEmit` is **clean**.
+- ✅ **Structure** — Degree → Branch → Program → Class CRUD (`/structure/*`).
+- ✅ **Academic** — AcademicYear + Semester, one-active-at-a-time activation; Promotion.
+- ✅ **People** — Students + Faculty provisioning (Firebase-first, temp password,
+  `mustChangePassword`); server-side paginated + searched lists, program-scoped.
+- ✅ **RBAC** — CASL abilities from DB grants; the `/access` console edits them; program
+  scoping via `authorize(..., { programId })`; role-assign subset rule.
+- ✅ **Curriculum** — Subjects (per program, derived `semesterNumber`); Timetable (Mon–Fri
+  grid; a working Saturday borrows a weekday).
+- ✅ **Attendance** — mark (period-wise; period 1 seeds MasterAttendance), Day-record
+  correction (class teacher), Report (overall % + per-subject + defaulters).
+- ✅ **My class** — the class advisor's roster view/edit + student temp-password reset.
+- ✅ **Internal Marks** — IA1/IA2/Model/Assignment entry, scoped from the **timetable**
+  (who teaches what), student sees them on their portal.
+- ✅ **Leave / OD** — student applies → class teacher → HOD two-stage approval → final
+  approval writes attendance (OD/EXCUSED); strict stage order.
+- ✅ **Student portal** — self-scoped Overview (attendance %, timetable, marks); dashboards
+  route Student → StudentDashboard, staff → DashboardHome.
 
-**Nothing else is built yet** — there are no management screens or feature APIs.
-The nav is trimmed to just "Today → Overview". This is a bare, correct foundation.
+Auto-memory (`~/.claude/.../memory/MEMORY.md`) has a one-line index of every feature's
+design decisions — read it for the "why".
 
 ---
 
-## 2. THE NEXT TASK (start here)
+## 2. THE NEXT TASK (candidates — confirm with the owner)
 
-Build the **first vertical slice: the Structure setup**, because everything else
-depends on it (you can't mark attendance without a Class to mark).
+The **core data model is fully built**; what remains is net-new product features and
+polish, not model gaps. Open candidates:
 
-Order it exactly like the dependency chain:
+- **Announcements** — staff post to students/faculty, scoped by program/class. Greenfield:
+  needs a schema addition (no table yet — it was in the "deferred" list) + design pass.
+  The `src/features/announcements` slice is an empty stub.
+- **Reports / export hub** — consolidated attendance + marks with CSV/PDF export for
+  HOD/admin. Uses existing data, no schema change. `src/features/reports` is an empty stub.
+- **Student-experience polish** — surface Leave/OD on the StudentDashboard (students reach
+  `/leave` only via the sidebar today); optionally hide HOD-role users from the Faculty page.
 
-1. **Degree** — CRUD (name, code, `durationYears`). Super-Admin only.
-2. **Branch** — CRUD (name, code). Super-Admin only.
-3. **Program** — pair a Degree × Branch. `programId` is _the_ scoping key.
-4. **Class** — within a Program: `year` (1…durationYears) + `section` ("A"…"H"),
-   optional `advisorId`. Unique `(program, year, section)`.
-
-Then the actual **Attendance** job can be built on top (job #1, the priority).
-
-The user's stated preference: **commit at clean checkpoints**, build **one vertical
-slice at a time**, and confirm design decisions before writing lots of code.
+Working style unchanged: **one vertical slice at a time**, commit at clean checkpoints,
+**confirm design decisions before writing lots of code**.
 
 ---
 
@@ -88,11 +95,12 @@ schema itself is [prisma/schema.prisma](../prisma/schema.prisma). Summary:
   PeriodAttendance.
 
 ### RBAC
-- Roles/permissions are **data**, composed in a UI (allow-list: "blocked" = not
-  granted, no explicit deny). CASL abilities are built in code from the
-  `UserRole → Role → Permission` mapping (the CASL factory `src/lib/rbac` is **not
-  built yet** — routes currently gate with the stopgap `requireRole()` /
-  `assertProgramScope()` in [src/lib/auth.ts](../src/lib/auth.ts)).
+- Roles/permissions are **data**, composed in the `/access` UI (allow-list: "blocked" =
+  not granted, no explicit deny). CASL abilities are built in code from the
+  `UserRole → Role → Permission` mapping by [src/lib/rbac/ability.ts](../src/lib/rbac/ability.ts);
+  `authenticate()` attaches the ability. Routes gate with `authorize(ctx, action, subject,
+  { programId? })` (and the non-throwing `can(...)`) in [src/lib/auth.ts](../src/lib/auth.ts).
+  The old `requireRole()` / `assertProgramScope()` stopgaps are **retired**.
 - **Scope:** PROGRAM roles (HOD, Faculty, Student, custom "ERP Coordinator") see only
   their own program; INSTITUTION (Super Admin) spans all.
 - **Super Admin** is bootstrapped in the seed (no higher role can create it).

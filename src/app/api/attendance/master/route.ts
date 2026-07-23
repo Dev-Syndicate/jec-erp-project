@@ -12,6 +12,7 @@
 // a plain subject teacher can mark their period but not override the day record.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { assertOwnsDayRecord } from "../access";
 import { isStatus, parseDateOnly, roman } from "../dto";
 
@@ -144,25 +145,40 @@ export async function POST(req: Request) {
     const markedById = ctx.user.id;
     const semesterId = semester.id;
 
-    // A manual correction: upsert the day row and flag it so period 1 won't
-    // overwrite it.
-    await db.$transaction(
-      entries.map((e) =>
-        db.masterAttendance.upsert({
-          where: { studentId_date: { studentId: e.studentId, date } },
-          update: { status: e.status as never, manuallyAdjusted: true, markedById },
-          create: {
-            studentId: e.studentId,
-            classId,
-            semesterId,
-            date,
-            status: e.status as never,
-            manuallyAdjusted: true,
-            markedById,
-          },
+    // A manual correction: create-or-update each day row and flag it manuallyAdjusted
+    // so period 1 won't overwrite it. Emulated bulk upsert (createMany + grouped
+    // updateMany) instead of a per-student upsert loop: on Vercel the loop was
+    // N round-trips to the Singapore DB in one interactive transaction and blew the
+    // 20s timeout for a full class. N students → ≤ (1 + 4) statements.
+    const byStatus = new Map<string, string[]>();
+    for (const e of entries) {
+      const ids = byStatus.get(e.status) ?? [];
+      ids.push(e.studentId);
+      byStatus.set(e.status, ids);
+    }
+    const ops: Prisma.PrismaPromise<unknown>[] = [
+      db.masterAttendance.createMany({
+        data: entries.map((e) => ({
+          studentId: e.studentId,
+          classId,
+          semesterId,
+          date,
+          status: e.status as never,
+          manuallyAdjusted: true,
+          markedById,
+        })),
+        skipDuplicates: true,
+      }),
+    ];
+    for (const [status, studentIds] of byStatus) {
+      ops.push(
+        db.masterAttendance.updateMany({
+          where: { studentId: { in: studentIds }, date },
+          data: { status: status as never, manuallyAdjusted: true, markedById },
         }),
-      ),
-    );
+      );
+    }
+    await db.$transaction(ops);
 
     return Response.json({ saved: entries.length }, { status: 200 });
   } catch (err) {

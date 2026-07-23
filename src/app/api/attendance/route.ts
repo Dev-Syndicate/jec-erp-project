@@ -19,6 +19,7 @@
 // program-scoped via a scoped authorize on the class's program.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { assertMarksPeriod, assertTeachesOrAdvises, canMarkPeriod } from "./access";
 import { isStatus, parseDateOnly, resolveWeekday, roman } from "./dto";
 
@@ -228,11 +229,29 @@ export async function POST(req: Request) {
     const semesterId = semester.id;
 
     // Upsert every student's period row; period 1 also stamps MasterAttendance.
-    const periodOps = entries.map((e) =>
-      db.periodAttendance.upsert({
-        where: { studentId_date_period: { studentId: e.studentId, date, period } },
-        update: { status: e.status as never, subjectId, markedById },
-        create: {
+    // NOTE ON SIZE: each op is a round-trip to Neon (Singapore). Marking a 60+
+    // student class over a US-region serverless function means ~60 round-trips of
+    // ~95ms each — a per-student updateMany loop for the master rows blew the 20s
+    // interactive-transaction timeout on Vercel (worked locally only because the
+    // DB was near). So the master write is collapsed to a handful of set-based
+    // statements: one createMany + one updateMany PER DISTINCT STATUS (≤4), not
+    // one per student.
+    // Group students by the status being set — used for both the period and the
+    // master writes so each becomes a fixed handful of set-based statements
+    // regardless of class size.
+    const byStatus = new Map<string, string[]>();
+    for (const e of entries) {
+      const ids = byStatus.get(e.status) ?? [];
+      ids.push(e.studentId);
+      byStatus.set(e.status, ids);
+    }
+
+    // Period rows: Prisma has no bulk upsert, so emulate it — createMany the
+    // missing rows (skipDuplicates), then one updateMany per status group for the
+    // rows that already existed. N students → ≤ (1 + 4) statements, not N upserts.
+    const periodOps: Prisma.PrismaPromise<unknown>[] = [
+      db.periodAttendance.createMany({
+        data: entries.map((e) => ({
           studentId: e.studentId,
           subjectId,
           classId,
@@ -241,34 +260,48 @@ export async function POST(req: Request) {
           period,
           status: e.status as never,
           markedById,
-        },
+        })),
+        skipDuplicates: true,
       }),
-    );
+    ];
+    for (const [status, studentIds] of byStatus) {
+      periodOps.push(
+        db.periodAttendance.updateMany({
+          where: { studentId: { in: studentIds }, date, period },
+          data: { status: status as never, subjectId, markedById },
+        }),
+      );
+    }
     // Period 1 seeds the official day record — but must NOT overwrite a row the
     // class teacher has manually corrected (manuallyAdjusted). So: create any
-    // missing rows, then update only the auto (non-adjusted) ones.
-    const masterOps =
-      period === 1
-        ? [
-            db.masterAttendance.createMany({
-              data: entries.map((e) => ({
-                studentId: e.studentId,
-                classId,
-                semesterId,
-                date,
-                status: e.status as never,
-                markedById,
-              })),
-              skipDuplicates: true,
-            }),
-            ...entries.map((e) =>
-              db.masterAttendance.updateMany({
-                where: { studentId: e.studentId, date, manuallyAdjusted: false },
-                data: { status: e.status as never, markedById },
-              }),
-            ),
-          ]
-        : [];
+    // missing rows, then update only the auto (non-adjusted) ones, GROUPED BY
+    // status so N students become ≤4 updateMany calls instead of N.
+    const masterOps: Prisma.PrismaPromise<unknown>[] = [];
+    if (period === 1) {
+      masterOps.push(
+        db.masterAttendance.createMany({
+          data: entries.map((e) => ({
+            studentId: e.studentId,
+            classId,
+            semesterId,
+            date,
+            status: e.status as never,
+            markedById,
+          })),
+          skipDuplicates: true,
+        }),
+      );
+      // Reuse the same status groups: one updateMany per status (skipping any row
+      // the class teacher manually corrected).
+      for (const [status, studentIds] of byStatus) {
+        masterOps.push(
+          db.masterAttendance.updateMany({
+            where: { studentId: { in: studentIds }, date, manuallyAdjusted: false },
+            data: { status: status as never, markedById },
+          }),
+        );
+      }
+    }
     await db.$transaction([...periodOps, ...masterOps]);
 
     return Response.json({ saved: entries.length, setDayAttendance: period === 1 }, { status: 200 });

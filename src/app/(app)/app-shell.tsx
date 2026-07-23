@@ -315,7 +315,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                         render={<Link href={item.href} />}
                       >
                         <Icon className="size-4" />
-                        <span>{item.title}</span>
+                        <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   );
@@ -393,8 +393,8 @@ function CollapsibleNavItem({
           render={
             <SidebarMenuButton isActive={active} tooltip={item.title}>
               <Icon className="size-4" />
-              <span>{item.title}</span>
-              <ChevronRight className="ml-auto size-4 transition-transform group-data-open/collapsible:rotate-90" />
+              <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
+              <ChevronRight className="ml-auto size-4 transition-transform group-data-open/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
             </SidebarMenuButton>
           }
         />

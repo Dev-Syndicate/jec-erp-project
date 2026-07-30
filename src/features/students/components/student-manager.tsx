@@ -174,9 +174,20 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
   const students = data?.items ?? [];
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
-  const startIdx = (page - 1) * PAGE_SIZE;
   const searching = debouncedQuery !== "";
   const filtering = Object.keys(filters).length > 0;
+
+  // Pagination is SERVER-side, so asking for a page past the end returns an
+  // empty list rather than clamping itself. Applying a filter resets to page 1,
+  // but a mutation can also shrink the result set beneath a high page (editing
+  // the last student on page 10 out of the filter, say), which would strand the
+  // user on a blank page.
+  //
+  // The stored `page` is therefore a REQUEST and this is the effective value —
+  // derived during render rather than corrected in an effect, which would cost
+  // an extra render and can cascade.
+  const currentPage = Math.min(page, pageCount);
+  const startIdx = (currentPage - 1) * PAGE_SIZE;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -324,19 +335,21 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page <= 1 || isPlaceholderData}
+                  // Step back from the EFFECTIVE page, so a request that
+                  // overshot the end still walks back one page at a time.
+                  onClick={() => setPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage <= 1 || isPlaceholderData}
                 >
                   Previous
                 </Button>
                 <span className="font-mono text-xs">
-                  Page {page} of {pageCount}
+                  Page {currentPage} of {pageCount}
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                  disabled={page >= pageCount || isPlaceholderData}
+                  onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
+                  disabled={currentPage >= pageCount || isPlaceholderData}
                 >
                   Next
                 </Button>

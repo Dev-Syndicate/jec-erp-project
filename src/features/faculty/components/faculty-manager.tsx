@@ -244,15 +244,38 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
 
   const hasGender = useMemo(() => (faculty ?? []).some((f) => f.gender), [faculty]);
 
+  // Each control below hides when it has fewer than two values to choose from,
+  // and its options are derived from the rows currently loaded. So a selection
+  // can outlive what justified it: filter by a designation, then edit the only
+  // other holder away, and the picker vanishes while the filter keeps silently
+  // applying — the list would look unfiltered but wouldn't be.
+  //
+  // Rather than correcting state in an effect (which costs an extra render and
+  // can cascade), the stored value is treated as a REQUEST and the effective
+  // one is derived here: a filter only counts while its control is on screen
+  // and its value still matches an available option.
+  const showProgramFilter = isInstitutionScoped && programOptions.length > 1;
+  const showDesignationFilter = designationOptions.length > 1;
+  const showRoleFilter = roles.length > 1;
+
+  const activeProgram =
+    showProgramFilter && programOptions.some((p) => p.value === programFilter) ? programFilter : "";
+  const activeDesignation =
+    showDesignationFilter && designationOptions.some((d) => d.value === designationFilter)
+      ? designationFilter
+      : "";
+  const activeRole = showRoleFilter && roles.includes(roleFilter) ? roleFilter : "ALL";
+  const activeGender = hasGender ? genderFilter : "";
+
   // Client-side filter (the list is small and fetched whole): text search across
   // the visible fields, intersected with every active filter.
   const filtered = useMemo(() => {
     if (!faculty) return [];
     const q = query.trim().toLowerCase();
     return faculty.filter((f) => {
-      const matchesRole = roleFilter === "ALL" || f.roles.includes(roleFilter);
-      const matchesProgram = !programFilter || f.programId === programFilter;
-      const matchesDesignation = !designationFilter || f.designation === designationFilter;
+      const matchesRole = activeRole === "ALL" || f.roles.includes(activeRole);
+      const matchesProgram = !activeProgram || f.programId === activeProgram;
+      const matchesDesignation = !activeDesignation || f.designation === activeDesignation;
       // "Invited" isn't a stored status — it's an ACTIVE account still on its
       // temp password, which is what the Status column renders.
       const matchesStatus =
@@ -262,7 +285,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
           : statusFilter === "ACTIVE"
             ? f.status === "ACTIVE" && !f.mustChangePassword
             : f.status === statusFilter);
-      const matchesGender = !genderFilter || f.gender === genderFilter;
+      const matchesGender = !activeGender || f.gender === activeGender;
       const matchesQuery =
         q === "" ||
         [f.staffId, f.displayName, f.email, f.programLabel, f.designation]
@@ -277,14 +300,14 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
         matchesQuery
       );
     });
-  }, [faculty, query, roleFilter, programFilter, designationFilter, statusFilter, genderFilter]);
+  }, [faculty, query, activeRole, activeProgram, activeDesignation, statusFilter, activeGender]);
 
   const activeFilterCount =
-    (roleFilter !== "ALL" ? 1 : 0) +
-    (programFilter ? 1 : 0) +
-    (designationFilter ? 1 : 0) +
+    (activeRole !== "ALL" ? 1 : 0) +
+    (activeProgram ? 1 : 0) +
+    (activeDesignation ? 1 : 0) +
     (statusFilter ? 1 : 0) +
-    (genderFilter ? 1 : 0);
+    (activeGender ? 1 : 0);
 
   const clearFilters = () => {
     setRoleFilter("ALL");
@@ -346,11 +369,11 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
                 className="h-10! pl-9"
               />
             </div>
-            {roles.length > 1 && (
+            {showRoleFilter && (
               <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter by role">
                 <RolePill
                   label="All"
-                  active={roleFilter === "ALL"}
+                  active={activeRole === "ALL"}
                   onClick={() => {
                     setRoleFilter("ALL");
                     setPage(1);
@@ -360,7 +383,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
                   <RolePill
                     key={r}
                     label={r}
-                    active={roleFilter === r}
+                    active={activeRole === r}
                     onClick={() => {
                       setRoleFilter(r);
                       setPage(1);
@@ -377,14 +400,14 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
               one-entry no-op. Presentation only: the list is scoped server-side
               regardless of what is selected here. */}
           <div className="flex flex-wrap items-end gap-3">
-            {isInstitutionScoped && programOptions.length > 1 && (
+            {showProgramFilter && (
               <div className="flex min-w-44 flex-col gap-1.5">
                 <Label htmlFor="ff-program" className="text-xs text-muted-foreground">
                   Program
                 </Label>
                 <FormSelect
                   id="ff-program"
-                  value={programFilter}
+                  value={activeProgram}
                   onChange={(v) => {
                     setProgramFilter(v);
                     setPage(1);
@@ -395,14 +418,14 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
               </div>
             )}
 
-            {designationOptions.length > 1 && (
+            {showDesignationFilter && (
               <div className="flex min-w-48 flex-col gap-1.5">
                 <Label htmlFor="ff-designation" className="text-xs text-muted-foreground">
                   Designation
                 </Label>
                 <FormSelect
                   id="ff-designation"
-                  value={designationFilter}
+                  value={activeDesignation}
                   onChange={(v) => {
                     setDesignationFilter(v);
                     setPage(1);
@@ -445,7 +468,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
                 </Label>
                 <FormSelect
                   id="ff-gender"
-                  value={genderFilter}
+                  value={activeGender}
                   onChange={(v) => {
                     setGenderFilter(v);
                     setPage(1);

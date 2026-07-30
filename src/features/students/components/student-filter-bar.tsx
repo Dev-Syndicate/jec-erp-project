@@ -55,15 +55,6 @@ export function StudentFilterBar({
   /** Super Admin only — a scoped role has a single program (see file header). */
   showProgram: boolean;
 }) {
-  const set = <K extends keyof StudentFilters>(key: K, value: StudentFilters[K]) => {
-    const next = { ...filters, [key]: value };
-    // Drop cleared keys so the query key (and the URL) stay tidy.
-    if (value === undefined || value === "") delete next[key];
-    // Sections differ per year, so changing the year clears a stale section.
-    if (key === "year") delete next.section;
-    onChange(next);
-  };
-
   // Year/section options come from the classes that actually exist, narrowed to
   // the chosen program — so we never offer a year with no class behind it.
   const inProgram = filters.programId
@@ -75,6 +66,24 @@ export function StudentFilterBar({
       inProgram.filter((c) => !filters.year || c.year === filters.year).map((c) => c.section),
     ),
   ].sort();
+
+  const set = <K extends keyof StudentFilters>(key: K, value: StudentFilters[K]) => {
+    const next = { ...filters, [key]: value };
+    // Drop cleared keys so the query key (and the URL) stay tidy.
+    if (value === undefined || value === "") delete next[key];
+    // Sections are not uniform across years (year 4 has A/B, years 2-3 have
+    // A/B/C), so a section chosen BEFORE a year can become impossible: picking
+    // "C" then "Year 4" would show an empty list with two valid-looking filters.
+    // Drop the section only when the new year has no such class — a still-valid
+    // choice like "A" survives.
+    if (key === "year" && next.section) {
+      const stillValid = inProgram.some(
+        (c) => (!next.year || c.year === next.year) && c.section === next.section,
+      );
+      if (!stillValid) delete next.section;
+    }
+    onChange(next);
+  };
 
   const activeCount = Object.keys(filters).length;
 

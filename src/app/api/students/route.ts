@@ -85,6 +85,10 @@ export async function GET(req: Request) {
     const q = url.searchParams.get("q")?.trim() || "";
 
     // Super Admin: all students. Scoped roles: only their own program.
+    //
+    // NOTE: `scope` is ANDed with every filter below and is never derived from
+    // user input — a scoped role cannot widen it by passing ?programId=. The
+    // programId filter can only ever NARROW what this role may already see.
     const scope = ctx.isInstitutionScoped
       ? {}
       : { user: { programId: ctx.user.programId ?? "__none__" } };
@@ -100,7 +104,37 @@ export async function GET(req: Request) {
           ],
         }
       : {};
-    const where = { AND: [scope, search] };
+
+    // --- filters (all optional, all narrowing) ------------------------------
+    const filters: Record<string, unknown>[] = [];
+
+    const programId = url.searchParams.get("programId")?.trim();
+    if (programId) filters.push({ user: { programId } });
+
+    const status = url.searchParams.get("status")?.trim();
+    if (status && ["ACTIVE", "GRADUATED", "DROPPED", "TRANSFERRED"].includes(status)) {
+      filters.push({ status: status as "ACTIVE" | "GRADUATED" | "DROPPED" | "TRANSFERRED" });
+    }
+
+    const gender = url.searchParams.get("gender")?.trim();
+    if (gender && ["MALE", "FEMALE", "OTHER"].includes(gender)) {
+      filters.push({ gender: gender as "MALE" | "FEMALE" | "OTHER" });
+    }
+
+    // Year / section filter the ACTIVE-year enrollment — the same row the list
+    // shows as "Class (this year)", so the filter matches the visible column.
+    const year = Number(url.searchParams.get("year"));
+    const section = url.searchParams.get("section")?.trim();
+    const classWhere: Record<string, unknown> = {};
+    if (Number.isInteger(year) && year > 0) classWhere.year = year;
+    if (section) classWhere.section = section;
+    if (Object.keys(classWhere).length > 0) {
+      filters.push({
+        enrollments: { some: { academicYear: { isActive: true }, class: classWhere } },
+      });
+    }
+
+    const where = { AND: [scope, search, ...filters] };
 
     // One page of rows + the total (for the pager), in parallel.
     const [total, students] = await Promise.all([

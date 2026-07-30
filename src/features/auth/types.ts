@@ -7,6 +7,10 @@ export type AuthUser = {
   displayName: string;
   programId: string | null;
   roles: string[];
+  // True when a role spans every program (INSTITUTION scope, e.g. Super Admin)
+  // rather than just the user's own. Server-derived from the role's DB scope —
+  // never infer this by comparing role names.
+  isInstitutionScoped: boolean;
   mustChangePassword: boolean;
   // True when the user advises ≥1 active class (is a class teacher). Gates the
   // "Day attendance" nav for a plain Faculty; HOD/SA see it via their role.

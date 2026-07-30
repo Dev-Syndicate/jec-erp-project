@@ -14,6 +14,7 @@ import type {
   ProvisionResult,
   Student,
   StudentInput,
+  StudentFilters,
   StudentPage,
   StudentPatch,
 } from "@/features/students/types";
@@ -25,10 +26,20 @@ const roman = (n: number) => ROMAN[n] ?? String(n);
 
 // --- Students -------------------------------------------------------------
 // One server-side page (50 rows) + a total. `q` searches register/roll number,
-// name and email server-side, so the whole list is never downloaded.
-export function fetchStudents(page: number, q: string): Promise<StudentPage> {
+// name and email server-side, and the filters narrow it further — so the whole
+// list is never downloaded.
+export function fetchStudents(
+  page: number,
+  q: string,
+  filters: StudentFilters = {},
+): Promise<StudentPage> {
   const params = new URLSearchParams({ page: String(page), pageSize: String(STUDENTS_PAGE_SIZE) });
   if (q) params.set("q", q);
+  if (filters.programId) params.set("programId", filters.programId);
+  if (filters.year) params.set("year", String(filters.year));
+  if (filters.section) params.set("section", filters.section);
+  if (filters.status) params.set("status", filters.status);
+  if (filters.gender) params.set("gender", filters.gender);
   return apiFetch<StudentPage>(`/api/students?${params.toString()}`);
 }
 

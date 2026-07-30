@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   try {
-    const { user, roles, mustChangePassword } = await authenticate(req);
+    const { user, roles, mustChangePassword, isInstitutionScoped } = await authenticate(req);
     // Is this user a class teacher (advises ≥1 active class)? Drives the "Day
     // attendance" nav — day-record correction is the class teacher's job; HOD/SA
     // reach it via their role instead, so this only matters for a plain Faculty.
@@ -24,6 +24,11 @@ export async function GET(req: Request) {
       displayName: user.displayName,
       programId: user.programId,
       roles,
+      // Does this user span every program (an INSTITUTION-scoped role) or just
+      // their own? Derived from the role's DB scope, so the client never has to
+      // compare role-name strings to work it out (CLAUDE.md). Presentation only
+      // — every route re-derives scope server-side.
+      isInstitutionScoped,
       mustChangePassword,
       advisesClass: advisedCount > 0,
     });

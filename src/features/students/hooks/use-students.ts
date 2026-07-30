@@ -6,7 +6,7 @@
 
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { StudentInput, StudentPatch } from "@/features/students/types";
+import type { StudentFilters, StudentInput, StudentPatch } from "@/features/students/types";
 import {
   commitImport,
   createStudent,
@@ -23,10 +23,12 @@ const STUDENTS_KEY = ["students", "list"] as const;
 // Server-side paginated + searched. keepPreviousData avoids a blank flash while
 // the next page/search loads. Mutations invalidate the STUDENTS_KEY prefix, which
 // covers every (page, q) variant.
-export function useStudents(page: number, q: string) {
+export function useStudents(page: number, q: string, filters: StudentFilters = {}) {
   return useQuery({
-    queryKey: [...STUDENTS_KEY, page, q],
-    queryFn: () => fetchStudents(page, q),
+    // Filters are part of the key so each combination caches separately; the
+    // STUDENTS_KEY prefix still invalidates them all after a mutation.
+    queryKey: [...STUDENTS_KEY, page, q, filters],
+    queryFn: () => fetchStudents(page, q, filters),
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });

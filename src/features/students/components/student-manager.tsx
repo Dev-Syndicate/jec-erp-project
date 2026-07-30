@@ -28,10 +28,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/app/(app)/page-header";
-import type { Gender, Student, StudentStatus } from "@/features/students/types";
+import type { Gender, Student, StudentFilters, StudentStatus } from "@/features/students/types";
 import { FormSelect } from "@/features/students/components/form-select";
 import { ClassCascade } from "@/features/students/components/class-cascade";
 import { ImportStudentsDialog } from "@/features/students/components/import-students-dialog";
+import { StudentFilterBar } from "@/features/students/components/student-filter-bar";
 import {
   useClassOptions,
   useCreateStudent,
@@ -139,24 +140,43 @@ function TempPasswordPanel({ name, password }: { name: string; password: string 
   );
 }
 
-export function StudentManager() {
+/**
+ * `isInstitutionScoped` decides which filter CONTROLS are offered — an
+ * institution role (Super Admin) spans every program, so the Program filter is
+ * meaningful to them; a program-scoped role has exactly one and would get a
+ * one-entry dropdown. It is passed in by the page rather than read here, because
+ * a feature must not import another feature's hooks (CLAUDE.md).
+ *
+ * This is presentation only. The API scopes every query to the caller's own
+ * program independently, so it is never the thing keeping data safe.
+ */
+export function StudentManager({ isInstitutionScoped = false }: { isInstitutionScoped?: boolean }) {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
   const [resetting, setResetting] = useState<Student | null>(null);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [filters, setFilters] = useState<StudentFilters>({});
 
-  // Server-side search + pagination: one page (50 rows) + a total, so the list
-  // scales to thousands of students instead of downloading them all.
+  // Server-side search + filters + pagination: one page (50 rows) + a total, so
+  // the list scales to thousands of students instead of downloading them all.
   const debouncedQuery = useDebounced(query.trim(), 300);
-  const { data, isPending, isError, error, isPlaceholderData } = useStudents(page, debouncedQuery);
+  const { data, isPending, isError, error, isPlaceholderData } = useStudents(
+    page,
+    debouncedQuery,
+    filters,
+  );
+
+  const programs = useProgramOptions();
+  const classes = useClassOptions();
 
   const students = data?.items ?? [];
   const total = data?.total ?? 0;
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const startIdx = (page - 1) * PAGE_SIZE;
   const searching = debouncedQuery !== "";
+  const filtering = Object.keys(filters).length > 0;
 
   return (
     <div className="flex flex-col gap-6 p-6">
@@ -182,7 +202,7 @@ export function StudentManager() {
         <p className="text-sm text-muted-foreground">Loading students…</p>
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
-      ) : total === 0 && !searching ? (
+      ) : total === 0 && !searching && !filtering ? (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
           <p className="text-sm text-muted-foreground">No students yet.</p>
           <Button variant="outline" onClick={() => setCreating(true)} data-icon="inline-start">
@@ -206,10 +226,25 @@ export function StudentManager() {
             />
           </div>
 
+          <StudentFilterBar
+            filters={filters}
+            onChange={(next) => {
+              setFilters(next);
+              setPage(1); // a narrower result set invalidates the current page
+            }}
+            programs={programs.data ?? []}
+            classes={classes.data ?? []}
+            showProgram={isInstitutionScoped}
+          />
+
           {students.length === 0 ? (
             <div className="rounded-xl border border-dashed border-border py-16 text-center">
               <p className="text-sm text-muted-foreground">
-                {searching ? `No students match “${debouncedQuery}”.` : "No students on this page."}
+                {searching
+                  ? `No students match “${debouncedQuery}”${filtering ? " with these filters" : ""}.`
+                  : filtering
+                    ? "No students match these filters."
+                    : "No students on this page."}
               </p>
             </div>
           ) : (

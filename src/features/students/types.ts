@@ -38,6 +38,18 @@ export type Student = {
   updatedAt: string;
 };
 
+// The list filters. All optional and all NARROWING — the server ANDs them with
+// the caller's own program scope, so these can never widen what a role sees.
+// Which controls are offered is a UI concern (see StudentFilterBar); the server
+// accepts the same set from anyone and simply intersects it with their scope.
+export type StudentFilters = {
+  programId?: string;
+  year?: number;
+  section?: string;
+  status?: StudentStatus;
+  gender?: Gender;
+};
+
 // One server-side page of the students list (only these rows are fetched).
 export type StudentPage = {
   items: Student[];

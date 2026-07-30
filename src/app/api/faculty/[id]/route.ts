@@ -125,7 +125,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!existing) return Response.json({ error: "Faculty not found." }, { status: 404 });
     authorize(ctx, "manage", "Faculty", { programId: existing.user.programId });
 
-    const { status, programId, dateOfBirth, roleIds, ...facultyFields } = parsed.data;
+    // displayName lives on User, not FacultyProfile — it must be pulled out here
+    // alongside the other User-side fields, or it would be spread into the
+    // profile update as an unknown column and throw.
+    const { status, programId, displayName, dateOfBirth, roleIds, ...facultyFields } = parsed.data;
 
     // Moving to another program: the target must exist and be within your scope
     // (a scoped user can't move a faculty into a program they don't own).
@@ -143,10 +146,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       validRoleIds = roleCheck.ok;
     }
 
-    // User-side fields (login status + scoping key) vs profile fields.
-    const userData: { status?: "ACTIVE" | "INACTIVE"; programId?: string } = {};
+    // User-side fields (display name, login status + scoping key) vs profile fields.
+    const userData: { status?: "ACTIVE" | "INACTIVE"; programId?: string; displayName?: string } = {};
     if (status) userData.status = status;
     if (programId !== undefined) userData.programId = programId;
+    if (displayName !== undefined) userData.displayName = displayName;
 
     // Keep the User (status/program/roles) and the profile in sync (atomic), then map.
     const updated = await db.$transaction(async (tx) => {

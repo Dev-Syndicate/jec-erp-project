@@ -611,6 +611,10 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
     designation.trim() !== "" &&
     phone.trim() !== "" &&
     programId !== "" &&
+    // Until /api/roles resolves, roleOptions is empty, so initialRoleIds is []
+    // and the current roles can't be represented. Editing then would post an
+    // empty/partial role set and silently strip roles the user never touched.
+    roles.isSuccess &&
     selectedRoleIds.length > 0;
 
   // Only include programId when it actually changed — a program move re-scopes the

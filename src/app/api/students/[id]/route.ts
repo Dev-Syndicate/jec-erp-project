@@ -83,7 +83,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (!existing) return Response.json({ error: "Student not found." }, { status: 404 });
     authorize(ctx, "manage", "Student", { programId: existing.user.programId });
 
-    const { status, classId, ...studentFields } = parsed.data;
+    // displayName lives on User, not Student — pull it out here or it would be
+    // spread into the student update as an unknown column and throw.
+    const { status, classId, displayName, ...studentFields } = parsed.data;
     // A non-ACTIVE lifecycle status also disables the login; ACTIVE restores it.
     const userStatusUpdate =
       status === undefined ? undefined : status === "ACTIVE" ? "ACTIVE" : "INACTIVE";
@@ -112,10 +114,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // Keep the login flag, student status and enrollment consistent (atomic). The
     // student.update runs last so the returned row reflects the moved enrollment.
     const updated = await db.$transaction(async (tx) => {
-      if (userStatusUpdate) {
+      if (userStatusUpdate || displayName !== undefined) {
         await tx.user.update({
           where: { id: existing.user.id },
-          data: { status: userStatusUpdate },
+          data: {
+            ...(userStatusUpdate ? { status: userStatusUpdate } : {}),
+            ...(displayName !== undefined ? { displayName } : {}),
+          },
         });
       }
       if (enrollTarget) {

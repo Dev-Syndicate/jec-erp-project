@@ -1,6 +1,6 @@
 # JEC ERP — Session Handoff
 
-_Last updated: 2026-07-23 · Branch: `rebuild-core` · HEAD: `6d1732a`_
+_Last updated: 2026-07-30 · Branch: `rebuild-core` · HEAD: `aeb7300`_
 
 Read this first, then open [docs/schema-design.html](./schema-design.html) (the visual
 source of truth for the data model) in a browser.
@@ -36,12 +36,46 @@ tables (§3) now has a working vertical slice — API + feature UI + RBAC scopin
 Auto-memory (`~/.claude/.../memory/MEMORY.md`) has a one-line index of every feature's
 design decisions — read it for the "why".
 
+### Real college data is loaded (2026-07-30)
+
+The demo/seed data was wiped and replaced with the college's actual CSE records from
+`CSE ERP Data.xlsx` + `CSE_Faculty Details.xlsx`. **The DB no longer contains fake
+students** — treat it as production-shaped data.
+
+| | |
+|---|---|
+| Students | **473** across 8 classes (2-A 60, 2-B 60, 2-C 56, 3-A 50, 3-B 53, 3-C 54, 4-A 69, 4-B 71) |
+| Faculty | **13** (staffIds `CSE001`–`CSE013`, all `@jeppiaarcollege.org`) |
+| Structure | B.E × CSE, one Program; AcademicYear **2025-2026** active, **ODD** semester active |
+| Preserved | `adminjec@jeppiar.com` + `test-admin@jeppiaar.local` (Super Admins), the 4 roles + 28 permissions |
+| Not yet loaded | Subjects, timetable, faculty assignments, attendance, marks — all empty |
+
+Scripts live in [scripts/import/](../scripts/import/):
+- `xlsx-source.ts` — parsing/normalisation (Excel-serial + text dates, phone, email repair)
+- `wipe.mts` — destructive reset; keeps INSTITUTION-scoped users + RBAC. Needs `--yes`
+- `seed-cse.mts` — the import. Supports `--dry-run`; **resumable** (skips emails that
+  already exist), Firebase-first-then-Neon per account with rollback
+
+**13 rows were rejected**, not guessed at — see `prisma/data/import-rejected.csv`
+(gitignored): 5 corrupt dates of birth (Excel serials pointing at 2024–2026), 4 duplicate
+emails, 1 duplicate register number, 1 blank register number, 2 malformed emails. Register
+number and email are the login handles, so a collision has no safe default. Fix the
+spreadsheet and re-run `seed-cse.mts` to add them — it will skip everyone already imported.
+
+⚠️ `prisma/data/import-credentials.csv` holds **485 one-time temp passwords** in plaintext
+(every account has `mustChangePassword=true`). Deliver them, then delete the file. It and
+the `.xlsx` sources are gitignored.
+
 ---
 
 ## 2. THE NEXT TASK (candidates — confirm with the owner)
 
-The **core data model is fully built**; what remains is net-new product features and
-polish, not model gaps. Open candidates:
+With real data loaded, the most valuable next slice is **curriculum for the live
+classes** — Subjects, then the Timetable, then FacultyAssignments. Those three are
+empty, and attendance/marks (already built) cannot be exercised on real students until
+the timetable exists. The college has not yet supplied a subject/timetable sheet.
+
+Other open candidates, unchanged:
 
 - **Announcements** — staff post to students/faculty, scoped by program/class. Greenfield:
   needs a schema addition (no table yet — it was in the "deferred" list) + design pass.

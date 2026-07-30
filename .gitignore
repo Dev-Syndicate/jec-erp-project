@@ -42,3 +42,8 @@ yarn-error.log*
 next-env.d.ts
 
 /src/generated/prisma
+
+# Import artefacts — student/staff PII and one-time temp passwords. Never commit.
+/prisma/data/import-credentials.csv
+/prisma/data/import-rejected.csv
+/*.xlsx

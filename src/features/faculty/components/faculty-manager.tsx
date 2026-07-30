@@ -194,13 +194,26 @@ function TempPasswordPanel({ name, password }: { name: string; password: string 
   );
 }
 
-export function FacultyManager() {
+/**
+ * `isInstitutionScoped` decides whether the Program filter is worth showing —
+ * an institution role (Super Admin) spans every program; a program-scoped role
+ * has exactly one. Passed in by the page rather than read here, because a
+ * feature must not import another feature's hooks (CLAUDE.md).
+ *
+ * Presentation only: /api/faculty scopes the list to the caller's own program
+ * independently, so this is never what keeps data safe.
+ */
+export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionScoped?: boolean }) {
   const { data: faculty, isPending, isError, error } = useFaculty();
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<Faculty | null>(null);
   const [resetting, setResetting] = useState<Faculty | null>(null);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
+  const [programFilter, setProgramFilter] = useState("");
+  const [designationFilter, setDesignationFilter] = useState("");
+  const [statusFilter, setStatusFilter] = useState("");
+  const [genderFilter, setGenderFilter] = useState("");
   const [page, setPage] = useState(1);
 
   // The distinct RBAC roles actually present in the list, so the filter only
@@ -211,21 +224,76 @@ export function FacultyManager() {
     return [...set].sort();
   }, [faculty]);
 
-  // Client-side filter: text search across the visible fields, intersected with
-  // the selected role (or all roles when "ALL").
+  // Programs and designations are derived from the rows on screen for the same
+  // reason: never offer a filter value that would return nothing. The list is
+  // already program-scoped server-side, so for an HOD this collapses to their
+  // own program (and the picker is hidden — see below).
+  const programOptions = useMemo(() => {
+    const map = new Map<string, string>();
+    (faculty ?? []).forEach((f) => {
+      if (f.programId && f.programLabel) map.set(f.programId, f.programLabel);
+    });
+    return [...map].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+  }, [faculty]);
+
+  const designationOptions = useMemo(() => {
+    const set = new Set<string>();
+    (faculty ?? []).forEach((f) => f.designation && set.add(f.designation));
+    return [...set].sort().map((d) => ({ value: d, label: d }));
+  }, [faculty]);
+
+  const hasGender = useMemo(() => (faculty ?? []).some((f) => f.gender), [faculty]);
+
+  // Client-side filter (the list is small and fetched whole): text search across
+  // the visible fields, intersected with every active filter.
   const filtered = useMemo(() => {
     if (!faculty) return [];
     const q = query.trim().toLowerCase();
     return faculty.filter((f) => {
       const matchesRole = roleFilter === "ALL" || f.roles.includes(roleFilter);
+      const matchesProgram = !programFilter || f.programId === programFilter;
+      const matchesDesignation = !designationFilter || f.designation === designationFilter;
+      // "Invited" isn't a stored status — it's an ACTIVE account still on its
+      // temp password, which is what the Status column renders.
+      const matchesStatus =
+        !statusFilter ||
+        (statusFilter === "INVITED"
+          ? f.status === "ACTIVE" && f.mustChangePassword
+          : statusFilter === "ACTIVE"
+            ? f.status === "ACTIVE" && !f.mustChangePassword
+            : f.status === statusFilter);
+      const matchesGender = !genderFilter || f.gender === genderFilter;
       const matchesQuery =
         q === "" ||
         [f.staffId, f.displayName, f.email, f.programLabel, f.designation]
           .filter(Boolean)
           .some((field) => field!.toLowerCase().includes(q));
-      return matchesRole && matchesQuery;
+      return (
+        matchesRole &&
+        matchesProgram &&
+        matchesDesignation &&
+        matchesStatus &&
+        matchesGender &&
+        matchesQuery
+      );
     });
-  }, [faculty, query, roleFilter]);
+  }, [faculty, query, roleFilter, programFilter, designationFilter, statusFilter, genderFilter]);
+
+  const activeFilterCount =
+    (roleFilter !== "ALL" ? 1 : 0) +
+    (programFilter ? 1 : 0) +
+    (designationFilter ? 1 : 0) +
+    (statusFilter ? 1 : 0) +
+    (genderFilter ? 1 : 0);
+
+  const clearFilters = () => {
+    setRoleFilter("ALL");
+    setProgramFilter("");
+    setDesignationFilter("");
+    setStatusFilter("");
+    setGenderFilter("");
+    setPage(1);
+  };
 
   // Paginate the filtered rows (50/page); currentPage is clamped so it stays
   // valid when a filter shrinks the list below the current page.
@@ -300,6 +368,103 @@ export function FacultyManager() {
                   />
                 ))}
               </div>
+            )}
+          </div>
+
+          {/* Program / designation / status / gender. The Program picker is
+              shown only to an institution role — a program-scoped user (HOD)
+              receives a single program from the API, so the control would be a
+              one-entry no-op. Presentation only: the list is scoped server-side
+              regardless of what is selected here. */}
+          <div className="flex flex-wrap items-end gap-3">
+            {isInstitutionScoped && programOptions.length > 1 && (
+              <div className="flex min-w-44 flex-col gap-1.5">
+                <Label htmlFor="ff-program" className="text-xs text-muted-foreground">
+                  Program
+                </Label>
+                <FormSelect
+                  id="ff-program"
+                  value={programFilter}
+                  onChange={(v) => {
+                    setProgramFilter(v);
+                    setPage(1);
+                  }}
+                  options={[{ value: "", label: "All programs" }, ...programOptions]}
+                  placeholder="All programs"
+                />
+              </div>
+            )}
+
+            {designationOptions.length > 1 && (
+              <div className="flex min-w-48 flex-col gap-1.5">
+                <Label htmlFor="ff-designation" className="text-xs text-muted-foreground">
+                  Designation
+                </Label>
+                <FormSelect
+                  id="ff-designation"
+                  value={designationFilter}
+                  onChange={(v) => {
+                    setDesignationFilter(v);
+                    setPage(1);
+                  }}
+                  options={[{ value: "", label: "All designations" }, ...designationOptions]}
+                  placeholder="All designations"
+                />
+              </div>
+            )}
+
+            <div className="flex min-w-36 flex-col gap-1.5">
+              <Label htmlFor="ff-status" className="text-xs text-muted-foreground">
+                Status
+              </Label>
+              <FormSelect
+                id="ff-status"
+                value={statusFilter}
+                onChange={(v) => {
+                  setStatusFilter(v);
+                  setPage(1);
+                }}
+                options={[
+                  { value: "", label: "All statuses" },
+                  { value: "ACTIVE", label: "Active" },
+                  { value: "INVITED", label: "Invited" },
+                  { value: "INACTIVE", label: "Inactive" },
+                ]}
+                placeholder="All statuses"
+              />
+            </div>
+
+            {/* Gender is optional on a faculty profile and the staff sheet has
+                no such column, so it is unset for every imported row. Offering
+                the filter then would only ever return nothing — show it once at
+                least one profile records a gender. */}
+            {hasGender && (
+              <div className="flex min-w-32 flex-col gap-1.5">
+                <Label htmlFor="ff-gender" className="text-xs text-muted-foreground">
+                  Gender
+                </Label>
+                <FormSelect
+                  id="ff-gender"
+                  value={genderFilter}
+                  onChange={(v) => {
+                    setGenderFilter(v);
+                    setPage(1);
+                  }}
+                  options={[
+                    { value: "", label: "All genders" },
+                    { value: "MALE", label: "Male" },
+                    { value: "FEMALE", label: "Female" },
+                    { value: "OTHER", label: "Other" },
+                  ]}
+                  placeholder="All genders"
+                />
+              </div>
+            )}
+
+            {activeFilterCount > 0 && (
+              <Button variant="ghost" className="h-10!" onClick={clearFilters}>
+                Clear{activeFilterCount > 1 ? ` (${activeFilterCount})` : ""}
+              </Button>
             )}
           </div>
 

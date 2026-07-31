@@ -47,10 +47,25 @@ export function useMe(enabled: boolean) {
  * Sign in either way the PRD allows: staff use their email directly; students
  * type their register number, which we first resolve to their real email (the
  * Firebase identity) before signing in. Both paths end at the same credential.
+ *
+ * The two doors are kept separate: a student who knows their email would
+ * otherwise authenticate fine through the Staff tab, so after a staff sign-in we
+ * check the resolved profile and sign straight back out if it's a Student. This
+ * is UX steering, NOT a privilege boundary — Firebase auth happens client-side,
+ * and every API route re-derives authorization server-side regardless of which
+ * tab was used. It exists so students land on the door that asks for the
+ * identifier they actually have (their register number).
  */
 type SignInInput =
   | { kind: "email"; email: string; password: string }
   | { kind: "register"; registerNumber: string; password: string };
+
+export class WrongSignInTabError extends Error {
+  constructor() {
+    super("Students sign in with their register number — use the Student tab.");
+    this.name = "WrongSignInTabError";
+  }
+}
 
 export function useSignIn() {
   const qc = useQueryClient();
@@ -60,7 +75,20 @@ export function useSignIn() {
         input.kind === "register"
           ? await resolveRegisterToEmail(input.registerNumber)
           : input.email;
-      return signInWithEmailAndPassword(auth, email, input.password);
+      const credential = await signInWithEmailAndPassword(auth, email, input.password);
+
+      // Staff door: reject a student account before the session is handed over.
+      // (The student door can't hit the inverse — resolve-roll only ever returns
+      // an email for a row in the Student table.)
+      if (input.kind === "email") {
+        const me = await fetchMe().catch(() => null);
+        if (me?.roles.includes("Student")) {
+          await signOut(auth);
+          qc.removeQueries({ queryKey: ["auth", "me"] });
+          throw new WrongSignInTabError();
+        }
+      }
+      return credential;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["auth", "me"] }),
   });

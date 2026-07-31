@@ -16,6 +16,7 @@ import {
   useSendPasswordReset,
   useSignIn,
   useSignOut,
+  WrongSignInTabError,
 } from "@/features/auth/hooks/use-auth";
 
 // Firebase surfaces raw codes like "auth/invalid-credential" on its errors;
@@ -205,8 +206,11 @@ function RedirectToDashboard({ name }: { name: string }) {
 
 type SignInMode = "staff" | "student";
 
-// Staff sign in with their email; students with their roll number. The toggle
-// swaps only the identifier field — the password field and flow are shared.
+// Staff sign in with their email; students with their register number. The
+// toggle swaps only the identifier field — the password field and flow are
+// shared. The doors are kept separate: a student who authenticates through the
+// Staff tab is signed back out and moved here (see WrongSignInTabError), so
+// each person uses the identifier they actually have.
 function ModeToggle({ mode, onChange }: { mode: SignInMode; onChange: (m: SignInMode) => void }) {
   const tabs: Array<{ id: SignInMode; label: string }> = [
     { id: "staff", label: "Staff" },
@@ -283,6 +287,14 @@ function SignInStep({
             isStudent
               ? { kind: "register", registerNumber, password }
               : { kind: "email", email, password },
+            {
+              // A student who tried the Staff door is moved to the right one
+              // rather than left staring at an error. Their password carries
+              // over; only the identifier needs retyping.
+              onError: (err) => {
+                if (err instanceof WrongSignInTabError) setMode("student");
+              },
+            },
           );
         }}
       >

@@ -78,7 +78,8 @@ Authorization is a CASL ability built per request from the user's DB `role → p
 **Never compare raw role-name strings inline** — always go through `authorize`. `ctx.isInstitutionScoped`
 (is Super Admin / any INSTITUTION role) is available for list `where` filters (unscoped → all, else
 `{ programId }`). Finer, resource-specific checks live beside the routes (e.g. attendance's
-[`access.ts`](src/app/api/attendance/access.ts): teaches/advises, per-period ownership).
+[`access.ts`](src/app/api/attendance/access.ts): teaches/advises, per-period ownership — note
+**marking a period is the period's own teacher only, with no role override at all**).
 
 ## Architecture
 

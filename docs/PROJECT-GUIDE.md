@@ -96,7 +96,56 @@ filters use `ctx.isInstitutionScoped` (unscoped → all rows, else `{ programId 
 Resource-specific rules that CASL can't express live beside their routes — see
 [src/app/api/attendance/access.ts](../src/app/api/attendance/access.ts)
 (`assertTeachesOrAdvises`, `assertMarksPeriod`, `assertOwnsDayRecord`): who teaches a period,
-who advises a class.
+who advises a class. Its three levels widen deliberately:
+
+| Action | Who |
+|---|---|
+| **View** a class's attendance | `manage Attendance` (HOD/SA), the class advisor, or anyone teaching ≥1 period in it |
+| **Correct the DAY record** | `manage Attendance` or the class advisor |
+| **Mark a PERIOD** | **the period's own teacher, full stop** — no role overrides it, Super Admin included |
+
+That last row is the strict one and the easiest to erode by accident: a subject hour is
+signed by whoever taught it, so nobody marks a register in another teacher's name. Covering
+an absent teacher means **reassigning the timetable slot** — explicit and auditable — not
+marking on their behalf. `test/api/attendance-access.test.ts` pins it.
+
+[`marks/access.ts`](../src/app/api/marks/access.ts) applies the same shape to internal marks:
+
+| Action | Who |
+|---|---|
+| **Read** marks | a marks admin (HOD/SA, via `manage Subject` in program scope) **or** the subject's teacher |
+| **Enter** marks | **the subject's own teacher, full stop** — no role overrides it |
+
+Same reasoning: `InternalMark.markedById` stamps whoever recorded the result, so a HOD
+entering marks would name someone who never assessed the work. A HOD keeps full *visibility*
+of their department's results — the picker labels non-taught subjects "(view only)" and the
+grid opens read-only. `test/api/marks-access.test.ts` pins the split.
+
+**The assessment scheme** ([`marks/scheme.ts`](../src/app/api/marks/scheme.ts)) — IAT 1 and
+IAT 2 are **composites out of 100**, not single marks:
+
+| Component | Out of |
+|---|---|
+| Cycle test 1 | 10 |
+| Cycle test 2 | 10 |
+| Assignment 1 | 10 |
+| Assignment 2 | 10 |
+| IAT paper | 60 |
+| **Total** | **100** |
+
+Model is a single mark out of 100. There is no standalone "Assignment" assessment — assignments
+are components inside each IAT.
+
+Each component is **its own `InternalMark` row** (`AssessmentType` = `IA1_CT1`, `IA1_EXAM`, …),
+so one part can be corrected without disturbing the rest, and the **total is summed on read,
+never stored** — it cannot drift from its parts. The maximums are a college rule fixed in
+`COMPONENT_MAX`, not per-subject configuration: the grid has no editable "Out of" box, and the
+server rejects a mark above its own column's maximum (a 10-mark cycle test can't take 100).
+`scheme.ts` is the single source of truth — the client renders whatever columns the API sends.
+
+Who-teaches-what for **both** modules comes from the **timetable**, not `FacultyAssignment`
+(that table exists but is intentionally unused — building the timetable *is* the teaching
+allocation).
 
 **Deliberate exceptions — don't "fix" these:**
 
@@ -252,7 +301,7 @@ hand-written code (every such hit is in the generated Prisma client), `tsc --noE
 uniform.
 
 ```bash
-pnpm test          # vitest run — 149 unit tests, <1s
+pnpm test          # vitest run — 217 unit tests, <1s
 pnpm test:watch    # watch mode
 pnpm exec tsc --noEmit   # still the main correctness gate
 ```
@@ -271,6 +320,11 @@ so a test that wanders into the DB fails loudly instead of connecting to a datab
 | `test/lib/student-import.test.ts` | Parsing, date/gender normalisation, required fields, in-file duplicates, row cap — the reject-never-guess rule |
 | `test/api/student-patch.test.ts` | `PATCH /api/students/[id]` body rules — a login handle may never be blanked, email shape matches the importer |
 | `test/api/faculty-patch.test.ts` | `PATCH /api/faculty/[id]` body rules — staff ID and the faculty sign-in email |
+| `test/api/attendance-access.test.ts` | Period marking is the period’s own teacher only — no HOD/Super-Admin override |
+| `test/api/marks-access.test.ts` | Marks read/enter split — HOD may view program results, only the teacher enters them |
+| `test/features/assignment-cascade.test.ts` | Year → Section → Subject narrowing behind the marks picker |
+| `test/api/marks-scheme.test.ts` | The IAT composition — 10/10/10/10/60 = 100, and Model = 100 |
+| `test/api/marks-body.test.ts` | POST /api/marks cells — per-column maxima, component/assessment matching, blanks |
 | `test/lib/prisma-errors.test.ts` | P2002/P2003/P2025 classification and hostile inputs |
 | `test/lib/india-geo.test.ts` | State/district lookup, sorting, case-insensitivity |
 

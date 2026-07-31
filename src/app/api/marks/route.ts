@@ -13,28 +13,21 @@
 // there's no back-dating a closed term here.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { assertMarksSubject } from "./access";
+import { assertEntersMarks, assertReadsMarks, teachesSubject } from "./access";
+import {
+  COMPONENT_LABEL,
+  COMPONENT_MAX,
+  assessmentTotal,
+  componentsOf,
+  isAssessment,
+  type Assessment,
+  type Component,
+} from "./scheme";
 
 export const dynamic = "force-dynamic";
 
-const ASSESSMENTS = ["IA1", "IA2", "MODEL", "ASSIGNMENT"] as const;
-type Assessment = (typeof ASSESSMENTS)[number];
-
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 const roman = (n: number) => ROMAN[n] ?? String(n);
-
-// Default out-of marks per assessment. The faculty can override on the grid; this
-// is only the initial value for a fresh assessment.
-export const DEFAULT_MAX: Record<Assessment, number> = {
-  IA1: 100,
-  IA2: 100,
-  MODEL: 100,
-  ASSIGNMENT: 20,
-};
-
-function isAssessment(v: unknown): v is Assessment {
-  return typeof v === "string" && (ASSESSMENTS as readonly string[]).includes(v);
-}
 
 // Load the class + subject and confirm they pair within one program (a subject is
 // per-program; a class belongs to a program). Returns the shared programId + the
@@ -73,7 +66,16 @@ export async function GET(req: Request) {
     if ("error" in rc) return Response.json({ error: rc.error }, { status: rc.status });
     const { klass, subject, semester } = rc;
 
-    await assertMarksSubject(ctx, { classId, subjectId, semesterId: semester.id, programId: klass.programId });
+    // Read gate: the subject's teacher, or a HOD/SA overseeing the program.
+    await assertReadsMarks(ctx, { classId, subjectId, semesterId: semester.id, programId: klass.programId });
+    // Whether THIS viewer may also SAVE, so the grid opens read-only for a HOD
+    // looking at someone else's subject instead of letting them edit-then-403.
+    const canEnter = await teachesSubject(ctx, {
+      classId,
+      subjectId,
+      semesterId: semester.id,
+      programId: klass.programId,
+    });
 
     const year = await db.academicYear.findFirst({ where: { isActive: true }, select: { id: true, name: true } });
     if (!year) return Response.json({ error: "No academic year is active." }, { status: 400 });
@@ -86,14 +88,19 @@ export async function GET(req: Request) {
       orderBy: { student: { registerNumber: "asc" } },
     });
 
+    // One row per COMPONENT per student (IA1 = 5 rows, MODEL = 1), so fetch the
+    // whole set for this assessment and key them by student → component.
+    const components = componentsOf(assessment);
     const existing = await db.internalMark.findMany({
-      where: { subjectId, semesterId: semester.id, assessment },
-      select: { studentId: true, obtained: true, maxMark: true },
+      where: { subjectId, semesterId: semester.id, assessment: { in: components } },
+      select: { studentId: true, assessment: true, obtained: true },
     });
-    const byStudent = new Map(existing.map((m) => [m.studentId, m]));
-    // The assessment's maxMark is shared; use the stored one if any row exists,
-    // else the default for this assessment.
-    const maxMark = existing[0] ? Number(existing[0].maxMark) : DEFAULT_MAX[assessment];
+    const byStudent = new Map<string, Map<string, number>>();
+    for (const m of existing) {
+      const row = byStudent.get(m.studentId) ?? new Map<string, number>();
+      row.set(m.assessment, Number(m.obtained));
+      byStudent.set(m.studentId, row);
+    }
 
     return Response.json({
       classId,
@@ -101,16 +108,28 @@ export async function GET(req: Request) {
       subjectId,
       subjectLabel: `${subject.code} — ${subject.name}`,
       assessment,
-      maxMark,
+      // The grid's columns, with each one's fixed maximum. Sent from the server so
+      // the client never hard-codes the scheme in a second place.
+      components: components.map((c) => ({
+        key: c,
+        label: COMPONENT_LABEL[c],
+        max: COMPONENT_MAX[c],
+      })),
+      total: assessmentTotal(assessment),
       academicYear: year.name,
+      // False when a HOD/SA is viewing a subject they don't teach — the grid
+      // renders read-only rather than offering a save that would 403.
+      canEnter,
       students: enrollments.map((e) => {
-        const m = byStudent.get(e.studentId);
+        const row = byStudent.get(e.studentId);
+        const marks: Record<string, number | null> = {};
+        for (const c of components) marks[c] = row?.get(c) ?? null;
         return {
           studentId: e.studentId,
           registerNumber: e.student.registerNumber,
           rollNumber: e.student.rollNumber,
           displayName: e.student.user.displayName,
-          obtained: m ? Number(m.obtained) : null,
+          marks,
         };
       }),
     });
@@ -119,10 +138,11 @@ export async function GET(req: Request) {
   }
 }
 
-type MarkInput = { studentId: string; obtained: number };
+// One cell of the grid: a student's mark for a single component.
+type MarkInput = { studentId: string; component: Component; obtained: number };
 
-function parseBody(body: unknown):
-  | { classId: string; subjectId: string; assessment: Assessment; maxMark: number; marks: MarkInput[] }
+export function parseBody(body: unknown):
+  | { classId: string; subjectId: string; assessment: Assessment; marks: MarkInput[] }
   | { error: string } {
   if (!body || typeof body !== "object") return { error: "Missing request body." };
   const b = body as Record<string, unknown>;
@@ -132,25 +152,45 @@ function parseBody(body: unknown):
   if (!classId || !subjectId) return { error: "Class and subject are required." };
   if (!isAssessment(b.assessment)) return { error: "Invalid assessment." };
 
-  const maxMark = typeof b.maxMark === "number" ? b.maxMark : Number(b.maxMark);
-  if (!Number.isFinite(maxMark) || maxMark <= 0) return { error: "Max mark must be a positive number." };
+  // The components this assessment is allowed to carry. A mark for anything else
+  // (e.g. an IA2 column posted to IA1) is rejected rather than silently stored.
+  const allowed = new Set<string>(componentsOf(b.assessment));
 
   if (!Array.isArray(b.marks)) return { error: "Marks must be a list." };
   const marks: MarkInput[] = [];
+  const seen = new Set<string>();
   for (const raw of b.marks) {
     if (!raw || typeof raw !== "object") return { error: "Invalid mark entry." };
     const r = raw as Record<string, unknown>;
     const studentId = typeof r.studentId === "string" ? r.studentId.trim() : "";
     if (!studentId) return { error: "Every mark needs a student." };
+
+    const component = typeof r.component === "string" ? r.component : "";
+    if (!allowed.has(component)) return { error: "Invalid assessment component." };
+
     // A blank cell (null/"") means "no mark entered" — skip it, don't store a 0.
     if (r.obtained === null || r.obtained === undefined || r.obtained === "") continue;
     const obtained = typeof r.obtained === "number" ? r.obtained : Number(r.obtained);
     if (!Number.isFinite(obtained) || obtained < 0) return { error: "Marks must be zero or more." };
-    if (obtained > maxMark) return { error: `A mark exceeds the maximum of ${maxMark}.` };
-    marks.push({ studentId, obtained });
+
+    // Each component has its OWN fixed maximum (10 for a cycle test or
+    // assignment, 60 for the IAT paper) — the college scheme, not a per-subject
+    // setting, so it's checked here rather than trusted from the client.
+    const max = COMPONENT_MAX[component as Component];
+    if (obtained > max) {
+      return { error: `${COMPONENT_LABEL[component as Component]} is out of ${max}.` };
+    }
+
+    // The unique constraint is (student, subject, semester, assessment), so two
+    // cells for the same pair would make the upserts fight each other.
+    const key = `${studentId}::${component}`;
+    if (seen.has(key)) return { error: "Duplicate mark for the same student and component." };
+    seen.add(key);
+
+    marks.push({ studentId, component: component as Component, obtained });
   }
 
-  return { classId, subjectId, assessment: b.assessment, maxMark, marks };
+  return { classId, subjectId, assessment: b.assessment, marks };
 }
 
 export async function POST(req: Request) {
@@ -160,13 +200,17 @@ export async function POST(req: Request) {
 
     const parsed = parseBody(await req.json().catch(() => null));
     if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 });
-    const { classId, subjectId, assessment, maxMark, marks } = parsed;
+    // `assessment` isn't needed past parsing: parseBody already checked every
+    // component belongs to it, and each mark carries its own component key.
+    const { classId, subjectId, marks } = parsed;
 
     const rc = await resolveContext(classId, subjectId);
     if ("error" in rc) return Response.json({ error: rc.error }, { status: rc.status });
     const { klass, semester } = rc;
 
-    await assertMarksSubject(ctx, { classId, subjectId, semesterId: semester.id, programId: klass.programId });
+    // Write gate: the subject's own teacher only — a HOD may read these marks but
+    // not record them (markedById must name whoever actually assessed the work).
+    await assertEntersMarks(ctx, { classId, subjectId, semesterId: semester.id, programId: klass.programId });
 
     const year = await db.academicYear.findFirst({ where: { isActive: true }, select: { id: true } });
     if (!year) return Response.json({ error: "No academic year is active." }, { status: 400 });
@@ -184,9 +228,11 @@ export async function POST(req: Request) {
     const stray = marks.find((m) => !enrolled.has(m.studentId));
     if (stray) return Response.json({ error: "A mark was submitted for a student not in this class." }, { status: 400 });
 
-    // Upsert every submitted mark as one unit (unique student+subject+semester+
-    // assessment). maxMark is stored on each row so the assessment's out-of value
-    // stays with the data.
+    // Upsert every submitted cell as one unit. The unique key is
+    // (student, subject, semester, assessment) where `assessment` is the
+    // COMPONENT — so a student's five IAT-1 parts are five independent rows and
+    // correcting one never disturbs the others. maxMark is stored per row from
+    // the fixed scheme, so each row records what it was out of.
     await db.$transaction(
       marks.map((m) =>
         db.internalMark.upsert({
@@ -195,19 +241,23 @@ export async function POST(req: Request) {
               studentId: m.studentId,
               subjectId,
               semesterId: semester.id,
-              assessment,
+              assessment: m.component,
             },
           },
           create: {
             studentId: m.studentId,
             subjectId,
             semesterId: semester.id,
-            assessment,
-            maxMark,
+            assessment: m.component,
+            maxMark: COMPONENT_MAX[m.component],
             obtained: m.obtained,
             markedById: ctx.user.id,
           },
-          update: { maxMark, obtained: m.obtained, markedById: ctx.user.id },
+          update: {
+            maxMark: COMPONENT_MAX[m.component],
+            obtained: m.obtained,
+            markedById: ctx.user.id,
+          },
         }),
       ),
     );

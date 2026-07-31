@@ -94,11 +94,24 @@ enum LeaveStatus {
 }
 
 // Internal assessment kinds (job 4).
+// Internal assessment components. IAT 1 and IAT 2 are each a COMPOSITE out of
+// 100, stored as five rows rather than one: two cycle tests (10 each), two
+// assignments (10 each) and the IAT exam itself (60). The total is summed on
+// read, never stored, so a component can be corrected without recomputing
+// anything. MODEL is a single mark out of 100. The maximums are a college rule
+// and live in COMPONENT_MAX (src/app/api/marks/scheme.ts), not the DB.
 enum AssessmentType {
-  IA1
-  IA2
+  IA1_CT1
+  IA1_CT2
+  IA1_ASG1
+  IA1_ASG2
+  IA1_EXAM
+  IA2_CT1
+  IA2_CT2
+  IA2_ASG1
+  IA2_ASG2
+  IA2_EXAM
   MODEL
-  ASSIGNMENT
 }
 
 // Timetable is Mon-Fri; a working Saturday borrows a weekday's grid.

@@ -106,22 +106,28 @@ const NAV: NavGroup[] = [
         title: "Mark attendance",
         href: "/attendance",
         icon: CalendarCheck2,
-        roles: ["Super Admin", "HOD", "Faculty"],
+        // Teaching work, not institution admin — Super Admin has no timetable to
+        // mark against. They keep the permission (the API still authorizes
+        // `manage all`, so a stuck record can be fixed); the nav just stops
+        // offering it.
+        roles: ["HOD", "Faculty"],
         exact: true, // /attendance/report and /attendance/timetable are siblings
       },
       {
         title: "Day attendance",
         href: "/attendance/day",
         icon: CalendarDays,
-        // The class teacher's job: HOD/SA (manage), or a Faculty who advises a
-        // class. A plain subject teacher who advises none doesn't see it.
-        gate: ({ roles, advisesClass }) =>
-          roles.includes("Super Admin") || roles.includes("HOD") || advisesClass,
+        // The class teacher's job: a HOD, or a Faculty who advises a class. A
+        // plain subject teacher who advises none doesn't see it, and neither
+        // does Super Admin (see "Mark attendance").
+        gate: ({ roles, advisesClass }) => roles.includes("HOD") || advisesClass,
       },
       {
         title: "Report",
         href: "/attendance/report",
         icon: ClipboardList,
+        // The one attendance view Super Admin keeps — reading across the
+        // institution is their job; recording attendance isn't.
         roles: ["Super Admin", "HOD", "Faculty"],
       },
     ],
@@ -133,20 +139,22 @@ const NAV: NavGroup[] = [
         title: "Internal marks",
         href: "/marks",
         icon: ClipboardPen,
-        // Staff who enter marks: HOD/Super Admin (program), or a Faculty assigned
-        // to a subject this semester. The picker is empty for a faculty with no
-        // assignments, but the nav still shows it (the API is the real gate).
-        roles: ["Super Admin", "HOD", "Faculty"],
+        // Staff who enter marks: a HOD, or a Faculty assigned to a subject this
+        // semester. The picker is empty for a faculty with no assignments, but
+        // the nav still shows it (the API is the real gate). Entering marks is
+        // teaching work, so Super Admin doesn't see it.
+        roles: ["HOD", "Faculty"],
       },
       {
         title: "Leave & OD",
         href: "/leave",
         icon: CalendarOff,
-        // Everyone: a student applies + tracks; a class teacher / HOD approve. The
-        // page is role-aware (the API reports isStudent / canApprove), so one nav
-        // entry serves both. Students have no other nav items, so this is their
-        // first staff-shell link.
-        roles: ["Super Admin", "HOD", "Faculty", "Student"],
+        // A student applies + tracks; a class teacher / HOD approve. The page is
+        // role-aware (the API reports isStudent / canApprove), so one nav entry
+        // serves both. Students have no other nav items, so this is their first
+        // staff-shell link. Approval is a class-teacher → HOD flow, so Super
+        // Admin is not in the queue.
+        roles: ["HOD", "Faculty", "Student"],
       },
     ],
   },

@@ -80,3 +80,19 @@ export async function deleteFirebaseUser(uid: string): Promise<void> {
 export async function resetFirebasePassword(uid: string, password: string): Promise<void> {
   await adminAuth.updateUser(uid, { password });
 }
+
+/**
+ * Change the email a Firebase identity authenticates with.
+ *
+ * Email is the identity itself, so Neon's `User.email` and this must never
+ * diverge: students resolve registerNumber → email before sign-in
+ * (/api/auth/resolve-roll), and a stale Neon email would hand the client an
+ * address Firebase no longer knows, breaking login with no visible cause. The
+ * caller is responsible for keeping the two in step — see the rollback in
+ * /api/students/[id].
+ *
+ * Throws `auth/email-already-exists` if another identity holds the address.
+ */
+export async function updateFirebaseEmail(uid: string, email: string): Promise<void> {
+  await adminAuth.updateUser(uid, { email });
+}

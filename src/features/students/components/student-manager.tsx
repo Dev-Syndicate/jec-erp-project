@@ -415,7 +415,7 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>{created ? "Student created" : "Add student"}</DialogTitle>
           <DialogDescription>
@@ -434,13 +434,14 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
           </>
         ) : (
           <>
-            {/* Landscape 2-column layout so the form stays short. */}
-            <form id="student-form" onSubmit={submit} className="grid grid-cols-2 gap-4">
+            {/* Landscape: 3 columns on desktop, 1 on narrow screens — matches
+                the Edit dialog so the two read as the same form. */}
+            <form id="student-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="s-name">Full name</Label>
                 <Input id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" autoFocus required />
               </div>
-              <div className="flex flex-col gap-2">
+              <div className="flex flex-col gap-2 sm:col-span-2">
                 <Label htmlFor="s-email">Email</Label>
                 <Input id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="h-10!" required />
               </div>
@@ -478,8 +479,8 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
                 />
               </div>
               {/* Class is optional — place them now (Year + Section) or later via
-                  "Change class". Spans both columns as its own Year | Section pair. */}
-              <div className="col-span-2 flex flex-col gap-2">
+                  "Change class". Takes the full row as its own Year | Section pair. */}
+              <div className="flex flex-col gap-2 sm:col-span-3">
                 <Label>Class (optional)</Label>
                 <ClassCascade
                   key={programId || "none"}
@@ -491,7 +492,7 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
                 />
               </div>
               {create.isError && (
-                <div className="col-span-2">
+                <div className="sm:col-span-3">
                   <FormError>{errorMessage(create.error)}</FormError>
                 </div>
               )}
@@ -515,6 +516,11 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
   const update = useUpdateStudent();
   const classes = useClassOptions();
   const [displayName, setDisplayName] = useState(student.displayName);
+  // Identity fields — both are login handles (register number is what the student
+  // types to sign in; email is the Firebase identity behind it), so they're sent
+  // only when actually changed and the dialog warns before saving.
+  const [registerNumber, setRegisterNumber] = useState(student.registerNumber);
+  const [email, setEmail] = useState(student.email);
   const [rollNumber, setRollNumber] = useState(student.rollNumber ?? "");
   const [phone, setPhone] = useState(student.phone);
   const [dateOfBirth, setDateOfBirth] = useState(isoToDateInput(student.dateOfBirth));
@@ -528,7 +534,16 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
     (c) => c.isActive && c.programId === student.programId,
   );
 
-  const valid = displayName.trim() !== "" && phone.trim() !== "" && dateOfBirth !== "";
+  const registerChanged = registerNumber.trim() !== student.registerNumber;
+  const emailChanged = email.trim().toLowerCase() !== student.email.toLowerCase();
+  const identityChanged = registerChanged || emailChanged;
+
+  const valid =
+    displayName.trim() !== "" &&
+    phone.trim() !== "" &&
+    dateOfBirth !== "" &&
+    registerNumber.trim() !== "" &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -543,6 +558,10 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
           dateOfBirth,
           gender: (gender || null) as Gender | null,
           status,
+          // Send identity fields only when changed — an unchanged email would
+          // otherwise cost a pointless Firebase round-trip on every save.
+          ...(registerChanged ? { registerNumber: registerNumber.trim() } : {}),
+          ...(emailChanged ? { email: email.trim().toLowerCase() } : {}),
           ...(classId && classId !== currentClassId ? { classId } : {}),
         },
       },
@@ -552,20 +571,43 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Edit {student.displayName}</DialogTitle>
           <DialogDescription>
             Update details, class or lifecycle status. A non-active status disables sign-in until set
-            back to Active. Register number and email aren’t editable here.
+            back to Active. Register number and email are the student’s sign-in details — changing
+            either changes how they log in.
           </DialogDescription>
         </DialogHeader>
-        {/* Landscape 2-column layout so the form stays short. */}
-        <form id="edit-student-form" onSubmit={submit} className="grid grid-cols-2 gap-4">
-          <div className="col-span-2 flex flex-col gap-2">
+        {/* Landscape: 3 columns on desktop so the whole form fits without
+            scrolling, collapsing to 1 column on narrow screens. Fields are
+            grouped by row — identity, then details, then placement. */}
+        <form id="edit-student-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-2 sm:col-span-3">
             <Label htmlFor="e-name">Full name</Label>
             <Input id="e-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" required />
           </div>
+          {/* Sign-in details. Grouped together and flagged so an admin editing a
+              phone number doesn't change a login handle without noticing. */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="e-reg">Register number</Label>
+            <Input id="e-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} className="h-10!" required />
+          </div>
+          <div className="flex flex-col gap-2 sm:col-span-2">
+            <Label htmlFor="e-email">Email</Label>
+            <Input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-10!" required />
+          </div>
+          {identityChanged && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 sm:col-span-3 dark:text-amber-200">
+              {registerChanged && emailChanged
+                ? "This changes both sign-in details. "
+                : registerChanged
+                  ? "This changes the register number they sign in with. "
+                  : "This changes the email their account authenticates with. "}
+              Tell {student.displayName} before saving — their password is unchanged.
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <Label htmlFor="e-roll">Roll number</Label>
             <Input id="e-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
@@ -582,18 +624,7 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
             <Label htmlFor="e-gender">Gender</Label>
             <FormSelect id="e-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
           </div>
-          {/* Class (enrollment) for the active year — edited alongside details. */}
-          <div className="col-span-2 flex flex-col gap-2">
-            <Label>Class</Label>
-            <ClassCascade
-              classes={classesInProgram}
-              initialClassId={currentClassId}
-              onChange={setClassId}
-              loading={classes.isPending}
-              idPrefix="e"
-            />
-          </div>
-          <div className="col-span-2 flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="e-status">Status</Label>
             <FormSelect
               id="e-status"
@@ -603,8 +634,21 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
               placeholder="Select"
             />
           </div>
+          {/* Class (enrollment) for the active year — edited alongside details.
+              ClassCascade renders its own Year + Section pair, so it takes the
+              full row rather than sitting in a single column. */}
+          <div className="flex flex-col gap-2 sm:col-span-3">
+            <Label>Class</Label>
+            <ClassCascade
+              classes={classesInProgram}
+              initialClassId={currentClassId}
+              onChange={setClassId}
+              loading={classes.isPending}
+              idPrefix="e"
+            />
+          </div>
           {update.isError && (
-            <div className="col-span-2">
+            <div className="sm:col-span-3">
               <FormError>{errorMessage(update.error)}</FormError>
             </div>
           )}

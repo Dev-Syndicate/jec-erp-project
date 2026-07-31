@@ -82,6 +82,11 @@ export type ProvisionResult = {
 // Body for PATCH /api/students/[id] — editable detail fields; every one optional.
 export type StudentPatch = {
   displayName?: string;
+  // Sign-in details. Editable only via /api/students/[id] (the roster route
+  // refuses them); send only when actually changed — an email change costs a
+  // Firebase write and can 409 if the address is taken.
+  registerNumber?: string;
+  email?: string;
   rollNumber?: string | null;
   phone?: string;
   gender?: Gender | null;

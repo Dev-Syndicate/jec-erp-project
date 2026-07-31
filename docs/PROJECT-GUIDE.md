@@ -87,7 +87,8 @@ can(ctx, …)                                          // same checks, non-throw
 ⚠️ **The resource argument is optional, and omitting it silently degrades to an unscoped
 check.** That is the single easiest way to introduce a real security bug here — a Faculty
 member reading another program's students. Pass `{ programId }` on every program-owned
-resource. There is no test guarding this (§8), so it is a review checkpoint.
+resource. `test/lib/authorize.test.ts` pins both forms, but no test can tell whether a given
+route *remembered* to pass the resource — that stays a review checkpoint (§8).
 
 Never compare role-name strings inline; always go through `authorize`. For list `where`
 filters use `ctx.isInstitutionScoped` (unscoped → all rows, else `{ programId }`).
@@ -186,6 +187,28 @@ A generated temp password is returned **once** for delivery, and `mustChangePass
 forces a reset at first login. `regenerateTempPassword` is only safe for accounts still on
 their temp password.
 
+### Editing a student's sign-in details
+
+`registerNumber` and `email` are editable, but **only** through
+[`PATCH /api/students/[id]`](../src/app/api/students/[id]/route.ts). They behave differently:
+
+- **`registerNumber` is Neon-only.** Login resolves it fresh on every sign-in via
+  `/api/auth/resolve-roll`, so the student simply uses the new number next time.
+- **`email` lives in both systems.** Firebase authenticates on it; Neon stores the copy
+  `resolve-roll` hands the client. If the two diverge, **login breaks silently** — the client
+  gets an address Firebase doesn't know. So the route commits Neon first, calls
+  `updateFirebaseEmail` after, and **rolls the Neon email back** if Firebase rejects it
+  (usually `auth/email-already-exists`). This is the mirror image of the provisioning pattern
+  above: whichever system is written second is the one that must be undone.
+
+Both are `@unique`, so a clash returns **409** with which handle is taken, and an email change
+calls `invalidateAuthUser` so the 30s auth cache can't serve the stale identity.
+
+⚠️ **[`/api/roster`](../src/app/api/roster/route.ts) deliberately refuses both fields.** A class
+advisor may correct a name, roll number, phone, DOB or gender for their own class, but not
+change what a student signs in with. It parses into an allowlist, so identity keys are ignored
+rather than rejected — if you add fields there, keep identity out.
+
 ---
 
 ## 7. The real-data import
@@ -221,7 +244,7 @@ hand-written code (every such hit is in the generated Prisma client), `tsc --noE
 uniform.
 
 ```bash
-pnpm test          # vitest run — 108 unit tests, <1s
+pnpm test          # vitest run — 128 unit tests, <1s
 pnpm test:watch    # watch mode
 pnpm exec tsc --noEmit   # still the main correctness gate
 ```
@@ -238,6 +261,7 @@ so a test that wanders into the DB fails loudly instead of connecting to a datab
 | `test/lib/authorize.test.ts` | `authorize`/`can`: capability vs scoped form, cross-program refusal, 403 shape, message doesn't leak what was checked |
 | `test/lib/semester-derivation.test.ts` | `semesterNumber ⇄ (year, kind)` round-trip across 2- and 4-year degrees |
 | `test/lib/student-import.test.ts` | Parsing, date/gender normalisation, required fields, in-file duplicates, row cap — the reject-never-guess rule |
+| `test/api/student-patch.test.ts` | `PATCH /api/students/[id]` body rules — a login handle may never be blanked, email shape matches the importer |
 | `test/lib/prisma-errors.test.ts` | P2002/P2003/P2025 classification and hostile inputs |
 | `test/lib/india-geo.test.ts` | State/district lookup, sorting, case-insensitivity |
 

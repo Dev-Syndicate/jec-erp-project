@@ -3,8 +3,8 @@
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 JEC ERP — a college ERP for Jeppiaar Engineering College. Next.js web app now; a Flutter
-client is planned later against the same API. **Start every session by reading
-[docs/SESSION-HANDOFF.md](docs/SESSION-HANDOFF.md)** (current state + next task) and opening
+client is planned later against the same API. **New to this codebase? Read
+[docs/PROJECT-GUIDE.md](docs/PROJECT-GUIDE.md)** (how the system is built and why) and open
 [docs/schema-design.html](docs/schema-design.html) (the visual source of truth for the data model).
 
 ## Commands
@@ -13,6 +13,8 @@ client is planned later against the same API. **Start every session by reading
 pnpm dev                       # next dev — RESTART after any schema change (holds a stale Prisma client)
 pnpm build                     # next build
 pnpm lint                      # eslint
+pnpm test                      # vitest run — unit tests, no DB/network (<1s)
+pnpm test:watch                # vitest watch mode
 pnpm exec tsc --noEmit         # typecheck — keep this green; it's the main correctness gate
 pnpm exec prisma generate      # regenerate client into src/generated/prisma after schema edits
 pnpm exec prisma db push       # sync dev DB (non-destructive)
@@ -26,9 +28,15 @@ PRISMA_USER_CONSENT_FOR_DANGEROUS_AI_ACTION="Shall I proceed with resetting the 
   pnpm exec prisma db push --force-reset --accept-data-loss
 ```
 
-`generate` runs automatically on `postinstall`, `predev`, and `prebuild`. There is **no test
-runner configured** — Playwright is a dependency but no test scripts exist; don't invent
-`pnpm test`. Verify changes with `tsc --noEmit` + running the app.
+`generate` runs automatically on `postinstall`, `predev`, and `prebuild`.
+
+**Tests are Vitest, unit-only, and must never touch the DB or Firebase** — the dev database
+holds real student PII. [vitest.config.mts](vitest.config.mts) aliases `@/lib/db` and
+`@/lib/firebase-admin` to stubs that throw on any access, so an offending test fails loudly
+rather than connecting. Keep it that way: anything needing real DB behaviour belongs in a
+separate integration suite against a throwaway database. There is **no E2E suite** — Playwright
+is a dependency but no config or specs exist. Route handlers are not covered; verify those with
+`tsc --noEmit` + running the app. See [docs/PROJECT-GUIDE.md](docs/PROJECT-GUIDE.md) §8.
 
 ### Stale-Prisma-client traps (hit repeatedly — do all three when the client goes out of sync)
 1. `pnpm exec prisma generate`
@@ -159,11 +167,44 @@ distinguishes "unknown" from "inactive" — don't add leakage.
 
 ## Working style (from the project owner)
 
-- **One vertical slice at a time**, committed at clean checkpoints. The next slice is the Structure
-  setup (Degree → Branch → Program → Class), then Attendance — see SESSION-HANDOFF.md §2.
+- **One vertical slice at a time**, committed at clean checkpoints. Every backbone table has a
+  working slice; the remaining stubs are Announcements and Reports — see PROJECT-GUIDE.md §5.
 - **Confirm design decisions before writing lots of code.** Decisions already settled are in
-  SESSION-HANDOFF.md §4 — don't relitigate them.
+  PROJECT-GUIDE.md §10 — don't relitigate them.
 - For browser testing use `test-admin@jeppiaar.local`, **never** the owner's real admin account.
+
+## Two environments (test vs production)
+
+There are **two Firebase projects and two Neon databases**. They are never mixed.
+
+| | Firebase | Neon | Holds |
+|---|---|---|---|
+| **Test** | `jec-erp-auth` | `ep-calm-grass-aza4b8ea` (ap-southeast-1) | The real CSE data — 473 students, 13 faculty, 18 subjects, 229 timetable slots |
+| **Production** | `jec-erp-auth-464c5` | `ep-muddy-frost-awmjmyvv` (us-east-1) | **Empty — 0 tables.** Not yet bootstrapped. |
+
+- `.env` is **test**, and carries `ERP_ENV="test"`. It is what `pnpm dev` and every
+  script under `scripts/` use by default.
+- `.env.production.local` is **production**. **Nothing loads it automatically** — you
+  must name it explicitly. Its Firebase Admin key and Super Admin bootstrap values are
+  still blank.
+- **Vercel reads neither file.** It has its own copy of these variables in the project
+  dashboard; editing `.env.production.local` does not change the live site.
+
+### The script guard
+[`scripts/guard-env.ts`](scripts/guard-env.ts) — the bulk-mutating scripts call
+`assertTestEnv()` before building any client. It refuses unless `ERP_ENV === "test"`,
+**and** cross-checks the Neon host, so a mislabelled env file (`ERP_ENV=test` beside a
+prod connection string) is caught rather than trusted. There is deliberately no override
+flag: production is maintained through the app's own `/students` importer, not from a
+laptop. `seed-cse.mts --dry-run` is exempt — it parses spreadsheets and writes nothing.
+
+### Bootstrapping production (not yet done)
+Prod has no schema, so the **UI importer cannot be the starting point** — it requires an
+existing `programId`, `classId`, and an active `AcademicYear`, and there is no Super Admin
+to log in as. Order: `prisma db push` → `prisma db seed` (RBAC + Super Admin) →
+`seed-cse.mts` (structure, faculty, students). ⚠️ **Subjects and timetable are NOT in
+`seed-cse.mts`** — the 18 subjects and 229 slots in test were entered another way and will
+not carry over. After bootstrap, all further intake goes through the UI importer.
 
 **Env:** copy [.env.example](.env.example) → `.env` (it documents every variable). Groups:
 `DATABASE_URL` (pooled) + `DIRECT_URL` (unpooled) for Neon; `NEXT_PUBLIC_FIREBASE_*` (public web

@@ -187,10 +187,18 @@ A generated temp password is returned **once** for delivery, and `mustChangePass
 forces a reset at first login. `regenerateTempPassword` is only safe for accounts still on
 their temp password.
 
-### Editing a student's sign-in details
+### Editing sign-in details
 
-`registerNumber` and `email` are editable, but **only** through
-[`PATCH /api/students/[id]`](../src/app/api/students/[id]/route.ts). They behave differently:
+Identity fields are editable for both students and faculty, each through their own route
+only — [`PATCH /api/students/[id]`](../src/app/api/students/[id]/route.ts) and
+[`PATCH /api/faculty/[id]`](../src/app/api/faculty/[id]/route.ts).
+
+**Faculty** (`staffId`, `email`): faculty sign in with their **email directly**, with no
+register-number step, so email is the credential and `staffId` is only an administrative
+college id. Both are `@unique`; the email follows exactly the same Firebase-sync-and-rollback
+rule as the student email below.
+
+**Students** (`registerNumber`, `email`) behave differently from each other:
 
 - **`registerNumber` is Neon-only.** Login resolves it fresh on every sign-in via
   `/api/auth/resolve-roll`, so the student simply uses the new number next time.
@@ -244,7 +252,7 @@ hand-written code (every such hit is in the generated Prisma client), `tsc --noE
 uniform.
 
 ```bash
-pnpm test          # vitest run — 128 unit tests, <1s
+pnpm test          # vitest run — 149 unit tests, <1s
 pnpm test:watch    # watch mode
 pnpm exec tsc --noEmit   # still the main correctness gate
 ```
@@ -262,6 +270,7 @@ so a test that wanders into the DB fails loudly instead of connecting to a datab
 | `test/lib/semester-derivation.test.ts` | `semesterNumber ⇄ (year, kind)` round-trip across 2- and 4-year degrees |
 | `test/lib/student-import.test.ts` | Parsing, date/gender normalisation, required fields, in-file duplicates, row cap — the reject-never-guess rule |
 | `test/api/student-patch.test.ts` | `PATCH /api/students/[id]` body rules — a login handle may never be blanked, email shape matches the importer |
+| `test/api/faculty-patch.test.ts` | `PATCH /api/faculty/[id]` body rules — staff ID and the faculty sign-in email |
 | `test/lib/prisma-errors.test.ts` | P2002/P2003/P2025 classification and hostile inputs |
 | `test/lib/india-geo.test.ts` | State/district lookup, sorting, case-insensitivity |
 

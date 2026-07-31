@@ -774,6 +774,11 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
   const roleOptions = roles.data ?? [];
   const [programId, setProgramId] = useState(faculty.programId ?? "");
   const [displayName, setDisplayName] = useState(faculty.displayName);
+  // Identity fields. Only email is a credential — faculty sign in with it
+  // directly (no register-number step), so a change is flagged before saving.
+  // staffId is a college id and touches nothing but its own unique constraint.
+  const [staffId, setStaffId] = useState(faculty.staffId);
+  const [email, setEmail] = useState(faculty.email);
   const [designation, setDesignation] = useState(faculty.designation);
   const [phone, setPhone] = useState(faculty.phone);
   const [emergencyPhone, setEmergencyPhone] = useState(faculty.emergencyPhone ?? "");
@@ -794,11 +799,16 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
     });
   const rolesChanged = roleIds !== null && !sameSet(selectedRoleIds, initialRoleIds);
 
+  const staffIdChanged = staffId.trim() !== faculty.staffId;
+  const emailChanged = email.trim().toLowerCase() !== faculty.email.toLowerCase();
+
   const valid =
     displayName.trim() !== "" &&
     designation.trim() !== "" &&
     phone.trim() !== "" &&
     programId !== "" &&
+    staffId.trim() !== "" &&
+    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
     // Until /api/roles resolves, roleOptions is empty, so initialRoleIds is []
     // and the current roles can't be represented. Editing then would post an
     // empty/partial role set and silently strip roles the user never touched.
@@ -824,6 +834,10 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
           dateOfBirth: dateOfBirth || null,
           maritalStatus: (maritalStatus || null) as MaritalStatus | null,
           status,
+          // Identity fields only when changed — an unchanged email would
+          // otherwise cost a pointless Firebase round-trip on every save.
+          ...(staffIdChanged ? { staffId: staffId.trim() } : {}),
+          ...(emailChanged ? { email: email.trim().toLowerCase() } : {}),
           ...(programId && programId !== faculty.programId ? { programId } : {}),
           ...(rolesChanged ? { roleIds: selectedRoleIds } : {}),
         },
@@ -834,17 +848,19 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="sm:max-w-4xl">
         <DialogHeader>
           <DialogTitle>Edit {faculty.displayName}</DialogTitle>
           <DialogDescription>
             Update details, program or active status. Moving a program re-scopes the account. An
-            inactive status disables sign-in until set back to Active. Email and staff ID aren’t
-            editable here.
+            inactive status disables sign-in until set back to Active. Email is the address this
+            account signs in with.
           </DialogDescription>
         </DialogHeader>
-        <form id="edit-faculty-form" onSubmit={submit} className="grid grid-cols-2 gap-4">
-          <div className="flex flex-col gap-2">
+        {/* Landscape: 3 columns on desktop, 1 on narrow screens — matches the
+            student dialogs so every edit form reads the same way. */}
+        <form id="edit-faculty-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="flex flex-col gap-2 sm:col-span-2">
             <Label htmlFor="ef-name">Full name</Label>
             <Input id="ef-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" required />
           </div>
@@ -858,6 +874,22 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
               placeholder={programs.isPending ? "Loading…" : "Select a program"}
             />
           </div>
+          {/* Staff ID + email. Only the email is a credential, so only that one
+              raises a warning — a staff ID change is administrative. */}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="ef-staff">Staff ID</Label>
+            <Input id="ef-staff" value={staffId} onChange={(e) => setStaffId(e.target.value)} className="h-10!" required />
+          </div>
+          <div className="flex flex-col gap-2 sm:col-span-2">
+            <Label htmlFor="ef-email">Email</Label>
+            <Input id="ef-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-10!" required />
+          </div>
+          {emailChanged && (
+            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 sm:col-span-3 dark:text-amber-200">
+              This changes the email {faculty.displayName} signs in with. Tell them before saving —
+              their password is unchanged.
+            </div>
+          )}
           <div className="flex flex-col gap-2">
             <Label htmlFor="ef-designation">Designation</Label>
             <Input id="ef-designation" value={designation} onChange={(e) => setDesignation(e.target.value)} className="h-10!" required />
@@ -882,7 +914,7 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
             <Label htmlFor="ef-marital">Marital status</Label>
             <FormSelect id="ef-marital" value={maritalStatus} onChange={setMaritalStatus} options={MARITAL_OPTIONS} placeholder="Select" />
           </div>
-          <div className="col-span-2 flex flex-col gap-2">
+          <div className="flex flex-col gap-2 sm:col-span-2">
             <Label>Roles</Label>
             <RoleChecklist
               roles={roleOptions}
@@ -891,7 +923,7 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
               loading={roles.isPending}
             />
           </div>
-          <div className="col-span-2 flex flex-col gap-2">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="ef-status">Status</Label>
             <FormSelect
               id="ef-status"
@@ -902,7 +934,7 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
             />
           </div>
           {update.isError && (
-            <div className="col-span-2">
+            <div className="sm:col-span-3">
               <FormError>{errorMessage(update.error)}</FormError>
             </div>
           )}

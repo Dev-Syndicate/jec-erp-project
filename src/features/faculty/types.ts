@@ -68,6 +68,11 @@ export type ProvisionResult = {
 // Body for PATCH /api/faculty/[id] — editable detail fields; every one optional.
 export type FacultyPatch = {
   displayName?: string;
+  // Identity. Send only when actually changed: an email change is a Firebase
+  // write (faculty authenticate on it directly) and can 409 if the address is
+  // taken; staffId is a unique college id and touches nothing else.
+  staffId?: string;
+  email?: string;
   designation?: string;
   phone?: string;
   emergencyPhone?: string | null;

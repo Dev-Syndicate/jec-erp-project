@@ -1,10 +1,16 @@
 // Per-faculty attendance scoping — the resource-level check that layers on top of
-// the `mark Attendance` capability. `manage Attendance` (HOD/Super Admin) works
-// with any class in program scope; a plain `mark Attendance` holder (Faculty) is
-// confined to a class they teach or advise, and — when marking — to the specific
-// period they teach. The class advisor (class teacher) can VIEW the whole class and
-// owns the DAY (Master) record (assertOwnsDayRecord), but period (subject) marking
-// stays with each period's own teacher — the advisor is NOT a wildcard there.
+// the `mark Attendance` capability. Three levels, deliberately different in width:
+//
+//   VIEW a class        — `manage Attendance` (HOD/SA), the class advisor, or
+//                         anyone teaching ≥1 period in it (assertTeachesOrAdvises)
+//   CORRECT the DAY row — `manage Attendance` or the class advisor
+//                         (assertOwnsDayRecord)
+//   MARK a PERIOD       — the period's own teacher, FULL STOP (canMarkPeriod).
+//                         No role overrides this, not even Super Admin.
+//
+// The last one is the strict one: a subject hour is signed by whoever taught it, so
+// nobody marks a register in another teacher's name. Covering an absent teacher
+// means reassigning the timetable slot, which is explicit and auditable.
 //
 // Program scope is enforced separately in the routes (the resource-form authorize); this
 // module adds the "which class within the program" layer.
@@ -36,17 +42,23 @@ export async function assertTeachesOrAdvises(
 }
 
 /**
- * Mark-level predicate: may this user mark THIS period? Period (subject) attendance
- * belongs to the subject teacher, so true ONLY for `manage Attendance` (HOD/SA — the
- * substitute/override valve) or the faculty assigned to this period's timetable
- * slot. The class advisor is deliberately NOT special here: they own the DAY
- * (Master) record (assertOwnsDayRecord), not other teachers' subject hours.
+ * Mark-level predicate: may this user mark THIS period? A subject hour belongs to
+ * the person who taught it, so this is true ONLY for the faculty on the period's
+ * timetable slot — **no role overrides it**, HOD and Super Admin included.
+ *
+ * That is stricter than the surrounding checks on purpose. `manage Attendance`
+ * still lets a HOD VIEW any class in their program and correct the DAY record
+ * (assertOwnsDayRecord), but marking a colleague's subject hour would put that
+ * teacher's name on a register they never took. Covering an absent teacher means
+ * reassigning the timetable slot — an explicit, auditable act — rather than
+ * silently marking on their behalf. The class advisor is likewise NOT special
+ * here: they own the day record, not other teachers' hours.
  *
  * The GET uses this per period to tell the UI which periods are editable, so the
  * grid never presents an hour the user can't save (avoiding an edit-then-403).
  */
 export function canMarkPeriod(ctx: AuthContext, slotFacultyId: string): boolean {
-  return ctx.ability.can("manage", "Attendance") || slotFacultyId === ctx.user.id;
+  return slotFacultyId === ctx.user.id;
 }
 
 /** The throwing form of {@link canMarkPeriod}, gating the POST. */

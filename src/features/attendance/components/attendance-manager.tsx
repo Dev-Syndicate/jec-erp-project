@@ -4,8 +4,9 @@
 // working Saturday borrows a weekday's timetable (a "follows" picker), Sunday is
 // off. Then pick one of the day's scheduled periods and mark the roster. Saving
 // period 1 also sets the day's official attendance (server-side). Open to staff
-// who mark attendance (Super Admin / HOD / Faculty); a Faculty can only mark the
-// periods they teach — other hours open read-only (the API re-checks + scopes).
+// who mark attendance (HOD / Faculty). Everyone — HOD included — can only mark
+// the periods they personally teach; other hours open read-only (the API
+// re-checks + scopes).
 "use client";
 
 import { useState } from "react";
@@ -346,9 +347,9 @@ function Loaded({
   );
 }
 
-// Shown when the viewer opens a period they don't teach (and isn't an admin).
-// Period/subject attendance is the subject teacher's to mark; the class advisor
-// corrects the day record elsewhere, and HOD/Super Admin can mark any hour.
+// Shown when the viewer opens a period they don't teach. A subject hour is the
+// teacher's own to mark — no role overrides that — so a HOD viewing a colleague's
+// period lands here too. The class advisor corrects the day record elsewhere.
 function LockedPeriod({ period }: { period: DayPeriod }) {
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-4 py-10 text-center">
@@ -357,7 +358,8 @@ function LockedPeriod({ period }: { period: DayPeriod }) {
         Period {period.period} · {period.subjectCode} — {period.subjectName}
       </p>
       <p className="max-w-sm text-sm text-muted-foreground">
-        This is {period.facultyName}’s hour. Only the subject teacher (or an admin) can mark it.
+        This is {period.facultyName}’s hour — only they can mark it. If someone else took the
+        class, reassign the period on the timetable first.
       </p>
     </div>
   );

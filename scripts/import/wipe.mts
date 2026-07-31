@@ -3,10 +3,13 @@
 // Run: pnpm exec tsx scripts/import/wipe.mts --yes
 //
 // KEPT:    Role, Permission, RolePermission (the RBAC baseline the seed plants)
-//          + every User holding an INSTITUTION-scoped role (the Super Admins)
-//          + the personal accounts listed in KEEP_FIREBASE_ONLY below.
+//          + every User holding an INSTITUTION-scoped role (the Super Admins).
 // DELETED: every other User (students + faculty) and their Firebase identity,
 //          plus all structure, curriculum, records and time rows.
+//
+// Survival is decided ENTIRELY by the RBAC data: hold an INSTITUTION-scoped
+// role or be deleted. There is no by-email exemption list — if an account must
+// survive a wipe, give it an INSTITUTION role rather than special-casing it.
 //
 // Firebase identities are deleted alongside the Neon rows. Leaving them behind
 // would orphan the identity and, worse, make a re-import fail on "email already
@@ -23,6 +26,12 @@ import { getApps, initializeApp, cert } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 
 import { PrismaClient } from "../../src/generated/prisma/client.js";
+import { assertTestEnv } from "../guard-env.js";
+
+// Before ANY client is built: this deletes students and their Firebase
+// identities, so it must never run against production. Throws if ERP_ENV
+// is not "test" or if the connection string looks like prod.
+assertTestEnv("wipe.mts");
 
 neonConfig.webSocketConstructor = ws;
 
@@ -44,18 +53,6 @@ const firebaseApp =
     }),
   });
 const adminAuth = getAuth(firebaseApp);
-
-// Firebase accounts that have no Neon User row but must survive the wipe (e.g.
-// the project owner's personal logins). Admins are detected from RBAC data and
-// are always kept — this is only for identities with no ERP row of their own.
-// Comma-separated in the env so no personal address is committed:
-//   WIPE_KEEP_EMAILS="someone@example.com,other@example.com"
-const KEEP_FIREBASE_ONLY = new Set(
-  (process.env.WIPE_KEEP_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim().toLowerCase())
-    .filter(Boolean),
-);
 
 async function main() {
   if (!process.argv.includes("--yes")) {
@@ -126,10 +123,10 @@ async function main() {
   await db.user.updateMany({ where: { id: { in: [...keepUserIds] } }, data: { programId: null } });
 
   // --- Firebase: remove the identities we just unlinked --------------------
-  const keepEmails = new Set([
-    ...adminUsers.map((u) => u.email.toLowerCase()),
-    ...KEEP_FIREBASE_ONLY,
-  ]);
+  // Only the admins survive. Any other Firebase identity — including one with
+  // no Neon row at all — is deleted, so a stale identity can't linger and block
+  // a later import from claiming its email.
+  const keepEmails = new Set(adminUsers.map((u) => u.email.toLowerCase()));
   const keepUids = new Set(adminUsers.map((u) => u.firebaseUid));
 
   const toDelete: string[] = [];

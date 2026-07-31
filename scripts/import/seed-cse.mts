@@ -34,10 +34,16 @@ import { getAuth, type Auth } from "firebase-admin/auth";
 
 import { PrismaClient } from "../../src/generated/prisma/client.js";
 import { readFaculty, readStudents, type RejectedRow } from "./xlsx-source.js";
-
-neonConfig.webSocketConstructor = ws;
+import { assertTestEnv } from "../guard-env.js";
 
 const DRY_RUN = process.argv.includes("--dry-run");
+
+// Bulk-provisions hundreds of accounts in Neon AND Firebase. A dry run only
+// parses the spreadsheets and writes nothing, so it is allowed anywhere; a real
+// run is test-only. Production is bootstrapped deliberately, not from here.
+if (!DRY_RUN) assertTestEnv("seed-cse.mts");
+
+neonConfig.webSocketConstructor = ws;
 
 const STUDENT_FILE = "CSE ERP Data.xlsx";
 const FACULTY_FILE = "CSE_Faculty Details.xlsx";

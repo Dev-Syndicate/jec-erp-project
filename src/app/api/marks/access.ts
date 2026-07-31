@@ -1,13 +1,20 @@
 // Per-faculty internal-marks scoping — the resource-level check layered on top of
-// the `enter Marks` capability. `manage Marks` doesn't exist as a distinct grant;
-// program-wide authority comes from `manage all` (Super Admin) or the HOD's
-// program-scoped grants. The coarse gate for a plain Faculty is the TIMETABLE:
-// they may enter/read marks ONLY for a (subject, class, semester) they teach at
-// least one period of this semester. Building the timetable IS the teaching
-// allocation — there's no separate FacultyAssignment step to keep in sync (the
-// FacultyAssignment table exists in the schema but is intentionally unused; the
-// timetable is the single source of who-teaches-what). Same source the attendance
-// mark-gate uses.
+// the `enter Marks` capability. Two levels, deliberately different in width:
+//
+//   READ  marks — a marks admin (HOD/SA in program scope) OR the subject's
+//                 teacher (assertReadsMarks). HODs keep oversight of results.
+//   ENTER marks — the subject's own teacher, FULL STOP (assertEntersMarks).
+//                 No role overrides it, not even Super Admin.
+//
+// The write rule mirrors attendance's per-period gate: a mark is the judgement of
+// whoever taught and assessed the subject, and `markedById` stamps the record, so
+// nobody enters a result in another teacher's name. A subject changing hands means
+// reassigning the timetable slot.
+//
+// The TIMETABLE is the source of who-teaches-what: building it IS the teaching
+// allocation, so there's no separate FacultyAssignment step to keep in sync (that
+// table exists in the schema but is intentionally unused). Same source the
+// attendance mark-gate uses.
 //
 // Program scope is enforced separately in the routes (the resource-form authorize
 // against the class's programId); this module adds the "which subject/class within
@@ -31,21 +38,16 @@ export function isMarksAdmin(ctx: AuthContext, programId: string | null): boolea
   return can(ctx, "manage", "Subject", { programId });
 }
 
-/**
- * May this user enter/read marks for THIS (subject, class, semester)? Passes for a
- * marks admin (HOD/SA in program scope), or the faculty who teaches at least one
- * timetable period of this subject to this class this semester. Throws 403
- * otherwise.
- *
- * The class's programId is used for the admin scope check, so pass a class that
- * belongs to the subject's program (the routes validate that pairing first).
- */
-export async function assertMarksSubject(
-  ctx: AuthContext,
-  args: { classId: string; subjectId: string; semesterId: string; programId: string | null },
-): Promise<void> {
-  if (isMarksAdmin(ctx, args.programId)) return;
-  const teaches = await db.timetableSlot.findFirst({
+type SubjectTarget = {
+  classId: string;
+  subjectId: string;
+  semesterId: string;
+  programId: string | null;
+};
+
+/** Does this user teach ≥1 timetable period of this subject to this class? */
+export async function teachesSubject(ctx: AuthContext, args: SubjectTarget): Promise<boolean> {
+  const slot = await db.timetableSlot.findFirst({
     where: {
       facultyId: ctx.user.id,
       subjectId: args.subjectId,
@@ -54,7 +56,36 @@ export async function assertMarksSubject(
     },
     select: { id: true },
   });
-  if (!teaches) {
-    throw new AuthError(403, "You can only enter marks for a subject you teach this semester.");
-  }
+  return slot !== null;
+}
+
+/**
+ * READ level: may this user look at marks for THIS (subject, class, semester)?
+ * Passes for a marks admin (HOD/SA in program scope) — departmental oversight of
+ * results — or the subject's own teacher. Throws 403 otherwise.
+ *
+ * The class's programId is used for the admin scope check, so pass a class that
+ * belongs to the subject's program (the routes validate that pairing first).
+ */
+export async function assertReadsMarks(ctx: AuthContext, args: SubjectTarget): Promise<void> {
+  if (isMarksAdmin(ctx, args.programId)) return;
+  if (await teachesSubject(ctx, args)) return;
+  throw new AuthError(403, "You can only view marks for a subject you teach this semester.");
+}
+
+/**
+ * WRITE level: may this user ENTER marks for THIS (subject, class, semester)?
+ * ONLY the faculty who teaches it — **no role overrides this**, HOD and Super
+ * Admin included.
+ *
+ * Deliberately stricter than {@link assertReadsMarks}, and the mirror of
+ * attendance's per-period rule: a mark is the judgement of whoever taught and
+ * assessed the subject, so nobody records a result in another teacher's name
+ * (`markedById` would then name someone who never saw the paper). If a subject
+ * changes hands, reassign the timetable slot — explicit and auditable — rather
+ * than entering marks on their behalf.
+ */
+export async function assertEntersMarks(ctx: AuthContext, args: SubjectTarget): Promise<void> {
+  if (await teachesSubject(ctx, args)) return;
+  throw new AuthError(403, "Only the subject's teacher can enter marks for it.");
 }

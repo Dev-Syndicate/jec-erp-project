@@ -7,6 +7,10 @@
 // one period of this semester. A marks admin (HOD/Super Admin — `manage Subject`
 // in program scope) gets every (class × subject) scheduled in program scope; a
 // plain Faculty gets only their own. Always filtered to the one active semester.
+//
+// Each entry carries `canEnter`: an admin can READ any of their program's
+// subjects but may only ENTER marks for one they personally teach, so the picker
+// marks the rest as view-only instead of hiding them.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isMarksAdmin } from "../access";
@@ -55,6 +59,18 @@ export async function GET(req: Request) {
       orderBy: [{ class: { year: "asc" } }, { class: { section: "asc" } }, { subject: { code: "asc" } }],
     });
 
+    // The (class, subject) pairs this viewer personally teaches — the set that is
+    // actually editable. For a non-admin it equals the list above; for an admin it
+    // is the subset of their program's subjects they teach themselves.
+    const ownSlots = admin
+      ? await db.timetableSlot.findMany({
+          where: { semesterId: semester.id, facultyId: ctx.user.id },
+          distinct: ["classId", "subjectId"],
+          select: { classId: true, subjectId: true },
+        })
+      : slots.map((s) => ({ classId: s.classId, subjectId: s.subjectId }));
+    const ownTaught = new Set(ownSlots.map((s) => `${s.classId}::${s.subjectId}`));
+
     return Response.json({
       semester: {
         id: semester.id,
@@ -68,7 +84,17 @@ export async function GET(req: Request) {
         subjectCode: s.subject.code,
         subjectName: s.subject.name,
         classLabel: `${s.class.program.degree.code} · ${s.class.program.branch.code} · ${roman(s.class.year)}-${s.class.section}`,
+        // Year + section separately so the client can drill down Year → Section →
+        // Subject instead of scrolling one flat list of every class × subject
+        // (a HOD sees the whole department's, which is 20+ entries).
+        year: s.class.year,
+        section: s.class.section,
         programId: s.class.programId,
+        // Only the subject's own teacher may enter marks. Computed from the
+        // viewer's OWN slots, not this row's facultyId: `distinct` keeps one
+        // arbitrary period per (class, subject), which for a co-taught subject
+        // may belong to a different teacher and would wrongly read as false.
+        canEnter: ownTaught.has(`${s.classId}::${s.subjectId}`),
       })),
     });
   } catch (err) {

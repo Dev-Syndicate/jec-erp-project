@@ -5,12 +5,15 @@
 //                         anyone teaching ≥1 period in it (assertTeachesOrAdvises)
 //   CORRECT the DAY row — `manage Attendance` or the class advisor
 //                         (assertOwnsDayRecord)
-//   MARK a PERIOD       — the period's own teacher, FULL STOP (canMarkPeriod).
-//                         No role overrides this, not even Super Admin.
+//   MARK a PERIOD       — the period's own teacher, or a substitute assigned for
+//                         that exact date (canMarkPeriod). No ROLE overrides it,
+//                         not even Super Admin.
 //
 // The last one is the strict one: a subject hour is signed by whoever taught it, so
-// nobody marks a register in another teacher's name. Covering an absent teacher
-// means reassigning the timetable slot, which is explicit and auditable.
+// nobody marks a register in another teacher's name. Covering an absent teacher is
+// therefore an explicit, auditable GRANT (SlotSubstitution: who covers, which date,
+// who arranged it) rather than a role that can reach into anyone's hours — and
+// PeriodAttendance.markedById still records who actually marked.
 //
 // Program scope is enforced separately in the routes (the resource-form authorize); this
 // module adds the "which class within the program" layer.
@@ -21,14 +24,21 @@ import { AuthError, type AuthContext } from "@/lib/auth";
 
 /**
  * Read-level: may this user view/work with this class's attendance at all?
- * Passes for `manage Attendance`, the class advisor, or anyone who teaches at
- * least one period in the class this semester. Throws 403 otherwise.
+ * Passes for `manage Attendance`, the class advisor, anyone who teaches at
+ * least one period in the class this semester, or a substitute covering a period
+ * in it on `date`. Throws 403 otherwise.
+ *
+ * The substitute case matters: a covering teacher usually teaches nothing else in
+ * that class, so without it they'd be refused here and never reach the period
+ * check that actually grants them the hour. `date` is optional — callers with no
+ * particular date (they exist) keep the teaches/advises behaviour.
  */
 export async function assertTeachesOrAdvises(
   ctx: AuthContext,
   classId: string,
   advisorId: string | null,
   semesterId: string,
+  date?: Date,
 ): Promise<void> {
   if (ctx.ability.can("manage", "Attendance")) return;
   if (advisorId && advisorId === ctx.user.id) return;
@@ -36,35 +46,82 @@ export async function assertTeachesOrAdvises(
     where: { classId, semesterId, facultyId: ctx.user.id },
     select: { id: true },
   });
-  if (!teaches) {
-    throw new AuthError(403, "You can only work with attendance for a class you teach or advise.");
+  if (teaches) return;
+  if (date) {
+    const covering = await db.slotSubstitution.findFirst({
+      where: { date, substituteId: ctx.user.id, slot: { classId, semesterId } },
+      select: { id: true },
+    });
+    if (covering) return;
   }
+  throw new AuthError(403, "You can only work with attendance for a class you teach or advise.");
 }
 
 /**
- * Mark-level predicate: may this user mark THIS period? A subject hour belongs to
- * the person who taught it, so this is true ONLY for the faculty on the period's
- * timetable slot — **no role overrides it**, HOD and Super Admin included.
+ * Mark-level predicate: may this user mark THIS period, on THIS date? True for
+ * the faculty on the period's timetable slot, or for a substitute explicitly
+ * assigned to cover that slot on that date — **no ROLE overrides it**, HOD and
+ * Super Admin included.
  *
  * That is stricter than the surrounding checks on purpose. `manage Attendance`
  * still lets a HOD VIEW any class in their program and correct the DAY record
  * (assertOwnsDayRecord), but marking a colleague's subject hour would put that
- * teacher's name on a register they never took. Covering an absent teacher means
- * reassigning the timetable slot — an explicit, auditable act — rather than
- * silently marking on their behalf. The class advisor is likewise NOT special
- * here: they own the day record, not other teachers' hours.
+ * teacher's name on a register they never took. A HOD who needs an hour covered
+ * assigns a substitute for that date — which is a recorded grant naming the
+ * covering teacher, the date and the assigner — instead of marking it themselves.
+ * The class advisor is likewise NOT special here: they own the day record, not
+ * other teachers' hours.
+ *
+ * `substituteSlotIds` is the set of slot ids this user is covering ON THE DATE
+ * BEING MARKED, resolved once per request (see substitutionsFor). It is a
+ * parameter rather than a lookup so the GET can call this per period without a
+ * query per period.
  *
  * The GET uses this per period to tell the UI which periods are editable, so the
  * grid never presents an hour the user can't save (avoiding an edit-then-403).
  */
-export function canMarkPeriod(ctx: AuthContext, slotFacultyId: string): boolean {
-  return slotFacultyId === ctx.user.id;
+export function canMarkPeriod(
+  ctx: AuthContext,
+  slotFacultyId: string,
+  slotId: string,
+  substituteSlotIds: ReadonlySet<string>,
+): boolean {
+  return slotFacultyId === ctx.user.id || substituteSlotIds.has(slotId);
 }
 
 /** The throwing form of {@link canMarkPeriod}, gating the POST. */
-export function assertMarksPeriod(ctx: AuthContext, slotFacultyId: string): void {
-  if (canMarkPeriod(ctx, slotFacultyId)) return;
-  throw new AuthError(403, "You can only mark attendance for a period you teach.");
+export function assertMarksPeriod(
+  ctx: AuthContext,
+  slotFacultyId: string,
+  slotId: string,
+  substituteSlotIds: ReadonlySet<string>,
+): void {
+  if (canMarkPeriod(ctx, slotFacultyId, slotId, substituteSlotIds)) return;
+  throw new AuthError(
+    403,
+    "You can only mark attendance for a period you teach, or one you've been assigned to cover.",
+  );
+}
+
+/**
+ * The slot ids this user is covering on `date` — the substitution grants that
+ * apply to this request. Resolved once and passed to canMarkPeriod/
+ * assertMarksPeriod so neither needs a query of its own.
+ *
+ * Scoped to the caller: it only ever returns grants made TO them, so it cannot
+ * widen anyone else's rights.
+ */
+export async function substitutionsFor(
+  ctx: AuthContext,
+  date: Date,
+  slotIds: string[],
+): Promise<Set<string>> {
+  if (slotIds.length === 0) return new Set();
+  const rows = await db.slotSubstitution.findMany({
+    where: { date, substituteId: ctx.user.id, slotId: { in: slotIds } },
+    select: { slotId: true },
+  });
+  return new Set(rows.map((r) => r.slotId));
 }
 
 /**

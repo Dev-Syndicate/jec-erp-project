@@ -23,7 +23,12 @@
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
-import { assertMarksPeriod, assertTeachesOrAdvises, canMarkPeriod } from "./access";
+import {
+  assertMarksPeriod,
+  assertTeachesOrAdvises,
+  canMarkPeriod,
+  substitutionsFor,
+} from "./access";
 import { dayName, isStatus, parseDateOnly, resolveWeekday, roman } from "./dto";
 
 export const dynamic = "force-dynamic";
@@ -79,8 +84,10 @@ export async function GET(req: Request) {
     }
 
     // A program-scoped Faculty may only view a class they teach or advise; HOD/SA
-    // (manage Attendance) can view any class in program scope.
-    await assertTeachesOrAdvises(ctx, classId, klass.advisorId, semester.id);
+    // (manage Attendance) can view any class in program scope. A substitute
+    // covering a period here on this date passes too — otherwise they'd be turned
+    // away before reaching the hour they were assigned.
+    await assertTeachesOrAdvises(ctx, classId, klass.advisorId, semester.id, date);
 
     // Periods, roster and saved marks are independent of one another — issued
     // together so the screen costs one round-trip's latency instead of three.
@@ -117,6 +124,24 @@ export async function GET(req: Request) {
       }),
     ]);
 
+    // Covers arranged for this class on this date. Needs the slot ids, so it
+    // follows the batch above rather than joining it.
+    const covers = await db.slotSubstitution.findMany({
+      relationLoadStrategy: "join",
+      where: { date, slotId: { in: slots.map((s) => s.id) } },
+      include: { substitute: { select: { id: true, displayName: true } } },
+    });
+    // The caller's own grants gate marking; the full list is display-only.
+    const mySubstitutions = new Set(
+      covers.filter((c) => c.substituteId === ctx.user.id).map((c) => c.slotId),
+    );
+    const coverBySlot = new Map(
+      covers.map((c) => [
+        c.slotId,
+        { facultyId: c.substitute.id, facultyName: c.substitute.displayName, reason: c.reason },
+      ]),
+    );
+
     return Response.json({
       classId,
       classLabel: classLabel(klass),
@@ -136,7 +161,10 @@ export async function GET(req: Request) {
         facultyName: s.faculty.displayName,
         // Whether THIS viewer may mark this period, so the UI locks the hours that
         // aren't theirs instead of letting them edit-then-403.
-        canMark: canMarkPeriod(ctx, s.facultyId),
+        canMark: canMarkPeriod(ctx, s.facultyId, s.id, mySubstitutions),
+        // Set when someone is covering this hour today, so the grid can say who
+        // is taking it instead of showing only the absent teacher's name.
+        coveredBy: coverBySlot.get(s.id) ?? null,
       })),
       roster: enrollments.map((e) => ({
         studentId: e.student.id,
@@ -209,7 +237,7 @@ export async function POST(req: Request) {
           period,
         },
       },
-      select: { subjectId: true, facultyId: true },
+      select: { id: true, subjectId: true, facultyId: true },
     });
     if (!slot) {
       return Response.json(
@@ -218,10 +246,11 @@ export async function POST(req: Request) {
       );
     }
 
-    // A plain `mark` holder (Faculty) may only mark the period they teach;
-    // `manage Attendance` (HOD/SA) may mark any period for the class. The advisor
-    // owns the day record, not other teachers' subject hours (see access.ts).
-    assertMarksPeriod(ctx, slot.facultyId);
+    // The period's own teacher, or whoever was assigned to cover it on THIS date.
+    // No role reaches into another teacher's hour — not the advisor, not HOD, not
+    // Super Admin; a HOD who needs it covered assigns a substitute (see access.ts).
+    const mySubstitutions = await substitutionsFor(ctx, date, [slot.id]);
+    assertMarksPeriod(ctx, slot.facultyId, slot.id, mySubstitutions);
 
     // Every marked student must be on this class's active-year roster.
     const enrolled = await db.enrollment.findMany({

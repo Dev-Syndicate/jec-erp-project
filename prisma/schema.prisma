@@ -251,15 +251,17 @@ model User {
   roles UserRole[]
 
   // Staff relationships.
-  advisingClasses    Class[] // classes this user mentors
-  facultyAssignments FacultyAssignment[] // subjects this user teaches
-  timetableSlots     TimetableSlot[] // scheduled periods this user takes
-  markedMaster       MasterAttendance[]  @relation("MasterMarkedBy")
-  markedPeriod       PeriodAttendance[]  @relation("PeriodMarkedBy")
-  enteredMarks       InternalMark[]      @relation("MarkEnteredBy")
-  workingDays         WorkingDay[]       @relation("WorkingDayDeclaredBy") // working Saturdays this user declared
-  leaveTeacherActions LeaveRequest[]     @relation("LeaveTeacherAction") // requests this user approved/rejected as class teacher
-  leaveHodActions     LeaveRequest[]     @relation("LeaveHodAction")     // requests this user approved/rejected as HOD
+  advisingClasses       Class[] // classes this user mentors
+  facultyAssignments    FacultyAssignment[] // subjects this user teaches
+  timetableSlots        TimetableSlot[] // scheduled periods this user takes
+  markedMaster          MasterAttendance[]  @relation("MasterMarkedBy")
+  markedPeriod          PeriodAttendance[]  @relation("PeriodMarkedBy")
+  enteredMarks          InternalMark[]      @relation("MarkEnteredBy")
+  workingDays           WorkingDay[]        @relation("WorkingDayDeclaredBy") // working Saturdays this user declared
+  leaveTeacherActions   LeaveRequest[]      @relation("LeaveTeacherAction") // requests this user approved/rejected as class teacher
+  leaveHodActions       LeaveRequest[]      @relation("LeaveHodAction") // requests this user approved/rejected as HOD
+  substitutingFor       SlotSubstitution[]  @relation("SubstituteFor") // periods this user is covering
+  substitutionsAssigned SlotSubstitution[]  @relation("SubstitutionAssignedBy") // covers this user arranged
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -541,6 +543,9 @@ model TimetableSlot {
   facultyId  String
   faculty    User      @relation(fields: [facultyId], references: [id])
 
+  // Dated one-day covers for this slot (see SlotSubstitution).
+  substitutions SlotSubstitution[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -549,6 +554,45 @@ model TimetableSlot {
   @@index([semesterId])
   @@index([subjectId])
   @@index([facultyId])
+}
+
+// A ONE-DAY cover for a timetable slot: who takes this hour when its usual
+// teacher can't. Marking a period is otherwise the slot teacher's alone
+// (see src/app/api/attendance/access.ts), which left a class with no way to
+// record attendance on a day that teacher is absent.
+//
+// Dated and additive on purpose. Editing TimetableSlot.facultyId would work for
+// today and then be WRONG every following week, because the slot is the
+// permanent schedule; a substitution covers exactly one date and leaves the base
+// timetable untouched. It grants marking rights for that (slot, date) only.
+//
+// The subject and the class are NOT overridable — a substitute teaches the
+// scheduled subject to the scheduled class. Only who marks it changes, and
+// PeriodAttendance.markedById still records who actually did.
+model SlotSubstitution {
+  id     String        @id @default(cuid())
+  slotId String
+  slot   TimetableSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  date   DateTime      @db.Date
+
+  // The covering faculty — who may mark this period on this date.
+  substituteId String
+  substitute   User   @relation("SubstituteFor", fields: [substituteId], references: [id])
+
+  // Who arranged the cover (HOD/admin). Audit: a substitution is a granted
+  // permission, so the grantor is part of the record.
+  assignedById String
+  assignedBy   User   @relation("SubstitutionAssignedBy", fields: [assignedById], references: [id])
+
+  reason String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One cover per slot per day — reassigning replaces it rather than stacking.
+  @@unique([slotId, date])
+  @@index([substituteId, date])
+  @@index([date])
 }
 
 // ---------------------------------------------------------------------------
@@ -563,20 +607,20 @@ model TimetableSlot {
 // today), but the class teacher (advisor) can correct it: a corrected row sets
 // manuallyAdjusted=true, which the period-1 auto-seed then leaves untouched.
 model MasterAttendance {
-  id         String           @id @default(cuid())
-  studentId  String
-  student    Student          @relation(fields: [studentId], references: [id])
-  classId    String
-  class      Class            @relation(fields: [classId], references: [id])
-  semesterId String
-  semester   Semester         @relation(fields: [semesterId], references: [id])
-  date       DateTime         @db.Date
-  status     AttendanceStatus
+  id               String           @id @default(cuid())
+  studentId        String
+  student          Student          @relation(fields: [studentId], references: [id])
+  classId          String
+  class            Class            @relation(fields: [classId], references: [id])
+  semesterId       String
+  semester         Semester         @relation(fields: [semesterId], references: [id])
+  date             DateTime         @db.Date
+  status           AttendanceStatus
   // True once the class teacher has manually set this day's record — the period-1
   // auto-seed skips these so a re-mark of period 1 can't clobber a correction.
-  manuallyAdjusted Boolean    @default(false)
-  markedById String
-  markedBy   User             @relation("MasterMarkedBy", fields: [markedById], references: [id])
+  manuallyAdjusted Boolean          @default(false)
+  markedById       String
+  markedBy         User             @relation("MasterMarkedBy", fields: [markedById], references: [id])
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

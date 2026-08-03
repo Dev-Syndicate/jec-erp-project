@@ -12,9 +12,12 @@ import {
   activateSemester,
   createAcademicYear,
   createSemester,
+  declareWorkingDay,
   deleteAcademicYear,
   deleteSemester,
+  deleteWorkingDay,
   fetchAcademicYears,
+  fetchWorkingDays,
   updateAcademicYear,
   updateSemester,
 } from "@/features/academic/api/academic-api";
@@ -85,4 +88,32 @@ export function useDeleteSemester() {
 export function useActivateSemester() {
   const invalidate = useInvalidateYears();
   return useMutation({ mutationFn: (id: string) => activateSemester(id), onSuccess: invalidate });
+}
+
+// --- Working Saturdays ----------------------------------------------------
+
+const WORKING_DAYS_KEY = ["academic", "working-days"] as const;
+
+export function useWorkingDays() {
+  return useQuery({ queryKey: WORKING_DAYS_KEY, queryFn: fetchWorkingDays });
+}
+
+function useInvalidateWorkingDays() {
+  const qc = useQueryClient();
+  return () => {
+    qc.invalidateQueries({ queryKey: WORKING_DAYS_KEY });
+    // The attendance grid resolves Saturdays from these declarations, so its
+    // cached rosters are stale the moment one changes.
+    qc.invalidateQueries({ queryKey: ["attendance"] });
+  };
+}
+
+export function useDeclareWorkingDay() {
+  const invalidate = useInvalidateWorkingDays();
+  return useMutation({ mutationFn: declareWorkingDay, onSuccess: invalidate });
+}
+
+export function useDeleteWorkingDay() {
+  const invalidate = useInvalidateWorkingDays();
+  return useMutation({ mutationFn: (id: string) => deleteWorkingDay(id), onSuccess: invalidate });
 }

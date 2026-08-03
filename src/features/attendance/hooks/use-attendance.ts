@@ -1,11 +1,11 @@
 // TanStack Query hooks for the Attendance feature. The roster query is keyed by
-// (class, date, followsDay); saving a period invalidates that key so the grid
+// (class, date); saving a period invalidates that key so the grid
 // re-reads the just-saved marks. Class options are their own lightly-cached query.
 "use client";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { DayInput, MarkInput, Weekday } from "@/features/attendance/types";
+import type { DayInput, MarkInput } from "@/features/attendance/types";
 import {
   fetchAttendanceReport,
   fetchClassOptions,
@@ -16,17 +16,13 @@ import {
   saveDayAttendance,
 } from "@/features/attendance/api/attendance-api";
 
-// `enabled` is decided by the caller — a Saturday must have chosen its followsDay
-// before the request is valid (otherwise the API would 400).
-export function useRoster(
-  classId: string | null,
-  date: string,
-  followsDay: Weekday | undefined,
-  enabled: boolean,
-) {
+// `enabled` is decided by the caller (a class and date must be chosen). A
+// Saturday needs nothing extra: the server resolves it from the admin's
+// WorkingDay declaration, and an undeclared one returns a 400 the UI surfaces.
+export function useRoster(classId: string | null, date: string, enabled: boolean) {
   return useQuery({
-    queryKey: ["attendance", "roster", classId, date, followsDay ?? null],
-    queryFn: () => fetchRoster(classId as string, date, followsDay),
+    queryKey: ["attendance", "roster", classId, date],
+    queryFn: () => fetchRoster(classId as string, date),
     enabled,
   });
 }
@@ -63,7 +59,7 @@ export function useSaveAttendance() {
     mutationFn: (input: MarkInput) => saveAttendance(input),
     onSuccess: (_data, input) =>
       qc.invalidateQueries({
-        queryKey: ["attendance", "roster", input.classId, input.date, input.followsDay ?? null],
+        queryKey: ["attendance", "roster", input.classId, input.date],
       }),
   });
 }

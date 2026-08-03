@@ -2,8 +2,12 @@
 // by GET (roster view) + POST (save). Attendance is keyed on the actual `date`,
 // but the timetable is Mon–Fri: a working Saturday BORROWS a weekday's grid. So
 // the "effective weekday" a date runs on is resolved here — Mon–Fri run as
-// themselves; a Saturday runs the weekday it `followsDay`; Sunday is off.
+// themselves; a working Saturday runs the weekday an admin DECLARED for that
+// date (the WorkingDay table); Sunday is off. An undeclared Saturday is a
+// holiday — attendance can't be marked on it.
 import "server-only";
+
+import { db } from "@/lib/db";
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"] as const;
 export const roman = (n: number) => ROMAN[n] ?? String(n);
@@ -31,25 +35,35 @@ export function dayName(date: Date): DayName {
   return DOW[date.getUTCDay()];
 }
 
-const isFollowsDay = (v: unknown): v is Weekday => WEEKDAYS.includes(v as Weekday);
+export const isWeekday = (v: unknown): v is Weekday => WEEKDAYS.includes(v as Weekday);
 
 /**
  * Resolve which weekday's timetable a date runs on.
- * - Mon–Fri → that weekday (any `followsDay` is ignored).
- * - Sat → the weekday it borrows (`followsDay`, required); a working Saturday.
+ * - Mon–Fri → that weekday.
+ * - Sat → the weekday declared in `WorkingDay` for that exact date. If no row
+ *   exists the Saturday is a holiday and marking is refused; the teacher has no
+ *   say, so two teachers can't read different grids for one date.
  * - Sun → not a working day.
+ *
+ * Async because a Saturday needs the lookup. The caller passes the resolved
+ * declaration rather than a client-supplied weekday — a working Saturday is an
+ * admin's decision, recorded once (see WorkingDay in the schema).
  */
-export function resolveWeekday(
-  date: Date,
-  followsDay: unknown,
-): { weekday: Weekday } | { error: string } {
+export async function resolveWeekday(date: Date): Promise<{ weekday: Weekday } | { error: string }> {
   const name = dayName(date);
   if (name === "SUN") return { error: "Sunday isn't a working day." };
   if (name === "SAT") {
-    if (!isFollowsDay(followsDay)) {
-      return { error: "Pick which weekday's timetable this Saturday follows." };
+    const declared = await db.workingDay.findUnique({
+      where: { date },
+      select: { followsDay: true },
+    });
+    if (!declared) {
+      return {
+        error:
+          "This Saturday hasn't been declared a working day. Ask an admin to declare it before marking attendance.",
+      };
     }
-    return { weekday: followsDay };
+    return { weekday: declared.followsDay };
   }
   return { weekday: name };
 }

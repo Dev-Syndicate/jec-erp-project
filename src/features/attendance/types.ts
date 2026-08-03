@@ -40,6 +40,9 @@ export type RosterView = {
   classLabel: string; // "B.E · CSE · II-A"
   date: string; // YYYY-MM-DD
   weekday: Weekday; // resolved (Sat → the borrowed weekday)
+  // Set only on a declared working Saturday — the weekday an admin said it
+  // runs. The UI states it read-only; nobody picks it here.
+  followsDay?: Weekday;
   semesterId: string;
   semesterLabel: string; // "2025-2026 · Odd"
   periods: DayPeriod[];
@@ -47,12 +50,12 @@ export type RosterView = {
   marks: ExistingMark[];
 };
 
-// Body for POST /api/attendance — save one period's marks.
+// Body for POST /api/attendance — save one period's marks. Saturdays need
+// nothing extra: the server resolves the working-day declaration itself.
 export type MarkInput = {
   classId: string;
   date: string;
   period: number;
-  followsDay?: Weekday; // required when the date is a Saturday
   entries: Array<{ studentId: string; status: AttendanceStatus }>;
 };
 

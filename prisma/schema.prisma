@@ -249,6 +249,7 @@ model User {
   markedMaster       MasterAttendance[]  @relation("MasterMarkedBy")
   markedPeriod       PeriodAttendance[]  @relation("PeriodMarkedBy")
   enteredMarks       InternalMark[]      @relation("MarkEnteredBy")
+  workingDays         WorkingDay[]       @relation("WorkingDayDeclaredBy") // working Saturdays this user declared
   leaveTeacherActions LeaveRequest[]     @relation("LeaveTeacherAction") // requests this user approved/rejected as class teacher
   leaveHodActions     LeaveRequest[]     @relation("LeaveHodAction")     // requests this user approved/rejected as HOD
 
@@ -491,6 +492,34 @@ model FacultyAssignment {
 // The weekly schedule — what subject/faculty sits in each (day, period) for a
 // class. Mon-Fri only; a working Saturday borrows a weekday's grid. Drives the
 // attendance screen and "today's classes".
+// A working Saturday: the college holds classes and runs some weekday's
+// timetable that day. Declared ONCE per date by a Super Admin (institution-wide)
+// so every teacher marking that Saturday reads the same grid — before this,
+// each teacher chose the weekday themselves and two could disagree on the same
+// date with nothing to flag it.
+//
+// Only Saturdays are ever stored here; Mon–Fri run as themselves and Sunday is
+// off, both decided in code (resolveWeekday). A Saturday with NO row is not a
+// working day and attendance can't be marked on it.
+//
+// This changes only which timetable grid a date reads. Attendance records still
+// key on the real `date`, so a working Saturday counts as its own day and never
+// collides with the weekday it borrows.
+model WorkingDay {
+  id         String    @id @default(cuid())
+  date       DateTime  @unique @db.Date
+  // Which weekday's timetable this Saturday runs.
+  followsDay DayOfWeek
+  // Optional note for the register ("Republic Day compensation").
+  note       String?
+
+  declaredById String?
+  declaredBy   User?   @relation("WorkingDayDeclaredBy", fields: [declaredById], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model TimetableSlot {
   id         String    @id @default(cuid())
   classId    String

@@ -14,21 +14,16 @@ import type {
   MyTimetable,
   RosterView,
   SaveResult,
-  Weekday,
 } from "@/features/attendance/types";
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 const roman = (n: number) => ROMAN[n] ?? String(n);
 
-// Load the marking context for a (class, date). `followsDay` is only needed when
-// the date is a Saturday (which weekday's timetable it borrows).
-export function fetchRoster(
-  classId: string,
-  date: string,
-  followsDay?: Weekday,
-): Promise<RosterView> {
+// Load the marking context for a (class, date). Saturdays need nothing extra:
+// the server resolves a working Saturday from the admin's WorkingDay
+// declaration and reports which weekday it runs in the response.
+export function fetchRoster(classId: string, date: string): Promise<RosterView> {
   const q = new URLSearchParams({ classId, date });
-  if (followsDay) q.set("followsDay", followsDay);
   return apiFetch<RosterView>(`/api/attendance?${q.toString()}`);
 }
 

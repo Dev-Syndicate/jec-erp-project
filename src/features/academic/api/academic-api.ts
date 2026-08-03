@@ -10,6 +10,8 @@ import type {
   AcademicYearInput,
   Semester,
   SemesterInput,
+  WorkingDay,
+  WorkingDayInput,
 } from "@/features/academic/types";
 
 // --- Academic years -------------------------------------------------------
@@ -65,4 +67,23 @@ export function deleteSemester(id: string): Promise<{ ok: true }> {
 // Returns the parent year (semester activation also switches the active year).
 export function activateSemester(id: string): Promise<AcademicYear> {
   return apiFetch<AcademicYear>(`/api/semesters/${id}/activate`, { method: "POST" });
+}
+
+// --- Working Saturdays ----------------------------------------------------
+
+export function fetchWorkingDays(): Promise<{ workingDays: WorkingDay[] }> {
+  return apiFetch<{ workingDays: WorkingDay[] }>("/api/working-days");
+}
+
+export function declareWorkingDay(input: WorkingDayInput): Promise<WorkingDay> {
+  return apiFetch<WorkingDay>("/api/working-days", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function deleteWorkingDay(id: string): Promise<{ deleted: true; attendanceRecords: number }> {
+  return apiFetch<{ deleted: true; attendanceRecords: number }>(`/api/working-days/${id}`, {
+    method: "DELETE",
+  });
 }

@@ -1,7 +1,8 @@
 // Attendance marking — mark a class's attendance for one (date, period).
 //
 // Flow: pick a Program → Class → Date. The weekday resolves from the date; a
-// working Saturday borrows a weekday's timetable (a "follows" picker), Sunday is
+// working Saturday runs the weekday an ADMIN declared for it (stated read-only
+// here — nobody picks it), an undeclared Saturday is a holiday, and Sunday is
 // off. Then pick one of the day's scheduled periods and mark the roster. Saving
 // period 1 also sets the day's official attendance (server-side). Open to staff
 // who mark attendance (HOD / Faculty). Everyone — HOD included — can only mark
@@ -19,7 +20,6 @@ import { FormSelect } from "@/features/attendance/components/form-select";
 import { STATUS_META } from "@/features/attendance/components/status-meta";
 import {
   STATUSES,
-  WEEKDAYS,
   type AttendanceStatus,
   type DayPeriod,
   type RosterStudent,
@@ -74,7 +74,6 @@ export function AttendanceManager() {
   const [programId, setProgramId] = useState("");
   const [classId, setClassId] = useState("");
   const [date, setDate] = useState(todayStr);
-  const [followsDay, setFollowsDay] = useState<Weekday | "">("");
   const [selectedPeriod, setSelectedPeriod] = useState<number | null>(null);
 
   const activeClasses = (classes.data ?? []).filter((c) => c.isActive);
@@ -99,15 +98,13 @@ export function AttendanceManager() {
   const dn = dayNameOf(date);
   const isSat = dn === "SAT";
   const isSun = dn === "SUN";
-  const needsFollows = isSat && followsDay === "";
 
-  const queryEnabled = !!effClassId && !!date && !isSun && !needsFollows;
-  const view = useRoster(
-    effClassId || null,
-    date,
-    isSat && followsDay !== "" ? followsDay : undefined,
-    queryEnabled,
-  );
+  // A working Saturday is declared by an admin, so the client neither asks nor
+  // sends which weekday it follows — the server resolves it and reports it back
+  // (`followsDay` on the response). An undeclared Saturday returns a 400 that
+  // renders as the error below, which is the right answer: it's a holiday.
+  const queryEnabled = !!effClassId && !!date && !isSun;
+  const view = useRoster(effClassId || null, date, queryEnabled);
 
   const periods = view.data?.periods ?? [];
   // Land on the first period the viewer can actually mark (their own hour),
@@ -177,35 +174,23 @@ export function AttendanceManager() {
             value={date}
             onChange={(e) => {
               setDate(e.target.value);
-              setFollowsDay("");
               resetPeriod();
             }}
             className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </Field>
 
-        {isSat && (
-          <Field label="Follows">
-            <div className="w-40">
-              <FormSelect
-                value={followsDay}
-                onChange={(v) => {
-                  setFollowsDay(v as Weekday);
-                  resetPeriod();
-                }}
-                options={WEEKDAYS.map((d) => ({ value: d, label: WEEKDAY_LABEL[d] }))}
-                placeholder="Which weekday?"
-              />
-            </div>
-          </Field>
-        )}
       </div>
 
-      {/* Saturday hint */}
-      {isSat && (
+      {/* A declared working Saturday: state which grid it runs, read-only. The
+          admin's declaration decides it, so there's nothing to choose here. */}
+      {isSat && view.data?.followsDay && (
         <p className="text-sm text-muted-foreground">
-          Saturday isn&apos;t in the timetable. If the college is working, choose which weekday&apos;s
-          timetable it follows — attendance is still recorded against this date.
+          Working Saturday — running{" "}
+          <span className="font-medium text-foreground">
+            {WEEKDAY_LABEL[view.data.followsDay]}
+          </span>
+          &apos;s timetable. Attendance is recorded against this date.
         </p>
       )}
 
@@ -222,10 +207,6 @@ export function AttendanceManager() {
               ? "Pick a class to mark attendance."
               : "Pick a program, then a class, to mark attendance."}
         </p>
-      ) : needsFollows ? (
-        <p className="text-sm text-muted-foreground">
-          Choose which weekday this Saturday follows to load the timetable.
-        </p>
       ) : view.isPending ? (
         <p className="text-sm text-muted-foreground">Loading roster…</p>
       ) : view.isError ? (
@@ -238,7 +219,6 @@ export function AttendanceManager() {
           activePeriod={activePeriod}
           activePeriodInfo={activePeriodInfo}
           onSelectPeriod={setSelectedPeriod}
-          followsDay={isSat && followsDay !== "" ? followsDay : undefined}
         />
       ) : null}
     </div>
@@ -261,7 +241,6 @@ function Loaded({
   activePeriod,
   activePeriodInfo,
   onSelectPeriod,
-  followsDay,
 }: {
   view: RosterView;
   isSat: boolean;
@@ -269,7 +248,6 @@ function Loaded({
   activePeriod: number | null;
   activePeriodInfo: DayPeriod | null;
   onSelectPeriod: (p: number) => void;
-  followsDay: Weekday | undefined;
 }) {
   return (
     <div className="flex flex-col gap-4">
@@ -333,7 +311,6 @@ function Loaded({
                 key={`${view.classId}-${view.date}-${view.weekday}-${activePeriodInfo.period}`}
                 classId={view.classId}
                 date={view.date}
-                followsDay={followsDay}
                 period={activePeriodInfo}
                 roster={view.roster}
                 existing={view.marks.filter((m) => m.period === activePeriodInfo.period)}
@@ -368,14 +345,12 @@ function LockedPeriod({ period }: { period: DayPeriod }) {
 function PeriodMarker({
   classId,
   date,
-  followsDay,
   period,
   roster,
   existing,
 }: {
   classId: string;
   date: string;
-  followsDay: Weekday | undefined;
   period: DayPeriod;
   roster: RosterStudent[];
   existing: Array<{ studentId: string; status: AttendanceStatus }>;
@@ -420,7 +395,6 @@ function PeriodMarker({
         classId,
         date,
         period: period.period,
-        followsDay,
         entries: roster.map((s) => ({ studentId: s.studentId, status: statuses[s.studentId] })),
       },
       { onSuccess: () => setSavedOnce(true) },

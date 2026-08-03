@@ -47,3 +47,32 @@ export type SemesterInput = {
   startDate: string;
   endDate: string;
 };
+
+// --- Working Saturdays ----------------------------------------------------
+// The college occasionally holds classes on a Saturday, running some weekday's
+// timetable. A Super Admin declares each one here (institution-wide); the
+// attendance screen then reads it instead of asking each teacher, so everyone
+// marking that date sees the same grid. An undeclared Saturday is a holiday.
+export type Weekday = "MON" | "TUE" | "WED" | "THU" | "FRI";
+
+export const WEEKDAY_OPTIONS: Array<{ value: Weekday; label: string }> = [
+  { value: "MON", label: "Monday" },
+  { value: "TUE", label: "Tuesday" },
+  { value: "WED", label: "Wednesday" },
+  { value: "THU", label: "Thursday" },
+  { value: "FRI", label: "Friday" },
+];
+
+export type WorkingDay = {
+  id: string;
+  date: string; // yyyy-mm-dd (always a Saturday)
+  followsDay: Weekday;
+  note: string | null;
+  declaredBy: string | null;
+};
+
+export type WorkingDayInput = {
+  date: string;
+  followsDay: Weekday;
+  note?: string | null;
+};

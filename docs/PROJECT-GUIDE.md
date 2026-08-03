@@ -164,7 +164,7 @@ move, deactivation — call `invalidateAuthUser(uid)` rather than waiting out th
 
 ---
 
-## 4. Data model (21 tables)
+## 4. Data model (22 tables)
 
 | Group | Tables |
 |-------|--------|
@@ -173,7 +173,7 @@ move, deactivation — call `invalidateAuthUser(uid)` rather than waiting out th
 | **RBAC** | `Role` (scope PROGRAM/INSTITUTION), `Permission`, `UserRole`, `RolePermission` |
 | **Time** | `AcademicYear`, `Semester` (kind ODD/EVEN — the hub) |
 | **Placement** | `Enrollment` (`unique(student, year)`) |
-| **Curriculum** | `Subject` (per program, `semesterNumber`), `FacultyAssignment`, `TimetableSlot` |
+| **Curriculum** | `Subject` (per program, `semesterNumber`), `FacultyAssignment`, `TimetableSlot`, `WorkingDay` (declared working Saturdays) |
 | **Records** | `MasterAttendance`, `PeriodAttendance`, `InternalMark`, `LeaveRequest` |
 
 **Semester is the hub.** Attendance, marks, timetable and assignments all point at a
@@ -199,6 +199,13 @@ year dropdown (1…duration) and this range (1…2×duration) — degrees are no
 
 **Timetable is Mon–Fri only.** A working Saturday borrows a weekday's grid. Attendance is
 keyed on the actual `date`, never day-of-week, so Saturdays work correctly.
+
+**A working Saturday is declared, not chosen.** A Super Admin records it once in `WorkingDay`
+(`date` unique, `followsDay`) on `/academic`; `resolveWeekday` reads that, so every teacher
+marking that date gets the same grid. A Saturday with **no row is a holiday** and marking is
+refused — there is no per-teacher fallback, because that was the bug: two teachers could pick
+different weekdays for one date with nothing to flag it. Deleting a declaration does not touch
+attendance already recorded (the classes happened); it only stops further marking.
 
 ---
 
@@ -301,7 +308,7 @@ hand-written code (every such hit is in the generated Prisma client), `tsc --noE
 uniform.
 
 ```bash
-pnpm test          # vitest run — 217 unit tests, <1s
+pnpm test          # vitest run — 233 unit tests, <1s
 pnpm test:watch    # watch mode
 pnpm exec tsc --noEmit   # still the main correctness gate
 ```
@@ -325,6 +332,7 @@ so a test that wanders into the DB fails loudly instead of connecting to a datab
 | `test/features/assignment-cascade.test.ts` | Year → Section → Subject narrowing behind the marks picker |
 | `test/api/marks-scheme.test.ts` | The IAT composition — 10/10/10/10/60 = 100, and Model = 100 |
 | `test/api/marks-body.test.ts` | POST /api/marks cells — per-column maxima, component/assessment matching, blanks |
+| `test/api/working-days.test.ts` | Date parsing + weekday naming behind working Saturdays |
 | `test/lib/prisma-errors.test.ts` | P2002/P2003/P2025 classification and hostile inputs |
 | `test/lib/india-geo.test.ts` | State/district lookup, sorting, case-insensitivity |
 

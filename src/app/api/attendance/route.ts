@@ -1,16 +1,19 @@
 // /api/attendance — mark a class's attendance for one (date, period).
 //
-// GET  ?classId=&date=&followsDay=  → the marking context: the day's scheduled
+// GET  ?classId=&date=  → the marking context: the day's scheduled
 //   periods (from the timetable for the effective weekday), the roster (students
 //   enrolled in this class for the ACTIVE academic year), and any marks already
 //   saved for that date (to prefill the grid).
-// POST { classId, date, period, followsDay?, entries:[{studentId,status}] } →
+// POST { classId, date, period, entries:[{studentId,status}] } →
 //   upsert PeriodAttendance for each student. Marking period 1 ALSO upserts that
 //   student's MasterAttendance with the same status (the official day record);
 //   periods 2–8 only touch PeriodAttendance. (schema-design.html)
 //
-// Saturdays: the timetable is Mon–Fri, so a working Saturday borrows a weekday's
-// grid via `followsDay` (resolveWeekday). Records still key on the real `date`.
+// Saturdays: the timetable is Mon–Fri, so a working Saturday borrows the weekday
+// an ADMIN declared for that date (the WorkingDay table, via resolveWeekday) —
+// not a weekday the caller picks, so every teacher marking that Saturday reads
+// the same grid. An undeclared Saturday is a holiday and is refused. Records
+// still key on the real `date`.
 //
 // Authorization: both GET and POST need `mark Attendance` — the staff capability
 // (SA/HOD/Faculty). The GET returns the WHOLE-CLASS roster + everyone's marks, so
@@ -21,7 +24,7 @@ import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { assertMarksPeriod, assertTeachesOrAdvises, canMarkPeriod } from "./access";
-import { isStatus, parseDateOnly, resolveWeekday, roman } from "./dto";
+import { dayName, isStatus, parseDateOnly, resolveWeekday, roman } from "./dto";
 
 export const dynamic = "force-dynamic";
 
@@ -53,7 +56,6 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const classId = url.searchParams.get("classId")?.trim();
     const dateStr = url.searchParams.get("date")?.trim();
-    const followsDay = url.searchParams.get("followsDay")?.trim() || undefined;
 
     if (!classId) return Response.json({ error: "Select a class." }, { status: 400 });
     if (!dateStr) return Response.json({ error: "Select a date." }, { status: 400 });
@@ -65,7 +67,7 @@ export async function GET(req: Request) {
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
     authorize(ctx, "mark", "Attendance", { programId: klass.programId });
 
-    const day = resolveWeekday(date, followsDay);
+    const day = await resolveWeekday(date);
     if ("error" in day) return Response.json({ error: day.error }, { status: 400 });
 
     const semester = await activeSemester();
@@ -114,6 +116,9 @@ export async function GET(req: Request) {
       classLabel: classLabel(klass),
       date: dateStr,
       weekday: day.weekday,
+      // On a declared working Saturday, tell the client which weekday it runs so
+      // the screen can state it. Absent on Mon–Fri, which run as themselves.
+      ...(dayName(date) === "SAT" ? { followsDay: day.weekday } : {}),
       semesterId: semester.id,
       semesterLabel: `${semester.academicYear.name} · ${semester.kind === "ODD" ? "Odd" : "Even"}`,
       periods: slots.map((s) => ({
@@ -149,7 +154,6 @@ export async function POST(req: Request) {
     const classId = typeof body?.classId === "string" ? body.classId.trim() : "";
     const dateStr = typeof body?.date === "string" ? body.date.trim() : "";
     const period = body?.period;
-    const followsDay = typeof body?.followsDay === "string" ? body.followsDay.trim() : undefined;
     const rawEntries = Array.isArray(body?.entries) ? (body.entries as unknown[]) : null;
 
     if (!classId) return Response.json({ error: "Select a class." }, { status: 400 });
@@ -182,7 +186,7 @@ export async function POST(req: Request) {
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
     authorize(ctx, "mark", "Attendance", { programId: klass.programId });
 
-    const day = resolveWeekday(date, followsDay);
+    const day = await resolveWeekday(date);
     if ("error" in day) return Response.json({ error: day.error }, { status: 400 });
 
     const semester = await activeSemester();

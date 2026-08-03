@@ -1,0 +1,22 @@
+# pnpm 11 moved build-script approval out of package.json's "pnpm" field (which
+# it no longer reads) and renamed onlyBuiltDependencies -> allowBuilds. Without
+# this, pnpm refuses these packages' install scripts and exits non-zero with
+# ERR_PNPM_IGNORED_BUILDS — which breaks `pnpm dev`, because predev triggers an
+# install check before next dev ever starts.
+#
+# Each is approved because it needs its install script to actually work:
+#   prisma / @prisma/engines / @prisma/client — fetch + place the query engine
+#   sharp          — native binary behind Next.js image optimisation
+#   unrs-resolver  — native resolver binary used by eslint
+#   protobufjs     — firebase-admin dependency
+#   @firebase/util — firebase postinstall
+#   esbuild        — native binary used by vitest / tsx
+allowBuilds:
+  '@firebase/util': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+  protobufjs: true
+  sharp: true
+  unrs-resolver: true

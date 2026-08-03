@@ -539,7 +539,14 @@ function PeriodMarker({
       <div className="flex items-center justify-between gap-3 border-t border-foreground/10 px-4 py-3">
         <div className="text-sm text-muted-foreground">
           {save.isError ? (
-            <span className="text-destructive">{errorMessage(save.error)}</span>
+            // A refusal here almost always means the right to mark went away
+            // while the page was open (cover withdrawn, timetable changed). The
+            // mutation re-reads the roster on error, so the grid locks itself
+            // right after this — say so, rather than leaving it looking broken.
+            <span className="text-destructive">
+              {errorMessage(save.error)}{" "}
+              <span className="text-muted-foreground">Reloading this period…</span>
+            </span>
           ) : savedOnce && !save.isPending ? (
             <span className="inline-flex items-center gap-1.5 text-emerald-600">
               <Check className="size-4" /> Saved

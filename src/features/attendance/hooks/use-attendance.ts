@@ -64,6 +64,14 @@ export function useSaveAttendance() {
       qc.invalidateQueries({
         queryKey: ["attendance", "roster", input.classId, input.date],
       }),
+    // A refusal means the client's idea of who may mark is out of date — cover
+    // can be revoked by a HOD while this page sits open, and the roster query is
+    // cached (30s staleTime, no refetch on focus). Re-read so the grid locks
+    // itself instead of leaving an editable table that can never save.
+    onError: (_err, input) =>
+      qc.invalidateQueries({
+        queryKey: ["attendance", "roster", input.classId, input.date],
+      }),
   });
 }
 

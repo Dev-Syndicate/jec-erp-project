@@ -9,7 +9,7 @@
 // TEST DB ONLY. Cleans up both PeriodAttendance and MasterAttendance it writes.
 import { assertTestEnv } from "./guard-env.js";
 
-assertTestEnv();
+assertTestEnv("e2e-cover-p1.mts");
 
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig } from "@neondatabase/serverless";

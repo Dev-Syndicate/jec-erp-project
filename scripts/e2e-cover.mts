@@ -7,7 +7,7 @@
 // deleted at the end. It never writes attendance.
 import { assertTestEnv } from "./guard-env.js";
 
-assertTestEnv();
+assertTestEnv("e2e-cover.mts");
 
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig } from "@neondatabase/serverless";

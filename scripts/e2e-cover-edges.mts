@@ -2,7 +2,7 @@
 // happy path. TEST DB ONLY; cleans up everything it writes.
 import { assertTestEnv } from "./guard-env.js";
 
-assertTestEnv();
+assertTestEnv("e2e-cover-edges.mts");
 
 import { PrismaNeon } from "@prisma/adapter-neon";
 import { neonConfig } from "@neondatabase/serverless";

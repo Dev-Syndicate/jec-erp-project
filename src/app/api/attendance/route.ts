@@ -82,34 +82,40 @@ export async function GET(req: Request) {
     // (manage Attendance) can view any class in program scope.
     await assertTeachesOrAdvises(ctx, classId, klass.advisorId, semester.id);
 
-    // The day's scheduled periods for the effective weekday (Sat borrows one).
-    const slots = await db.timetableSlot.findMany({
-      where: { classId, semesterId: semester.id, dayOfWeek: day.weekday },
-      include: { subject: { select: { code: true, name: true } }, faculty: { select: { displayName: true } } },
-      orderBy: { period: "asc" },
-    });
-
-    // Roster = students enrolled in this class for the active academic year.
-    const enrollments = await db.enrollment.findMany({
-      where: { classId, academicYear: { isActive: true } },
-      include: {
-        student: {
-          select: {
-            id: true,
-            registerNumber: true,
-            rollNumber: true,
-            user: { select: { displayName: true } },
+    // Periods, roster and saved marks are independent of one another — issued
+    // together so the screen costs one round-trip's latency instead of three.
+    // They run only AFTER the access check above, which is the ordering that
+    // matters here.
+    const [slots, enrollments, marks] = await Promise.all([
+      // The day's scheduled periods for the effective weekday (Sat borrows one).
+      db.timetableSlot.findMany({
+        relationLoadStrategy: "join",
+        where: { classId, semesterId: semester.id, dayOfWeek: day.weekday },
+        include: { subject: { select: { code: true, name: true } }, faculty: { select: { displayName: true } } },
+        orderBy: { period: "asc" },
+      }),
+      // Roster = students enrolled in this class for the active academic year.
+      db.enrollment.findMany({
+        relationLoadStrategy: "join",
+        where: { classId, academicYear: { isActive: true } },
+        include: {
+          student: {
+            select: {
+              id: true,
+              registerNumber: true,
+              rollNumber: true,
+              user: { select: { displayName: true } },
+            },
           },
         },
-      },
-      orderBy: { student: { registerNumber: "asc" } },
-    });
-
-    // Marks already saved for this date (prefill the grid, per period).
-    const marks = await db.periodAttendance.findMany({
-      where: { classId, date, semesterId: semester.id },
-      select: { studentId: true, period: true, status: true },
-    });
+        orderBy: { student: { registerNumber: "asc" } },
+      }),
+      // Marks already saved for this date (prefill the grid, per period).
+      db.periodAttendance.findMany({
+        where: { classId, date, semesterId: semester.id },
+        select: { studentId: true, period: true, status: true },
+      }),
+    ]);
 
     return Response.json({
       classId,

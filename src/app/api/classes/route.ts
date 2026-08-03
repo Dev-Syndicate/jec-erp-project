@@ -51,6 +51,7 @@ export async function GET(req: Request) {
       : { programId: ctx.user.programId ?? "__none__" };
 
     const classes = await db.class.findMany({
+      relationLoadStrategy: "join",
       where,
       include: CLASS_INCLUDE,
       orderBy: [{ isActive: "desc" }, { year: "asc" }, { section: "asc" }],

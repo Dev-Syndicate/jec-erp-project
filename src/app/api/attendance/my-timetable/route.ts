@@ -21,6 +21,7 @@ export async function GET(req: Request) {
     if (!semester) return Response.json({ semesterLabel: null, slots: [] });
 
     const slots = await db.timetableSlot.findMany({
+      relationLoadStrategy: "join",
       where: { facultyId: ctx.user.id, semesterId: semester.id },
       include: {
         subject: { select: { code: true, name: true } },

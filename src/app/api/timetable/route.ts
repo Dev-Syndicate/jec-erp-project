@@ -30,7 +30,10 @@ export async function GET(req: Request) {
     const classId = new URL(req.url).searchParams.get("classId")?.trim();
     if (!classId) return Response.json({ error: "Select a class." }, { status: 400 });
 
+    // NOTE: this stays sequential on purpose — the scope check below needs
+    // klass.programId before we're allowed to read the class's slots.
     const klass = await db.class.findUnique({
+      relationLoadStrategy: "join",
       where: { id: classId },
       include: { program: { include: { degree: true, branch: true } } },
     });
@@ -46,6 +49,7 @@ export async function GET(req: Request) {
     }
 
     const slots = await db.timetableSlot.findMany({
+      relationLoadStrategy: "join",
       where: { classId, semesterId: semester.id },
       include: SLOT_INCLUDE,
     });

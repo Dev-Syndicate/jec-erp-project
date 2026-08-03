@@ -45,6 +45,7 @@ export async function GET(req: Request) {
       : { programId: ctx.user.programId ?? "__none__" };
 
     const subjects = await db.subject.findMany({
+      relationLoadStrategy: "join",
       where,
       include: SUBJECT_INCLUDE,
       orderBy: [{ isActive: "desc" }, { semesterNumber: "asc" }, { code: "asc" }],

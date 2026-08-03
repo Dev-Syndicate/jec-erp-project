@@ -137,9 +137,15 @@ export async function GET(req: Request) {
     const where = { AND: [scope, search, ...filters] };
 
     // One page of rows + the total (for the pager), in parallel.
+    //
+    // `relationLoadStrategy: "join"` matters here: STUDENT_INCLUDE pulls six
+    // nested relations, and Prisma's default strategy fetches each in its own
+    // round-trip (11 of them for this query). Against Neon at ~90ms RTT that was
+    // ~750ms; as a single join it's ~380ms, returning byte-identical rows.
     const [total, students] = await Promise.all([
       db.student.count({ where }),
       db.student.findMany({
+        relationLoadStrategy: "join",
         where,
         include: STUDENT_INCLUDE,
         orderBy: { registerNumber: "asc" },

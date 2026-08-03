@@ -20,9 +20,17 @@
 //
 // docs: https://pris.ly/d/prisma-schema
 
+// `relationJoins` lets a query opt into a single LEFT JOIN LATERAL instead of
+// Prisma's default strategy, which issues one round-trip PER included relation.
+// Measured against this DB (Neon, ap-southeast-1, ~90ms RTT): the students list
+// `include` fanned out into 4 round-trips / ~1030ms, versus ~190ms for the
+// equivalent single join. At ~90ms per round-trip the fan-out, not the query
+// work, is what makes pages feel slow. Opt in per query with
+// `relationLoadStrategy: "join"` — see src/app/api/students/dto.ts.
 generator client {
-  provider = "prisma-client"
-  output   = "../src/generated/prisma"
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["relationJoins"]
 }
 
 datasource db {

@@ -23,7 +23,9 @@ export async function GET(req: Request) {
     const ctx = await authenticate(req);
 
     // Resolve THIS user's student record (+ current-year class/program).
+    // Joined rather than fanned out — see the note on the parallel block below.
     const student = await db.student.findUnique({
+      relationLoadStrategy: "join",
       where: { userId: ctx.user.id },
       include: {
         user: { select: { displayName: true, email: true } },
@@ -77,23 +79,46 @@ export async function GET(req: Request) {
     const semesterId = semester.id;
     const studentId = student.id;
 
-    // --- Attendance: overall (MasterAttendance) + per-subject (PeriodAttendance).
-    const master = await db.masterAttendance.groupBy({
-      by: ["status"],
-      where: { studentId, semesterId },
-      _count: { _all: true },
-    });
+    // The four reads below are independent of each other, so they go out together
+    // rather than one after another. Each round-trip to Neon costs ~90ms, so
+    // sequential awaits here cost ~4x what the queries themselves need.
+    const [master, period, slots, marks] = await Promise.all([
+      // --- Attendance: overall (MasterAttendance) + per-subject (PeriodAttendance).
+      db.masterAttendance.groupBy({
+        by: ["status"],
+        where: { studentId, semesterId },
+        _count: { _all: true },
+      }),
+      db.periodAttendance.groupBy({
+        by: ["subjectId", "status"],
+        where: { studentId, semesterId },
+        _count: { _all: true },
+      }),
+      // --- Timetable: the student's class grid for the active semester.
+      db.timetableSlot.findMany({
+        relationLoadStrategy: "join",
+        where: { classId: klass.id, semesterId },
+        include: {
+          subject: { select: { code: true, name: true } },
+          faculty: { select: { displayName: true } },
+        },
+        orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }],
+      }),
+      // --- Marks: the student's internal marks this semester, grouped by subject.
+      db.internalMark.findMany({
+        relationLoadStrategy: "join",
+        where: { studentId, semesterId },
+        include: { subject: { select: { id: true, code: true, name: true } } },
+        orderBy: [{ subject: { code: "asc" } }, { assessment: "asc" }],
+      }),
+    ]);
+
     const overallCounts: Record<Status, number> = { PRESENT: 0, ABSENT: 0, OD: 0, EXCUSED: 0 };
     for (const row of master) overallCounts[row.status as Status] = row._count._all;
     const overallTotal =
       overallCounts.PRESENT + overallCounts.ABSENT + overallCounts.OD + overallCounts.EXCUSED;
     const overallAttended = overallCounts.PRESENT + overallCounts.OD;
 
-    const period = await db.periodAttendance.groupBy({
-      by: ["subjectId", "status"],
-      where: { studentId, semesterId },
-      _count: { _all: true },
-    });
     const perSubject = new Map<string, { attended: number; total: number }>();
     for (const row of period) {
       const cell = perSubject.get(row.subjectId) ?? { attended: 0, total: 0 };
@@ -102,24 +127,9 @@ export async function GET(req: Request) {
       perSubject.set(row.subjectId, cell);
     }
 
-    // --- Timetable: the student's class grid for the active semester.
-    const slots = await db.timetableSlot.findMany({
-      where: { classId: klass.id, semesterId },
-      include: {
-        subject: { select: { code: true, name: true } },
-        faculty: { select: { displayName: true } },
-      },
-      orderBy: [{ dayOfWeek: "asc" }, { period: "asc" }],
-    });
-
-    // --- Marks: the student's internal marks this semester, grouped by subject.
-    const marks = await db.internalMark.findMany({
-      where: { studentId, semesterId },
-      include: { subject: { select: { id: true, code: true, name: true } } },
-      orderBy: [{ subject: { code: "asc" } }, { assessment: "asc" }],
-    });
-
     // Subject metadata for the per-subject attendance rows (code/name), ordered.
+    // This one genuinely depends on the period-attendance result above, so it
+    // stays a second stage rather than joining the parallel batch.
     const subjectIds = [...perSubject.keys()];
     const subjectsMeta = subjectIds.length
       ? await db.subject.findMany({

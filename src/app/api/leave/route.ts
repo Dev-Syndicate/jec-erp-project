@@ -37,6 +37,7 @@ export async function GET(req: Request) {
     }
 
     const requests = await db.leaveRequest.findMany({
+      relationLoadStrategy: "join",
       where,
       include: LEAVE_INCLUDE,
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],

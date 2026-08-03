@@ -50,21 +50,25 @@ export async function GET(req: Request) {
     // advise; HOD/SA (manage Attendance) can see any class in program scope.
     await assertTeachesOrAdvises(ctx, classId, klass.advisorId, semester.id);
 
-    // Roster: students enrolled in this class for the active year.
-    const enrollments = await db.enrollment.findMany({
-      where: { classId, academicYear: { isActive: true } },
-      include: {
-        student: { select: { id: true, registerNumber: true, user: { select: { displayName: true } } } },
-      },
-      orderBy: { student: { registerNumber: "asc" } },
-    });
-
-    // Overall: count master rows per (student, status) for the semester.
-    const master = await db.masterAttendance.groupBy({
-      by: ["studentId", "status"],
-      where: { classId, semesterId: semester.id },
-      _count: { _all: true },
-    });
+    // The roster and the attendance counts don't depend on each other, so they
+    // go out together — one ~90ms round-trip instead of two.
+    const [enrollments, master] = await Promise.all([
+      // Roster: students enrolled in this class for the active year.
+      db.enrollment.findMany({
+        relationLoadStrategy: "join",
+        where: { classId, academicYear: { isActive: true } },
+        include: {
+          student: { select: { id: true, registerNumber: true, user: { select: { displayName: true } } } },
+        },
+        orderBy: { student: { registerNumber: "asc" } },
+      }),
+      // Overall: count master rows per (student, status) for the semester.
+      db.masterAttendance.groupBy({
+        by: ["studentId", "status"],
+        where: { classId, semesterId: semester.id },
+        _count: { _all: true },
+      }),
+    ]);
     const overallByStudent = new Map<string, Record<Status, number>>();
     for (const row of master) {
       const rec = overallByStudent.get(row.studentId) ?? { PRESENT: 0, ABSENT: 0, OD: 0, EXCUSED: 0 };

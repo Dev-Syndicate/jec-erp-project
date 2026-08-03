@@ -129,6 +129,7 @@ export async function GET(req: Request) {
       : { user: { programId: ctx.user.programId ?? "__none__" } };
 
     const faculty = await db.facultyProfile.findMany({
+      relationLoadStrategy: "join",
       where,
       include: FACULTY_INCLUDE,
       orderBy: { staffId: "asc" },

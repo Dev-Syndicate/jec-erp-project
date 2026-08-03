@@ -42,35 +42,38 @@ export async function GET(req: Request) {
       classId: string;
       classShort: string;
     }> = [];
-    if (semester && weekday) {
-      const slots = await db.timetableSlot.findMany({
-        where: { facultyId: ctx.user.id, semesterId: semester.id, dayOfWeek: weekday },
-        include: {
-          subject: { select: { code: true, name: true } },
-          class: { select: { year: true, section: true } },
-        },
-        orderBy: { period: "asc" },
-      });
-      todayClasses = slots.map((s) => ({
-        period: s.period,
-        subjectCode: s.subject.code,
-        subjectName: s.subject.name,
-        classId: s.classId,
-        classShort: `${roman(s.class.year)}-${s.class.section}`,
-      }));
-    }
+    // Today's slots, the advised-class count and the teaches check are independent
+    // of one another — issued together, since each sequential await would cost a
+    // separate ~90ms round-trip to Neon.
+    const [slots, advisedCount, teachingSlotCount] = await Promise.all([
+      semester && weekday
+        ? db.timetableSlot.findMany({
+            relationLoadStrategy: "join",
+            where: { facultyId: ctx.user.id, semesterId: semester.id, dayOfWeek: weekday },
+            include: {
+              subject: { select: { code: true, name: true } },
+              class: { select: { year: true, section: true } },
+            },
+            orderBy: { period: "asc" },
+          })
+        : Promise.resolve([]),
+      db.class.count({ where: { advisorId: ctx.user.id, isActive: true } }),
+      // Does this user teach at all this semester? (Gates the "My timetable" link —
+      // Super Admin / non-teaching staff have no personal timetable.)
+      semester
+        ? db.timetableSlot.count({ where: { facultyId: ctx.user.id, semesterId: semester.id } })
+        : Promise.resolve(0),
+    ]);
 
-    const advisedCount = await db.class.count({
-      where: { advisorId: ctx.user.id, isActive: true },
-    });
+    todayClasses = slots.map((s) => ({
+      period: s.period,
+      subjectCode: s.subject.code,
+      subjectName: s.subject.name,
+      classId: s.classId,
+      classShort: `${roman(s.class.year)}-${s.class.section}`,
+    }));
 
-    // Does this user teach at all this semester? (Gates the "My timetable" link —
-    // Super Admin / non-teaching staff have no personal timetable.)
-    const teaches = semester
-      ? (await db.timetableSlot.count({
-          where: { facultyId: ctx.user.id, semesterId: semester.id },
-        })) > 0
-      : false;
+    const teaches = teachingSlotCount > 0;
 
     // Admin snapshot (only for a manage-Student holder), scoped to their program
     // unless they're institution-scoped (Super Admin).

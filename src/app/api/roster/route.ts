@@ -48,7 +48,11 @@ export async function GET(req: Request) {
     const year = await activeYear();
     if (!year) return Response.json({ error: "No academic year is active." }, { status: 400 });
 
+    // Joined, not fanned out: STUDENT_INCLUDE nested under the enrollment is the
+    // deepest include in the app, and one round-trip per relation adds up fast
+    // against Neon (~90ms each).
     const enrollments = await db.enrollment.findMany({
+      relationLoadStrategy: "join",
       where: { classId, academicYearId: year.id },
       include: { student: { include: STUDENT_INCLUDE } },
       orderBy: { student: { registerNumber: "asc" } },

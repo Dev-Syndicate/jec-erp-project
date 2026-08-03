@@ -5,13 +5,16 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { DayInput, MarkInput } from "@/features/attendance/types";
+import type { AssignCoverInput, DayInput, MarkInput } from "@/features/attendance/types";
 import {
+  assignCover,
   fetchAttendanceReport,
   fetchClassOptions,
+  fetchCover,
   fetchDayAttendance,
   fetchMyTimetable,
   fetchRoster,
+  removeCover,
   saveAttendance,
   saveDayAttendance,
 } from "@/features/attendance/api/attendance-api";
@@ -80,4 +83,41 @@ export function useSaveDayAttendance() {
     onSuccess: (_data, input) =>
       qc.invalidateQueries({ queryKey: ["attendance", "day", input.classId, input.date] }),
   });
+}
+
+// --- Substitutions (cover) ---------------------------------------------------
+
+// The day's periods for a class with any cover already arranged. Same
+// (class, date) shape as the roster query, but its own key — this is the
+// assigner's view, not the marker's.
+export function useCover(classId: string | null, date: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ["attendance", "cover", classId, date],
+    queryFn: () => fetchCover(classId as string, date),
+    enabled,
+  });
+}
+
+// Assigning or removing cover changes WHO MAY MARK, so both invalidate the
+// roster query as well as the cover view — otherwise the marking screen would
+// keep showing a stale `canMark` and lock out the teacher who was just assigned.
+function useCoverMutation<TInput>(fn: (input: TInput) => Promise<unknown>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: fn,
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["attendance", "cover"] });
+      qc.invalidateQueries({ queryKey: ["attendance", "roster"] });
+    },
+  });
+}
+
+export function useAssignCover() {
+  return useCoverMutation((input: AssignCoverInput) => assignCover(input));
+}
+
+export function useRemoveCover() {
+  return useCoverMutation(({ slotId, date }: { slotId: string; date: string }) =>
+    removeCover(slotId, date),
+  );
 }

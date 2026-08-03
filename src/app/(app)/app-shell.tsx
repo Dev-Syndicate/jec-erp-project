@@ -20,6 +20,7 @@ import {
   BookOpen,
   CalendarClock,
   UsersRound,
+  UserRoundCheck,
   ShieldCheck,
   ChevronsUp,
   ChevronRight,
@@ -121,6 +122,15 @@ const NAV: NavGroup[] = [
         // plain subject teacher who advises none doesn't see it, and neither
         // does Super Admin (see "Mark attendance").
         gate: ({ roles, advisesClass }) => roles.includes("HOD") || advisesClass,
+      },
+      {
+        title: "Arrange cover",
+        href: "/attendance/cover",
+        icon: UserRoundCheck,
+        // Assigning a stand-in for an absent teacher's period. A supervised act
+        // (it grants the right to sign another teacher's register), so HOD and
+        // Super Admin only — never the teachers themselves.
+        roles: ["Super Admin", "HOD"],
       },
       {
         title: "Report",

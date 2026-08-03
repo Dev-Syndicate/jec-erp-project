@@ -18,6 +18,13 @@ export type RosterStudent = {
   displayName: string;
 };
 
+// Who is covering a period on this date, when its usual teacher is away.
+export type PeriodCover = {
+  facultyId: string;
+  facultyName: string;
+  reason: string | null;
+};
+
 // One scheduled period of the day (from the timetable for the effective weekday).
 export type DayPeriod = {
   period: number;
@@ -26,9 +33,13 @@ export type DayPeriod = {
   subjectName: string;
   facultyId: string;
   facultyName: string;
-  // Whether the current viewer may mark this period (server-computed: they hold
-  // `manage Attendance`, or they teach this period). The UI locks the rest.
+  // Whether the current viewer may mark this period (server-computed: they are
+  // this period's teacher, or a substitute assigned to cover it on this date —
+  // no role grants it). The UI locks the rest.
   canMark: boolean;
+  // Set when someone is covering this hour today, so the grid can name who is
+  // taking it rather than showing only the absent teacher.
+  coveredBy: PeriodCover | null;
 };
 
 // A mark already saved for this date (used to prefill the grid).
@@ -150,4 +161,48 @@ export type AttendanceReport = {
   semesterLabel: string;
   subjectsMeta: SubjectMeta[];
   students: StudentReport[];
+};
+
+// --- Substitutions (cover) ---------------------------------------------------
+// Arranging cover for a period whose usual teacher is away. A substitution is a
+// DATED grant: it lets the covering teacher mark that one hour on that one date,
+// and leaves the permanent timetable alone. Assigned by HOD / Super Admin only.
+
+// The cover arranged for one period, as the assigner sees it.
+export type Substitution = {
+  id: string;
+  substituteId: string;
+  substituteName: string;
+  assignedByName: string;
+  reason: string | null;
+};
+
+// One period of the day on the cover screen: who normally takes it, and who (if
+// anyone) is covering.
+export type CoverPeriod = {
+  slotId: string;
+  period: number;
+  subjectCode: string;
+  subjectName: string;
+  classId: string;
+  classShort: string;
+  regularFacultyId: string;
+  regularFacultyName: string;
+  substitution: Substitution | null;
+};
+
+export type CoverView = {
+  classId: string;
+  date: string;
+  weekday: Weekday;
+  followsDay?: Weekday;
+  periods: CoverPeriod[];
+};
+
+// Body for POST /api/attendance/substitutions — assign (or reassign) cover.
+export type AssignCoverInput = {
+  slotId: string;
+  date: string;
+  substituteId: string;
+  reason?: string;
 };

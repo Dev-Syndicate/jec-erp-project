@@ -6,8 +6,10 @@
 
 import { apiFetch } from "@/lib/api-client";
 import type {
+  AssignCoverInput,
   AttendanceReport,
   ClassOption,
+  CoverView,
   DayInput,
   DayView,
   MarkInput,
@@ -51,6 +53,29 @@ export function saveDayAttendance(input: DayInput): Promise<{ saved: number }> {
   return apiFetch<{ saved: number }>("/api/attendance/master", {
     method: "POST",
     body: JSON.stringify(input),
+  });
+}
+
+// --- Substitutions (cover) ---------------------------------------------------
+// Arranging cover for a period whose teacher is away. HOD / Super Admin only —
+// the API re-checks, so these are simply the calls the console makes.
+
+export function fetchCover(classId: string, date: string): Promise<CoverView> {
+  const q = new URLSearchParams({ classId, date });
+  return apiFetch<CoverView>(`/api/attendance/substitutions?${q.toString()}`);
+}
+
+export function assignCover(input: AssignCoverInput): Promise<{ id: string }> {
+  return apiFetch<{ id: string }>("/api/attendance/substitutions", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+export function removeCover(slotId: string, date: string): Promise<{ ok: true }> {
+  const q = new URLSearchParams({ slotId, date });
+  return apiFetch<{ ok: true }>(`/api/attendance/substitutions?${q.toString()}`, {
+    method: "DELETE",
   });
 }
 

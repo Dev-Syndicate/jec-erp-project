@@ -11,7 +11,7 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarCheck2, Check, Lock, Search } from "lucide-react";
+import { CalendarCheck2, Check, Lock, Search, UserRoundCheck } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -297,6 +297,14 @@ function Loaded({
                   </span>
                   <span className="inline-flex items-center gap-1 text-sm font-medium">
                     {p.subjectCode}
+                    {/* Cover is worth showing even on a locked hour: it says the
+                        class IS being taken, just not by its usual teacher. */}
+                    {p.coveredBy && (
+                      <UserRoundCheck
+                        className="size-3 text-emerald-600"
+                        aria-label={`Covered by ${p.coveredBy.facultyName}`}
+                      />
+                    )}
                     {!p.canMark && <Lock className="size-3 text-muted-foreground" />}
                   </span>
                 </button>
@@ -328,6 +336,7 @@ function Loaded({
 // teacher's own to mark — no role overrides that — so a HOD viewing a colleague's
 // period lands here too. The class advisor corrects the day record elsewhere.
 function LockedPeriod({ period }: { period: DayPeriod }) {
+  const covered = period.coveredBy;
   return (
     <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border px-4 py-10 text-center">
       <Lock className="size-5 text-muted-foreground" />
@@ -335,8 +344,17 @@ function LockedPeriod({ period }: { period: DayPeriod }) {
         Period {period.period} · {period.subjectCode} — {period.subjectName}
       </p>
       <p className="max-w-sm text-sm text-muted-foreground">
-        This is {period.facultyName}’s hour — only they can mark it. If someone else took the
-        class, reassign the period on the timetable first.
+        {covered ? (
+          <>
+            {covered.facultyName} is covering this hour for {period.facultyName} today — only they
+            can mark it.
+          </>
+        ) : (
+          <>
+            This is {period.facultyName}’s hour — only they can mark it. If they’re away, a HOD can
+            assign someone to cover it under Attendance → Arrange cover.
+          </>
+        )}
       </p>
     </div>
   );
@@ -410,7 +428,17 @@ function PeriodMarker({
             Period {period.period} · {period.subjectCode} — {period.subjectName}
           </span>
           <span className="text-xs text-muted-foreground">
-            {period.facultyName}
+            {/* On a covered hour, say so plainly — the substitute is marking a
+                register that isn't normally theirs, and the record notes it. */}
+            {period.coveredBy ? (
+              <span className="inline-flex items-center gap-1">
+                <UserRoundCheck className="size-3 text-emerald-600" />
+                {period.coveredBy.facultyName} covering for {period.facultyName}
+                {period.coveredBy.reason && ` · ${period.coveredBy.reason}`}
+              </span>
+            ) : (
+              period.facultyName
+            )}
             {period.period === 1 && " · also sets today's overall attendance"}
           </span>
         </div>

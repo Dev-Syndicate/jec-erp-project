@@ -11,6 +11,10 @@
 //
 // Super-Admin only — a year transition, like the Academic slice. The Enrollment
 // model is unchanged; promotion just adds next-year rows.
+//
+// Promotion is also the one place a student CHANGES DEPARTMENT: first year is
+// owned by S&H, year 2+ by the branch's department. The award (programId) is what
+// stays fixed — see the target-class check in POST.
 import { authenticate, invalidateAuthUser, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 
@@ -36,7 +40,13 @@ export async function GET(req: Request) {
 
     const klass = await db.class.findUnique({
       where: { id: classId },
-      include: { program: { include: { degree: true, branch: true } } },
+      include: {
+        program: { include: { degree: true, branch: true } },
+        // The class's OWNER, which is not the same question as its award: a
+        // year-1 class is owned by S&H while its award is B.E · CSE. The UI
+        // shows the hand-off, so both halves have to come back.
+        department: { select: { code: true, name: true } },
+      },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
 
@@ -62,14 +72,31 @@ export async function GET(req: Request) {
     const suggestedTargetYearId =
       otherYears.find((y) => y.startDate > active.startDate)?.id ?? null;
 
-    // Where they land: year-(N+1) classes in the same program.
-    const targetClasses = isFinalYear
+    // Where they land: year-(N+1) classes for the same AWARD. Deliberately not
+    // filtered by department — the year-2 class for an S&H-owned first year is
+    // owned by the branch's department, and that is exactly the class we want to
+    // offer. Its department comes back with it so the picker can say so.
+    const targetRows = isFinalYear
       ? []
       : await db.class.findMany({
           where: { programId: klass.programId, year: klass.year + 1, isActive: true },
           orderBy: { section: "asc" },
-          select: { id: true, year: true, section: true },
+          select: {
+            id: true,
+            year: true,
+            section: true,
+            departmentId: true,
+            department: { select: { code: true, name: true } },
+          },
         });
+    const targetClasses = targetRows.map((c) => ({
+      id: c.id,
+      year: c.year,
+      section: c.section,
+      departmentId: c.departmentId,
+      departmentCode: c.department.code,
+      departmentName: c.department.name,
+    }));
     const suggestedTargetClassId = targetClasses.find((c) => c.section === klass.section)?.id ?? null;
 
     // The roster to advance: active students enrolled in this class this year.
@@ -86,6 +113,12 @@ export async function GET(req: Request) {
         id: klass.id,
         programId: klass.programId,
         programLabel,
+        // Who owns it TODAY. Paired with the target class's department the UI can
+        // render the move ("S&H → CSE Department") instead of silently relocating
+        // the roster into another department's reach.
+        departmentId: klass.departmentId,
+        departmentCode: klass.department.code,
+        departmentName: klass.department.name,
         year: klass.year,
         section: klass.section,
         label: `${programLabel} · ${roman(klass.year)}-${klass.section}`,
@@ -181,9 +214,26 @@ export async function POST(req: Request) {
     if (!year) return Response.json({ error: "Select a valid academic year." }, { status: 400 });
 
     if (!targetClassId) return Response.json({ error: "Select a target class." }, { status: 400 });
+    // THE CROSS-DEPARTMENT HAND-OFF. Two facts about the target are checked, and
+    // a third is deliberately NOT:
+    //
+    //   programId  MUST match. A student keeps their award — you are promoted
+    //              within B.E · CSE, never into a different degree or branch.
+    //   year       MUST be source + 1. Promotion advances exactly one year.
+    //   departmentId  MAY DIFFER, and at the year-1 → year-2 boundary it always
+    //              does. Science & Humanities owns every branch's first year;
+    //              from year 2 the branch's own department owns the class. So
+    //              promoting I-A → II-A moves the roster out of S&H's reach and
+    //              into CSE Department's, and that transfer of ownership IS the
+    //              promotion. Do not "fix" this by adding a departmentId equality
+    //              check — it would make first-year students unpromotable.
+    //
+    // Ownership is never written here: a student's department is derived from
+    // whichever department owns the class their current Enrollment points at, so
+    // landing the new enrollment in the year-2 class moves them by construction.
     const target = await db.class.findUnique({
       where: { id: targetClassId },
-      select: { programId: true, year: true },
+      select: { programId: true, year: true, departmentId: true },
     });
     if (!target || target.programId !== source.programId || target.year !== source.year + 1) {
       return Response.json(
@@ -203,7 +253,9 @@ export async function POST(req: Request) {
       ),
     );
 
-    return Response.json({ processed: studentIds.length, mode });
+    // Report the owning department the roster landed in — it may not be the one
+    // it left (see the hand-off note above), and the caller should be able to say so.
+    return Response.json({ processed: studentIds.length, mode, departmentId: target.departmentId });
   } catch (err) {
     return toAuthResponse(err);
   }

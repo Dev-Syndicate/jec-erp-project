@@ -65,6 +65,7 @@ const PERMISSIONS: Array<{ action: string; subject: string }> = [
   { action: "manage", subject: "Attendance" }, // mark ANY class in scope (HOD/SA)
   { action: "mark", subject: "Attendance" }, // mark only what you teach/advise (Faculty)
   { action: "read", subject: "Attendance" },
+  { action: "manage", subject: "Marks" }, // oversight of a department's results (HOD/SA) — never authorship
   { action: "enter", subject: "Marks" },
   { action: "read", subject: "Marks" },
   { action: "apply", subject: "Leave" }, // student raises an OD/leave request
@@ -94,8 +95,9 @@ const DEFAULT_GRANTS: Record<string, Array<[string, string]>> = {
     ["manage", "Faculty"],
     ["manage", "Subject"],
     ["manage", "Timetable"],
-    ["manage", "Attendance"], // mark any class in their program (covers mark + read)
+    ["manage", "Attendance"], // mark any class in their department (covers mark + read)
     ["read", "Attendance"],
+    ["manage", "Marks"], // oversight: view their department's results without teaching them
     ["enter", "Marks"],
     ["read", "Marks"],
     ["approve", "Leave"], // stage-2 approver (HOD)

@@ -36,6 +36,8 @@ import { PageHeader } from "@/app/(app)/page-header";
 import type { Class, Program } from "@/features/structure/types";
 import { usePrograms } from "@/features/structure/hooks/use-programs";
 import { useStaffOptions } from "@/features/structure/hooks/use-staff";
+import { useDepartments } from "@/features/structure/hooks/use-departments";
+import { DepartmentSelect } from "@/components/department-select";
 import {
   useClasses,
   useCreateClass,
@@ -106,6 +108,7 @@ export function ClassManager() {
             <TableHeader>
               <TableRow>
                 <TableHead>Program</TableHead>
+                <TableHead>Owned by</TableHead>
                 <TableHead className="text-right">Year</TableHead>
                 <TableHead>Section</TableHead>
                 <TableHead>Class teacher</TableHead>
@@ -118,6 +121,9 @@ export function ClassManager() {
               {classes.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-mono text-xs">{c.programLabel}</TableCell>
+                  {/* The owning department — the scoping key, and the column that
+                      shows a first year sitting with S&H while its award is CSE. */}
+                  <TableCell className="text-sm">{c.departmentName}</TableCell>
                   <TableCell className="text-right tabular-nums">{c.year}</TableCell>
                   <TableCell className="font-medium">{c.section}</TableCell>
                   <TableCell className="text-sm">
@@ -212,8 +218,9 @@ function RowActions({
 }
 
 // Create (cls = null) or edit an existing class. On create the Program is a
-// dropdown that bounds the Year options; on edit the Program is fixed and only
-// Year + Section are editable.
+// dropdown that bounds the Year options and the owning department defaults to the
+// one that runs that program; on edit both are fixed and only Year + Section (and
+// the class teacher) are editable.
 function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => void }) {
   const isEdit = cls !== null;
   const create = useCreateClass();
@@ -222,8 +229,13 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
   const { data: programs } = usePrograms();
   const activePrograms = (programs ?? []).filter((p) => p.isActive);
   const staff = useStaffOptions();
+  const departments = useDepartments();
+  const activeDepartments = (departments.data ?? []).filter((d) => d.isActive);
 
   const [programId, setProgramId] = useState(cls?.programId ?? "");
+  // "" = follow the program's own department. Picking one overrides that — the
+  // control that hands a first year to S&H without touching its award.
+  const [departmentId, setDepartmentId] = useState(cls?.departmentId ?? "");
   const [year, setYear] = useState(cls ? String(cls.year) : "");
   const [section, setSection] = useState(cls?.section ?? "");
   const [advisorId, setAdvisorId] = useState(cls?.advisorId ?? NO_ADVISOR);
@@ -260,7 +272,18 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
         { onSuccess: onClose },
       );
     } else {
-      create.mutate({ programId, year: yearNum, section, advisorId: advisor }, { onSuccess: onClose });
+      // Send the owner only when it differs from the program's own department —
+      // omitting it lets the server apply that default.
+      create.mutate(
+        {
+          programId,
+          departmentId: departmentId === "" ? undefined : departmentId,
+          year: yearNum,
+          section,
+          advisorId: advisor,
+        },
+        { onSuccess: onClose },
+      );
     }
   }
 
@@ -271,8 +294,8 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
           <DialogTitle>{isEdit ? "Edit class" : "New class"}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update this class's year and section. The program it belongs to can't be changed."
-              : "Add a class group within a program — pick the program, then its year and section."}
+              ? "Update this class's year and section. The program and the department that owns it can't be changed."
+              : "Add a class group within a program — pick the award, who owns the class, then its year and section."}
           </DialogDescription>
         </DialogHeader>
 
@@ -288,11 +311,15 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
               <Select
                 value={programId}
                 onValueChange={(v) => {
-                  setProgramId((v as string) ?? "");
+                  const next = (v as string) ?? "";
+                  setProgramId(next);
                   // Reset year (duration bound changed) + advisor (staff are
                   // program-scoped, so the previous pick may no longer apply).
                   setYear("");
                   setAdvisorId(NO_ADVISOR);
+                  // Default the owner to the department that runs the new program;
+                  // the admin can still hand the class to another one.
+                  setDepartmentId(activePrograms.find((p) => p.id === next)?.departmentId ?? "");
                 }}
               >
                 <SelectTrigger id="class-program" className="h-10! w-full">
@@ -312,6 +339,29 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
                 </SelectContent>
               </Select>
             )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="class-department">Owned by</Label>
+            {isEdit ? (
+              // The owner is fixed after create — show it read-only.
+              <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                {cls.departmentName}
+              </div>
+            ) : (
+              <DepartmentSelect
+                id="class-department"
+                value={departmentId}
+                onChange={setDepartmentId}
+                departments={activeDepartments}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">
+              The department this class belongs to day to day — its HOD and staff.
+              Defaults to the department that runs the program. Change it to hand a
+              first-year class to Science &amp; Humanities while its award stays
+              B.E · CSE.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

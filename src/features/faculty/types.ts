@@ -24,6 +24,12 @@ export type Faculty = {
   motherName: string | null;
   status: "ACTIVE" | "INACTIVE"; // = User.status (login enabled?)
   mustChangePassword: boolean; // still on the temp password (never logged in)
+  // Who EMPLOYS them — the primary fact, and what the server scopes the list on.
+  departmentId: string;
+  departmentCode: string; // "CSE", "S&H"
+  departmentName: string;
+  // Secondary and conditional: null for staff of a department that runs no award
+  // (S&H teaches every branch's first year but graduates nobody).
   programId: string | null;
   programLabel: string | null; // "B.E · CSE"
   roles: string[];
@@ -45,7 +51,10 @@ export type Role = {
 export type FacultyInput = {
   email: string;
   displayName: string;
-  programId: string;
+  departmentId: string; // required — the employing department is the anchor
+  // null when the department runs no award. The server REJECTS a program for such
+  // a department rather than discarding it, so the dialog must send null, not "".
+  programId: string | null;
   roleIds: string[]; // one or more assignable roles
   staffId: string;
   designation: string;
@@ -82,7 +91,10 @@ export type FacultyPatch = {
   fatherName?: string | null;
   motherName?: string | null;
   status?: "ACTIVE" | "INACTIVE";
-  programId?: string; // reassign to a different program (the scoping key)
+  departmentId?: string; // re-employ into a different department (the scoping key)
+  // Explicit `null` CLEARS the program — that is how a move into a department
+  // running no award is expressed. Omitted = leave alone; "" is a 400.
+  programId?: string | null;
   roleIds?: string[]; // replace the whole role set (e.g. HOD rotation)
 };
 
@@ -91,6 +103,18 @@ export type FacultyPatch = {
 export type ProgramOption = {
   id: string;
   label: string; // "B.E · CSE"
+  // Which department RUNS this award. The dialog filters the program list on it,
+  // so a lecturer is never attached to another department's program.
+  departmentId: string;
   durationYears: number;
   isActive: boolean;
+};
+
+export type DepartmentOption = {
+  id: string;
+  name: string; // "Computer Science and Engineering Department"
+  code: string; // "CSE", "S&H"
+  isActive: boolean;
+  // 0 = runs no award (S&H), which is what makes the program field disappear.
+  programCount: number;
 };

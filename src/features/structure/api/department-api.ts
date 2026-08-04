@@ -17,3 +17,21 @@ export function createDepartment(input: DepartmentInput): Promise<Department> {
     body: JSON.stringify(input),
   });
 }
+
+// Partial update — name/code (rename) or isActive (the deactivate that stands in
+// for a delete once the department owns anything).
+export function updateDepartment(
+  id: string,
+  input: Partial<DepartmentInput> & { isActive?: boolean },
+): Promise<Department> {
+  return apiFetch<Department>(`/api/departments/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(input),
+  });
+}
+
+// Only succeeds for a department that owns nothing at all; otherwise the API
+// returns 409 telling the admin to deactivate instead.
+export function deleteDepartment(id: string): Promise<{ ok: true }> {
+  return apiFetch<{ ok: true }>(`/api/departments/${id}`, { method: "DELETE" });
+}

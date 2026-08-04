@@ -104,6 +104,10 @@ const DEFAULT_GRANTS: Record<string, Array<[string, string]>> = {
     ["read", "Leave"],
     ["read", "Class"],
     ["read", "Program"],
+    // Needed for the department picker on the faculty form — an HOD provisions
+    // staff into their own department, so they must be able to name it. The GET is
+    // scoped to their own department; creating one stays Super-Admin-only.
+    ["read", "Branch"],
   ],
   Faculty: [
     ["read", "Student"],

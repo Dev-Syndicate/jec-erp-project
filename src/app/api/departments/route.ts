@@ -33,11 +33,20 @@ function parseDepartmentBody(body: unknown): { data: ParsedDepartment } | { erro
 export async function GET(req: Request) {
   try {
     const ctx = await authenticate(req);
-    // Same capability as Branch — Structure is Super-Admin only, and the program
-    // and class forms both need this list to name an owner.
-    authorize(ctx, "manage", "Branch");
+    // A READ, gated on `read Branch` rather than `manage Branch`. Creating a
+    // department is Super-Admin-only (see POST), but the list is a PICKER: the
+    // faculty form needs it to name an employer, and that form is open to HODs.
+    // Requiring the write capability here would 403 every HOD on a dropdown.
+    authorize(ctx, "read", "Branch");
+
+    // Scoped like the rest of the employment axis: an institution role sees every
+    // department, anyone else sees only their own — so a HOD's picker offers the
+    // one department they may actually assign staff to, and the list can't be used
+    // to enumerate the college.
+    const where = ctx.isInstitutionScoped ? {} : { id: ctx.departmentId ?? "__none__" };
 
     const departments = await db.department.findMany({
+      where,
       orderBy: [{ isActive: "desc" }, { name: "asc" }],
       include: {
         _count: { select: { programs: true, classes: true, facultyProfiles: true } },

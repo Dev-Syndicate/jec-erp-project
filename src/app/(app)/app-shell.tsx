@@ -176,11 +176,14 @@ const NAV: NavGroup[] = [
         href: "/structure/degrees",
         icon: Building2,
         roles: ["Super Admin"],
-        // The dependency chain: a Program pairs a Degree × Branch; a Class sits
-        // within a Program.
+        // Ordered by the dependency chain, so setting the college up top to bottom
+        // works: a Program pairs a Degree × Branch AND names the Department that
+        // runs it, and a Class sits within a Program while being OWNED by a
+        // department (S&H for first year, the branch's own from year 2).
         children: [
           { title: "Degrees", href: "/structure/degrees" },
           { title: "Branches", href: "/structure/branches" },
+          { title: "Departments", href: "/structure/departments" },
           { title: "Programs", href: "/structure/programs" },
           { title: "Classes", href: "/structure/classes" },
         ],

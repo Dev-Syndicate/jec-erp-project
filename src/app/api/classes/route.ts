@@ -66,10 +66,13 @@ export async function GET(req: Request) {
     // so it's `read` (they hold read Class), not the `manage` the create needs.
     authorize(ctx, "read", "Class");
 
-    // Super Admin: all classes. Scoped roles: only classes in their own program.
+    // Super Admin: all classes. Scoped roles: the classes their own DEPARTMENT
+    // owns. Department, not program: staff carry no award (User.programId is null
+    // for every staff account since the department model landed), so filtering on
+    // it here returned an empty list for every HOD.
     const where = ctx.isInstitutionScoped
       ? {}
-      : { programId: ctx.user.programId ?? "__none__" };
+      : { departmentId: ctx.departmentId ?? "__none__" };
 
     const classes = await db.class.findMany({
       relationLoadStrategy: "join",
@@ -116,6 +119,12 @@ export async function POST(req: Request) {
     if (!departmentId) {
       return Response.json({ error: "Select a valid program." }, { status: 400 });
     }
+
+    // Scoped on the OWNER, and checked only now because the owner isn't known until
+    // it's resolved above. A HOD may create classes for their own department only;
+    // without this, `manage Class` would let them plant a class in any department —
+    // including handing one to S&H — since the capability check alone is unscoped.
+    authorize(ctx, "manage", "Class", { departmentId });
 
     // The class teacher (if chosen) must be active staff in this program.
     // Against the OWNING department, not the award — the class teacher is staff of

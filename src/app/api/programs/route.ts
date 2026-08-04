@@ -77,11 +77,15 @@ export async function GET(req: Request) {
     const ctx = await authenticate(req);
     authorize(ctx, "read", "Program");
 
-    // Super Admin: all programs. Scoped roles: only their own program (a Program
-    // IS the scoping key, so it filters on the id itself).
+    // Super Admin: all programs. Scoped roles: the awards their own DEPARTMENT
+    // runs — a department may run several (Civil running B.E-CIVIL and B.E-STRUCT),
+    // which is exactly why this can't be a single stored id.
+    //
+    // Was `ctx.user.programId`, which is null for every staff account since the
+    // department model landed — so this returned an empty list to every HOD.
     const where = ctx.isInstitutionScoped
       ? {}
-      : { id: ctx.user.programId ?? "__none__" };
+      : { id: { in: ctx.ownProgramIds } };
 
     const programs = await db.program.findMany({
       where,

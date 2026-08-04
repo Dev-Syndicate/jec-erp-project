@@ -102,6 +102,12 @@ const DEFAULT_GRANTS: Record<string, Array<[string, string]>> = {
     ["read", "Marks"],
     ["approve", "Leave"], // stage-2 approver (HOD)
     ["read", "Leave"],
+    // Their own department's classes: set the class teacher, add/retire sections.
+    // `Class` is DEPARTMENT-scoped, so the grant carries { departmentId } and a HOD
+    // reaches only the classes their department OWNS — a first-year B.E-CSE class
+    // belongs to S&H, not to the CSE HOD. The routes pass that resource on every
+    // path; `manage Class` on its own is an unscoped, institution-wide check.
+    ["manage", "Class"],
     ["read", "Class"],
     ["read", "Program"],
     // Needed for the department picker on the faculty form — an HOD provisions

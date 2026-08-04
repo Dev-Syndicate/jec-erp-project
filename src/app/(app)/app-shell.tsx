@@ -194,6 +194,16 @@ const NAV: NavGroup[] = [
           { title: "Classes", href: "/structure/classes" },
         ],
       },
+      {
+        title: "Classes",
+        href: "/structure/classes",
+        icon: UsersRound,
+        // A HOD runs their own department's classes — setting the class teacher
+        // above all. Super Admin reaches the same page through "Structure setup"
+        // above, so this entry is HOD-only to avoid listing it twice for them.
+        // The API scopes it: a HOD sees only the classes their department owns.
+        roles: ["HOD"],
+      },
     ],
   },
   {

@@ -371,6 +371,14 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
               <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
                 {cls.departmentName}
               </div>
+            ) : activeDepartments.length === 0 ? (
+              // /api/departments is Super-Admin-only, so a HOD gets nothing here.
+              // That's correct rather than broken: they can only create a class for
+              // their own department anyway, and the server derives that from the
+              // program. Show what will happen instead of an empty, dead control.
+              <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                The department that runs the selected program
+              </div>
             ) : (
               <DepartmentSelect
                 id="class-department"

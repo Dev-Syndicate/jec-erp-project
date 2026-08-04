@@ -39,8 +39,11 @@ function parsePatchBody(body: unknown): { data: ClassPatch } | { error: string }
   }
 
   if (b.section !== undefined) {
+    // Same rule as create: free text, stored uppercase so "a" and "A" can never
+    // become two sections under the (programId, year, section) unique key.
     const section = typeof b.section === "string" ? b.section.trim().toUpperCase() : "";
-    if (!/^[A-H]$/.test(section)) return { error: "Section must be a single letter A–H." };
+    if (!section) return { error: "Section can't be empty." };
+    if (section.length > 4) return { error: "Section can be at most 4 characters." };
     data.section = section;
   }
 

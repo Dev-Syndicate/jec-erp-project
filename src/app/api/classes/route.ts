@@ -44,8 +44,13 @@ function parseClassBody(body: unknown):
     return { error: "Year must be a whole number of 1 or more." };
   }
 
+  // Free text, but STORED UPPERCASE — "a" and "A" must never become two different
+  // sections, since (programId, year, section) is unique and the pair would both
+  // be accepted. Uppercasing here (not only in the form) is what makes that true
+  // for every caller, the importer and scripts included.
   const rawSection = typeof b.section === "string" ? b.section.trim().toUpperCase() : "";
-  if (!/^[A-H]$/.test(rawSection)) return { error: "Section must be a single letter A–H." };
+  if (!rawSection) return { error: "Section is required." };
+  if (rawSection.length > 4) return { error: "Section can be at most 4 characters." };
 
   // advisorId (class teacher) is optional — validated against the program in POST.
   const advisorId =

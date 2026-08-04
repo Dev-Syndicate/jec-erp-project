@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Plus, Pencil, Power, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -49,8 +50,8 @@ import {
 // are cuids so this never collides with a real staff id.
 const NO_ADVISOR = "none";
 
-// Sections a class can take. Year options are derived from the program duration.
-const SECTIONS = ["A", "B", "C", "D", "E", "F", "G", "H"] as const;
+// Section is free text (upper-cased); Year options are derived from the program's
+// degree duration.
 
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -274,11 +275,15 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
   const yearOptions = Array.from({ length: durationYears }, (_, i) => i + 1);
 
   const yearNum = Number(year);
+  // Section is free text; the same bounds the server applies (non-empty, ≤4 chars
+  // after trimming). It's already upper-cased by the input's onChange.
+  const trimmedSection = section.trim();
   const valid =
     programId !== "" &&
     Number.isInteger(yearNum) &&
     yearNum >= 1 &&
-    /^[A-H]$/.test(section);
+    trimmedSection !== "" &&
+    trimmedSection.length <= 4;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -286,7 +291,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
     const advisor = effectiveAdvisorId === NO_ADVISOR ? null : effectiveAdvisorId;
     if (isEdit) {
       update.mutate(
-        { id: cls.id, input: { year: yearNum, section, advisorId: advisor } },
+        { id: cls.id, input: { year: yearNum, section: trimmedSection, advisorId: advisor } },
         { onSuccess: onClose },
       );
     } else {
@@ -297,7 +302,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
           programId,
           departmentId: departmentId === "" ? undefined : departmentId,
           year: yearNum,
-          section,
+          section: trimmedSection,
           advisorId: advisor,
         },
         { onSuccess: onClose },
@@ -404,20 +409,24 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="class-section">Section</Label>
-              <Select value={section} onValueChange={(v) => setSection((v as string) ?? "")}>
-                <SelectTrigger id="class-section" className="h-10! w-full">
-                  <SelectValue placeholder="Section">
-                    {(v) => (v ? String(v) : "Section")}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {SECTIONS.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Free text rather than a fixed A–H list, so a college running
+                  "P1" or more than eight sections isn't blocked. Upper-cased on
+                  the way IN, not just on save: the field shows exactly what will
+                  be stored, and (programId, year, section) is unique — "a" and
+                  "A" must never be able to become two different sections. The
+                  server upper-cases too, since the form isn't the only caller. */}
+              <Input
+                id="class-section"
+                value={section}
+                onChange={(e) => setSection(e.target.value.toUpperCase())}
+                placeholder="A"
+                maxLength={4}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                className="h-10! uppercase"
+                required
+              />
             </div>
           </div>
 

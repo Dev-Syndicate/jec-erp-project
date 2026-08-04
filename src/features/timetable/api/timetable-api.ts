@@ -30,7 +30,16 @@ export function deleteSlot(id: string): Promise<{ ok: true }> {
 }
 
 // --- Picker options -------------------------------------------------------
-type RawClass = { id: string; programId: string; programLabel: string; year: number; section: string; isActive: boolean };
+type RawClass = {
+  id: string;
+  programId: string;
+  programLabel: string;
+  departmentId: string;
+  departmentCode: string;
+  year: number;
+  section: string;
+  isActive: boolean;
+};
 export async function fetchClassOptions(): Promise<ClassOption[]> {
   const classes = await apiFetch<RawClass[]>("/api/classes");
   return classes.map((c) => ({
@@ -39,6 +48,10 @@ export async function fetchClassOptions(): Promise<ClassOption[]> {
     shortLabel: `${roman(c.year)}-${c.section}`,
     programId: c.programId,
     programLabel: c.programLabel,
+    // Carried through so the faculty picker can filter on the class's OWNER —
+    // the server accepts only staff of that department for a slot.
+    departmentId: c.departmentId,
+    departmentCode: c.departmentCode,
     isActive: c.isActive,
   }));
 }
@@ -56,14 +69,24 @@ export async function fetchSubjectOptions(): Promise<SubjectOption[]> {
   }));
 }
 
-type RawFaculty = { userId: string; displayName: string; programId: string | null; status: "ACTIVE" | "INACTIVE" };
+// Staff are keyed on DEPARTMENT, not program: a staff account is scoped only by
+// who employs them, and an S&H lecturer has no award at all — filtering these by
+// program would match nobody and silently empty the picker.
+type RawFaculty = {
+  userId: string;
+  displayName: string;
+  departmentId: string;
+  departmentCode: string;
+  status: "ACTIVE" | "INACTIVE";
+};
 export async function fetchFacultyOptions(): Promise<FacultyOption[]> {
   const faculty = await apiFetch<RawFaculty[]>("/api/faculty");
   // A slot's facultyId references User.id — so map to userId, not the profile id.
   return faculty.map((f) => ({
     id: f.userId,
     name: f.displayName,
-    programId: f.programId,
+    departmentId: f.departmentId,
+    departmentCode: f.departmentCode,
     status: f.status,
   }));
 }

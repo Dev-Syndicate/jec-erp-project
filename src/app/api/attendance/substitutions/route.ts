@@ -102,6 +102,10 @@ export async function GET(req: Request) {
 
     return Response.json({
       classId,
+      // The class's OWNING department — the picker needs it to offer only the
+      // staff POST will accept as a substitute. Sent from here because the class
+      // list the screen already has is filtered by award, not by owner.
+      departmentId: klass.departmentId,
       date: dateStr,
       weekday: day.weekday,
       ...(dayName(date) === "SAT" ? { followsDay: day.weekday } : {}),

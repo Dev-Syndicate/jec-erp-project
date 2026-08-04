@@ -46,6 +46,12 @@ export type ClassOption = {
   shortLabel: string; // within a program: "II-A"
   programId: string;
   programLabel: string; // "B.E · CSE" — for the program picker
+  // WHO OWNS the class — the department that timetables it, which for a
+  // first-year class is S&H even though the award is B.E · CSE. The faculty
+  // picker filters on this; the subject picker still uses programId (subjects
+  // belong to the award, teachers to the owning department).
+  departmentId: string;
+  departmentCode: string;
   isActive: boolean;
 };
 
@@ -61,6 +67,9 @@ export type SubjectOption = {
 export type FacultyOption = {
   id: string; // = User.id (what a slot's facultyId references)
   name: string;
-  programId: string | null;
+  // The department that EMPLOYS them — the only thing scoping a staff account.
+  // Staff carry no award, so there is no programId here to filter by.
+  departmentId: string;
+  departmentCode: string;
   status: "ACTIVE" | "INACTIVE";
 };

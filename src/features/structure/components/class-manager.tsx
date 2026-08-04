@@ -240,10 +240,28 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
   const [section, setSection] = useState(cls?.section ?? "");
   const [advisorId, setAdvisorId] = useState(cls?.advisorId ?? NO_ADVISOR);
 
-  // The advisor must be staff in the class's program. On create that's the
-  // selected program; on edit it's fixed to the class's program.
-  const advisorProgramId = isEdit ? cls.programId : programId;
-  const advisorOptions = (staff.data ?? []).filter((s) => s.programId === advisorProgramId);
+  // The advisor must be staff of the department that OWNS the class — the "Owned
+  // by" field above, not the award. That is what makes an S&H lecturer eligible to
+  // be class teacher of a first-year class whose award is B.E · CSE.
+  //
+  // Resolved the same way the server does: an explicit owner wins, otherwise the
+  // department that runs the selected program. On edit the class already has one.
+  const ownerDepartmentId = isEdit
+    ? (departmentId || cls.departmentId)
+    : departmentId || (activePrograms.find((p) => p.id === programId)?.departmentId ?? "");
+  const advisorOptions = (staff.data ?? []).filter((s) => s.departmentId === ownerDepartmentId);
+
+  // The stored advisor is treated as a REQUEST, not the truth: handing the class
+  // to another department can strand a pick that belonged to the old one. Deriving
+  // the effective value (rather than resetting it in an effect) means the form can
+  // never submit an advisor the owning department doesn't employ. The edit dialog
+  // keeps the advisor already on the record even once staff have loaded, so opening
+  // it never silently clears a class teacher nobody asked to change.
+  const advisorStillValid =
+    advisorId === NO_ADVISOR ||
+    (isEdit && advisorId === cls.advisorId) ||
+    advisorOptions.some((s) => s.userId === advisorId);
+  const effectiveAdvisorId = advisorStillValid ? advisorId : NO_ADVISOR;
 
   const pending = create.isPending || update.isPending;
   const mutationError = create.error ?? update.error;
@@ -265,7 +283,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
-    const advisor = advisorId === NO_ADVISOR ? null : advisorId;
+    const advisor = effectiveAdvisorId === NO_ADVISOR ? null : effectiveAdvisorId;
     if (isEdit) {
       update.mutate(
         { id: cls.id, input: { year: yearNum, section, advisorId: advisor } },
@@ -406,9 +424,9 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
           <div className="flex flex-col gap-2">
             <Label htmlFor="class-advisor">Class teacher</Label>
             <Select
-              value={advisorId}
+              value={effectiveAdvisorId}
               onValueChange={(v) => setAdvisorId((v as string) ?? NO_ADVISOR)}
-              disabled={advisorProgramId === ""}
+              disabled={ownerDepartmentId === ""}
             >
               <SelectTrigger id="class-advisor" className="h-10! w-full">
                 <SelectValue placeholder="Optional">
@@ -431,9 +449,10 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
                 ))}
               </SelectContent>
             </Select>
-            {advisorProgramId !== "" && !staff.isPending && advisorOptions.length === 0 && (
+            {ownerDepartmentId !== "" && !staff.isPending && advisorOptions.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No staff in this program yet — add faculty first, then set the class teacher.
+                No staff in the owning department yet — add faculty to it first, then set the
+                class teacher.
               </p>
             )}
           </div>

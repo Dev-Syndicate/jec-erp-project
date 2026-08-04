@@ -140,6 +140,9 @@ export type ClassInput = {
 export type StaffOption = {
   userId: string;
   displayName: string;
-  programId: string | null;
+  // The department that EMPLOYS them — what the advisor picker filters on. Staff
+  // carry no award, so there is no program here to filter by.
+  departmentId: string;
+  departmentCode: string;
   designation: string | null;
 };

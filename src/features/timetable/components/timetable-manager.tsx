@@ -1,7 +1,8 @@
 // Timetable grid — build the Mon–Fri period grid for a class in the active
 // semester. Pick a class, then each (day, period) cell holds a subject + the
 // faculty who takes it. Subjects are filtered to the class's curriculum semester
-// and program; faculty to the program. One slot per (class, day, period).
+// and program; faculty to the department that OWNS the class. One slot per
+// (class, day, period).
 "use client";
 
 import { useState } from "react";
@@ -203,6 +204,7 @@ export function TimetableManager() {
         <SlotDialog
           classId={classId}
           programId={selectedClass.programId}
+          departmentId={selectedClass.departmentId}
           curriculumSemesterNumber={view.data?.curriculumSemesterNumber ?? 0}
           day={editing.day}
           period={editing.period}
@@ -217,6 +219,7 @@ export function TimetableManager() {
 function SlotDialog({
   classId,
   programId,
+  departmentId,
   curriculumSemesterNumber,
   day,
   period,
@@ -224,7 +227,8 @@ function SlotDialog({
   onClose,
 }: {
   classId: string;
-  programId: string;
+  programId: string; // the AWARD — scopes the subject list
+  departmentId: string; // the class's OWNER — scopes the faculty list
   curriculumSemesterNumber: number;
   day: DayOfWeek;
   period: number;
@@ -246,9 +250,14 @@ function SlotDialog({
     )
     .map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }));
 
+  // Faculty are matched on the class's OWNING department, not its award — that's
+  // exactly what POST /api/timetable enforces. It also makes an S&H lecturer (who
+  // has no award at all) eligible for the first-year classes S&H runs. The
+  // department code rides along in the label so a lecturer from another
+  // department is recognisable at a glance.
   const facultyOptions = (faculty.data ?? [])
-    .filter((f) => f.status === "ACTIVE" && f.programId === programId)
-    .map((f) => ({ value: f.id, label: f.name }));
+    .filter((f) => f.status === "ACTIVE" && f.departmentId === departmentId)
+    .map((f) => ({ value: f.id, label: `${f.name} · ${f.departmentCode}` }));
 
   const valid = subjectId !== "" && facultyId !== "";
   const pending = upsert.isPending || del.isPending;
@@ -307,7 +316,9 @@ function SlotDialog({
                   onChange={setFacultyId}
                   options={facultyOptions}
                   placeholder={
-                    facultyOptions.length === 0 ? "No faculty in this program" : "Select faculty"
+                    facultyOptions.length === 0
+                      ? "No faculty in the department that owns this class"
+                      : "Select faculty"
                   }
                 />
               </div>

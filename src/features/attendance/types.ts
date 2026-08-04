@@ -193,6 +193,10 @@ export type CoverPeriod = {
 
 export type CoverView = {
   classId: string;
+  // The department that OWNS this class. The covering teacher must be staff of
+  // it (the API refuses anyone else), and staff carry no award — so this, not
+  // the class's program, is what the cover picker filters on.
+  departmentId: string;
   date: string;
   weekday: Weekday;
   followsDay?: Weekday;

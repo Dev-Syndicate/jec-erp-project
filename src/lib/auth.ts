@@ -53,8 +53,103 @@ function loadUser(uid: string) {
           role: { include: { permissions: { include: { permission: true } } } },
         },
       },
+      // The employment axis: which department employs this person, and which
+      // awards that department runs. Both ride the existing 30s cache rather than
+      // costing a second round-trip per request.
+      facultyProfile: {
+        select: {
+          departmentId: true,
+          department: { select: { programs: { select: { id: true } } } },
+        },
+      },
     },
   });
+}
+
+/** The subset of a loaded user that scope derivation needs. */
+export type GrantUser = {
+  programId: string | null;
+  facultyProfile: {
+    departmentId: string;
+    department: { programs: Array<{ id: string }> };
+  } | null;
+};
+
+export type Scopes = {
+  /** The department that employs this user. Null for students. */
+  departmentId: string | null;
+  /** The awards this user's department runs — their ADMINISTRATIVE reach. */
+  ownProgramIds: string[];
+};
+
+/**
+ * Derive a user's scopes from their loaded record.
+ *
+ * Extracted as a pure function (rather than left inline in `authenticate`) so the
+ * unit suite can exercise it — Vitest cannot reach the DB, so anything embedded in
+ * the authenticated request path is untestable by construction.
+ *
+ * The branch on `facultyProfile` is load-bearing, not defensive. A student has no
+ * department, so deriving their scope from one would yield an empty set and lock
+ * them out of their own records entirely — students keep `User.programId` as their
+ * scope, and only staff resolve through a department.
+ *
+ * A staff member's reach is DERIVED from their department rather than stored, which
+ * is why one HOD covers every award their department runs — B.E-CIVIL and
+ * B.E-STRUCT alike — instead of a single stored programId.
+ */
+export function scopesFor(user: GrantUser): Scopes {
+  const profile = user.facultyProfile;
+
+  const ownProgramIds = profile
+    ? profile.department.programs.map((p) => p.id) // staff: via their department
+    : user.programId
+      ? [user.programId] // student: their own program
+      : [];
+
+  return { departmentId: profile?.departmentId ?? null, ownProgramIds };
+}
+
+/** A role's granted permissions, in the shape grant-building needs. */
+export type GrantRoles = Array<{
+  role: {
+    scope: string;
+    permissions: Array<{ permission: { action: string; subject: string } }>;
+  };
+}>;
+
+/**
+ * Flatten every role's granted permissions into CASL grants, conditioned on the
+ * axis the SUBJECT is scoped by. Pure, so the unit suite can pin the rules.
+ *
+ * Two axes, because two different questions scope different subjects:
+ *
+ *   `Faculty`      → `{ departmentId }`  — a person, scoped by who EMPLOYS them.
+ *                    An S&H HOD manages S&H staff even though S&H runs no award.
+ *   everything else → `{ programId: { $in: ownProgramIds } }` — a record, scoped
+ *                    by which award owns it.
+ *
+ * `Student` sits on the ACADEMIC axis deliberately: a student's program is exactly
+ * their program, so there is no separate employment question for them.
+ *
+ * Both empty cases fail closed. A PROGRAM role with no department matches nothing
+ * via the `__none__` sentinel (a null condition would otherwise match
+ * null-department resources), and an empty `ownProgramIds` gives `$in: []`, which
+ * matches nothing on its own.
+ */
+export function buildGrants(user: GrantUser & { roles: GrantRoles }): Grant[] {
+  const { departmentId, ownProgramIds } = scopesFor(user);
+
+  return user.roles.flatMap((ur) =>
+    ur.role.permissions.map((rp) => {
+      const { action, subject } = rp.permission;
+      if (ur.role.scope !== "PROGRAM") return { action, subject, conditions: undefined };
+
+      return subject === "Faculty"
+        ? { action, subject, conditions: { departmentId: departmentId ?? "__none__" } }
+        : { action, subject, conditions: { programId: { $in: ownProgramIds } } };
+    }),
+  );
 }
 
 async function resolveUser(uid: string): Promise<CachedUser | null> {
@@ -115,27 +210,23 @@ export async function authenticate(req: Request) {
   // a PROGRAM-scoped role is conditioned on the user's own programId (so it only
   // applies to resources in that program); INSTITUTION grants are unconditional.
   // Duplicate grants across roles are harmless (CASL collapses them).
-  const grants: Grant[] = user.roles.flatMap((ur) =>
-    ur.role.permissions.map((rp) => ({
-      action: rp.permission.action,
-      subject: rp.permission.subject,
-      // A PROGRAM role with no programId must match NOTHING (fail closed, like the
-      // old assertProgramScope's `!ctx.user.programId` guard) — a null condition
-      // would otherwise match null-programId resources. The `__none__` sentinel is
-      // the same fence the list `where` filters use.
-      conditions:
-        ur.role.scope === "PROGRAM" ? { programId: user.programId ?? "__none__" } : undefined,
-    })),
-  );
+  const grants = buildGrants(user);
+  const scopes = scopesFor(user);
 
   return {
     user,
     uid,
     roles: user.roles.map((r) => r.role.name),
     // An INSTITUTION-scoped role (Super Admin) acts across every program; PROGRAM
-    // roles are confined to their own program by the ability's programId conditions
-    // (still exposed as a flag for the list `where` filters).
+    // roles are confined by the ability's conditions (still exposed as a flag for
+    // the list `where` filters).
     isInstitutionScoped: user.roles.some((r) => r.role.scope === "INSTITUTION"),
+    // The employment axis — who this user's department is. Use for `Faculty`
+    // filters and for "which classes does my department own".
+    departmentId: scopes.departmentId,
+    // The academic axis — the awards their department runs. Use for
+    // administrative list filters (a department may run several).
+    ownProgramIds: scopes.ownProgramIds,
     ability: defineAbilityFor(grants),
     mustChangePassword: user.mustChangePassword,
   };
@@ -145,10 +236,24 @@ export async function authenticate(req: Request) {
 // Authorization (step two). `authorize` is the CASL-backed permission check that
 // replaced the requireRole role-name stopgap: it asks the ability built from the
 // user's DB grants whether they may perform `action` on `subject`. Passing a
-// `resource` also enforces the grant's program condition (a PROGRAM role acts only
-// within its own program) — folding what used to be a separate assertProgramScope
-// call into the same check.
+// `resource` also enforces the grant's scope condition — folding what used to be a
+// separate assertProgramScope call into the same check.
 // ---------------------------------------------------------------------------
+
+/**
+ * The scope a resource carries, matching the axis its subject is scoped by:
+ *
+ *   `{ departmentId }` — a person, scoped by who employs them: the `Faculty`
+ *                        subject, and anything a department OWNS (e.g. a Class).
+ *   `{ programId }`    — a record, scoped by the award that owns it.
+ *
+ * A UNION rather than two optional fields on purpose: a resource carrying neither
+ * then fails to type-check, instead of silently degrading to a capability-only
+ * (unscoped) check — which is the trap the old optional `resource` argument set.
+ */
+export type ScopedResource =
+  | { programId: string | null }
+  | { departmentId: string | null };
 
 /**
  * Throw 403 unless the user's granted permissions allow `action` on `subject`.
@@ -168,7 +273,7 @@ export function authorize(
   ctx: AuthContext,
   action: string,
   subject: string,
-  resource?: { programId: string | null },
+  resource?: ScopedResource,
 ): void {
   // asSubject tags the resource with its subject type so CASL evaluates the
   // grant's conditions against it (cast: the tag adds a hidden symbol prop).
@@ -192,7 +297,7 @@ export function can(
   ctx: AuthContext,
   action: string,
   subject: string,
-  resource?: { programId: string | null },
+  resource?: ScopedResource,
 ): boolean {
   const target =
     resource === undefined

@@ -22,7 +22,12 @@ import { authenticate, invalidateAuthUser, authorize, toAuthResponse } from "@/l
 import { db } from "@/lib/db";
 import { updateFirebaseEmail } from "@/lib/firebase-admin";
 import { isUniqueViolation } from "@/lib/prisma-errors";
-import { FACULTY_INCLUDE, toFacultyDto, validateAssignableRoles } from "../dto";
+import {
+  FACULTY_INCLUDE,
+  toFacultyDto,
+  validateAssignableRoles,
+  validateDepartmentAndProgram,
+} from "../dto";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +44,10 @@ type FacultyPatch = {
   fatherName?: string | null;
   motherName?: string | null;
   status?: "ACTIVE" | "INACTIVE";
-  programId?: string;
+  departmentId?: string;
+  // `null` CLEARS the program — that is how a move into a department running no
+  // award is expressed. An empty string is still an error (see the parser).
+  programId?: string | null;
   roleIds?: string[];
 };
 
@@ -119,10 +127,21 @@ export function parsePatchBody(body: unknown): { data: FacultyPatch } | { error:
     }
     data.status = b.status;
   }
+  if (b.departmentId !== undefined) {
+    const v = typeof b.departmentId === "string" ? b.departmentId.trim() : "";
+    if (!v) return { error: "Department can't be empty." };
+    data.departmentId = v;
+  }
   if (b.programId !== undefined) {
-    const v = typeof b.programId === "string" ? b.programId.trim() : "";
-    if (!v) return { error: "Program can't be empty." };
-    data.programId = v;
+    // Explicit null clears it (moving into a department that runs no award);
+    // a blank string is a half-filled form and must NOT silently detach them.
+    if (b.programId === null) {
+      data.programId = null;
+    } else {
+      const v = typeof b.programId === "string" ? b.programId.trim() : "";
+      if (!v) return { error: "Program can't be empty." };
+      data.programId = v;
+    }
   }
   if (b.roleIds !== undefined) {
     if (!Array.isArray(b.roleIds)) return { error: "Roles must be a list." };
@@ -151,25 +170,40 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const existing = await db.facultyProfile.findUnique({
       where: { id },
-      include: { user: { select: { id: true, firebaseUid: true, programId: true, email: true } } },
+      select: {
+        departmentId: true,
+        user: { select: { id: true, firebaseUid: true, programId: true, email: true } },
+      },
     });
     if (!existing) return Response.json({ error: "Faculty not found." }, { status: 404 });
-    authorize(ctx, "manage", "Faculty", { programId: existing.user.programId });
+    // Employment axis — you may edit staff YOUR department employs.
+    authorize(ctx, "manage", "Faculty", { departmentId: existing.departmentId });
 
     // displayName lives on User, not FacultyProfile — it must be pulled out here
     // alongside the other User-side fields, or it would be spread into the
     // profile update as an unknown column and throw.
-    const { status, programId, displayName, email, dateOfBirth, roleIds, ...facultyFields } =
+    const { status, departmentId, programId, displayName, email, dateOfBirth, roleIds, ...facultyFields } =
       parsed.data;
     // Only a real change is worth a Firebase round-trip (and a rollback risk).
     const emailChanged = email !== undefined && email !== existing.user.email;
 
-    // Moving to another program: the target must exist and be within your scope
-    // (a scoped user can't move a faculty into a program they don't own).
-    if (programId !== undefined) {
-      const program = await db.program.findUnique({ where: { id: programId }, select: { id: true } });
-      if (!program) return Response.json({ error: "Select a valid program." }, { status: 400 });
-      authorize(ctx, "manage", "Faculty", { programId: programId });
+    // A move re-validates the RESULTING pair, not each field against the old state:
+    // changing only the department would otherwise leave the old program behind and
+    // strand the lecturer in another department's award.
+    const movesDepartment = departmentId !== undefined;
+    const movesProgram = programId !== undefined;
+    let resolvedProgramId: string | null | undefined;
+    if (movesDepartment || movesProgram) {
+      const targetDepartmentId = departmentId ?? existing.departmentId;
+      const targetProgramId = movesProgram ? programId : existing.user.programId;
+
+      // You must be allowed to act in the department they're moving INTO, as well
+      // as the one they're leaving (checked above).
+      authorize(ctx, "manage", "Faculty", { departmentId: targetDepartmentId });
+
+      const pair = await validateDepartmentAndProgram(targetDepartmentId, targetProgramId);
+      if ("error" in pair) return Response.json({ error: pair.error }, { status: 400 });
+      resolvedProgramId = pair.ok;
     }
 
     // Reassigning roles (e.g. HOD rotation): validate they're assignable first.
@@ -183,12 +217,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // User-side fields (display name, login status + scoping key) vs profile fields.
     const userData: {
       status?: "ACTIVE" | "INACTIVE";
-      programId?: string;
+      programId?: string | null;
       displayName?: string;
       email?: string;
     } = {};
     if (status) userData.status = status;
-    if (programId !== undefined) userData.programId = programId;
+    // Written whenever EITHER half moves — a department move can null the program
+    // (that is how a move into a department running no award is expressed).
+    if (resolvedProgramId !== undefined) userData.programId = resolvedProgramId;
     if (displayName !== undefined) userData.displayName = displayName;
     if (email !== undefined) userData.email = email;
 
@@ -210,6 +246,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
           where: { id },
           data: {
             ...facultyFields,
+            // Employment lives on the profile, so a department move is written here
+            // — in the same transaction as the User-side program change above, or
+            // the two halves could disagree.
+            ...(departmentId !== undefined ? { departmentId } : {}),
             ...(dateOfBirth !== undefined ? { dateOfBirth: dateOfBirth ? new Date(dateOfBirth) : null } : {}),
           },
           include: FACULTY_INCLUDE,

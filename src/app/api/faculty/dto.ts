@@ -61,6 +61,7 @@ export async function validateAssignableRoles(
 // The include that produces a faculty row with its user, program and roles.
 // Pass to findMany/findUnique.
 export const FACULTY_INCLUDE = {
+  department: { select: { code: true, name: true } },
   user: {
     include: {
       program: { include: { degree: true, branch: true } },
@@ -73,9 +74,63 @@ type Deg = { code: string };
 type Br = { code: string };
 type ProgRel = { degree: Deg; branch: Br } | null;
 
+/**
+ * Validate the (department, program) pair for a staff account.
+ *
+ * The rule can't live in the body parser because it depends on a DB fact the
+ * parser can't see: **does this department run any awards?**
+ *
+ *   - A department that runs awards requires one **of its own** — picking another
+ *     department's program would strand the lecturer outside their own unit.
+ *   - A department that runs none (S&H) requires **no** program, and REJECTS one
+ *     rather than silently discarding it: a caller that sent a program has a
+ *     different model of the world in mind and should be told so.
+ *
+ * Returns the resolved programId (or null) on success.
+ */
+export async function validateDepartmentAndProgram(
+  departmentId: string,
+  programId: string | null,
+): Promise<{ ok: string | null } | { error: string }> {
+  const department = await db.department.findUnique({
+    where: { id: departmentId },
+    select: {
+      name: true,
+      isActive: true,
+      _count: { select: { programs: true } },
+    },
+  });
+  if (!department) return { error: "Select a valid department." };
+  if (!department.isActive) return { error: `${department.name} is not an active department.` };
+
+  if (department._count.programs === 0) {
+    if (programId) {
+      return {
+        error: `${department.name} runs no programs, so its staff aren't attached to one.`,
+      };
+    }
+    return { ok: null };
+  }
+
+  if (!programId) return { error: "Program is required for this department." };
+
+  const program = await db.program.findUnique({
+    where: { id: programId },
+    select: { departmentId: true },
+  });
+  if (!program) return { error: "Select a valid program." };
+  if (program.departmentId !== departmentId) {
+    return { error: `That program isn't run by ${department.name}.` };
+  }
+
+  return { ok: programId };
+}
+
 type FacultyRow = {
   id: string;
   userId: string;
+  departmentId: string;
+  department: { code: string; name: string };
   staffId: string;
   designation: string;
   phone: string;
@@ -106,6 +161,11 @@ export function toFacultyDto(f: FacultyRow) {
   return {
     id: f.id,
     userId: f.userId,
+    // Who employs them — the primary fact for staff. programLabel below is null
+    // for a department that runs no award, so the roster leads with this.
+    departmentId: f.departmentId,
+    departmentCode: f.department.code,
+    departmentName: f.department.name,
     staffId: f.staffId,
     designation: f.designation,
     displayName: f.user.displayName,

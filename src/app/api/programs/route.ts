@@ -18,8 +18,10 @@ type ProgramWithRels = {
   id: string;
   degreeId: string;
   branchId: string;
+  departmentId: string;
   degree: { name: string; code: string; durationYears: number };
   branch: { name: string; code: string };
+  department: { name: string; code: string };
   isActive: boolean;
   _count: { classes: number };
   createdAt: Date;
@@ -36,6 +38,11 @@ function toDto(p: ProgramWithRels) {
     durationYears: p.degree.durationYears,
     branchName: p.branch.name,
     branchCode: p.branch.code,
+    // The department that RUNS this award — distinct from the branch, which is
+    // only the discipline in its name.
+    departmentId: p.departmentId,
+    departmentName: p.department.name,
+    departmentCode: p.department.code,
     isActive: p.isActive,
     classCount: p._count.classes,
     createdAt: p.createdAt,
@@ -44,7 +51,9 @@ function toDto(p: ProgramWithRels) {
 }
 
 // Parse + validate a create body. Only the pairing is set on create.
-function parseCreateBody(body: unknown): { data: { degreeId: string; branchId: string } } | { error: string } {
+function parseCreateBody(
+  body: unknown,
+): { data: { degreeId: string; branchId: string; departmentId: string } } | { error: string } {
   if (!body || typeof body !== "object") return { error: "Missing request body." };
   const b = body as Record<string, unknown>;
 
@@ -54,7 +63,13 @@ function parseCreateBody(body: unknown): { data: { degreeId: string; branchId: s
   const branchId = typeof b.branchId === "string" ? b.branchId.trim() : "";
   if (!branchId) return { error: "Branch is required." };
 
-  return { data: { degreeId, branchId } };
+  // Which department RUNS this award. Not derivable from the branch: a department
+  // may run programs across several branches (Civil: B.E-CIVIL + B.E-STRUCT), so
+  // the caller has to say which one owns it.
+  const departmentId = typeof b.departmentId === "string" ? b.departmentId.trim() : "";
+  if (!departmentId) return { error: "Department is required." };
+
+  return { data: { degreeId, branchId, departmentId } };
 }
 
 export async function GET(req: Request) {
@@ -70,7 +85,7 @@ export async function GET(req: Request) {
 
     const programs = await db.program.findMany({
       where,
-      include: { degree: true, branch: true, _count: { select: { classes: true } } },
+      include: { degree: true, branch: true, department: true, _count: { select: { classes: true } } },
       orderBy: [{ isActive: "desc" }, { createdAt: "asc" }],
     });
 
@@ -94,7 +109,7 @@ export async function POST(req: Request) {
     try {
       const created = await db.program.create({
         data: parsed.data,
-        include: { degree: true, branch: true, _count: { select: { classes: true } } },
+        include: { degree: true, branch: true, department: true, _count: { select: { classes: true } } },
       });
       return Response.json(toDto(created), { status: 201 });
     } catch (e) {

@@ -143,20 +143,56 @@ async function seedStructureAndTime(sections: Map<number, Set<string>>) {
     create: { name: "Computer Science and Engineering", code: "CSE", isActive: true },
   });
 
-  const program = await db.program.upsert({
-    where: { degreeId_branchId: { degreeId: degree.id, branchId: branch.id } },
-    update: { isActive: true },
-    create: { degreeId: degree.id, branchId: branch.id, isActive: true },
+  // The DEPARTMENT that runs the award — a separate thing from the Branch, which
+  // is only the discipline in its name. Created here because production bootstraps
+  // from this script and every Program/Class/FacultyProfile now requires one.
+  const department = await db.department.upsert({
+    where: { code: "CSE" },
+    update: { name: "Computer Science and Engineering Department", isActive: true },
+    create: {
+      name: "Computer Science and Engineering Department",
+      code: "CSE",
+      isActive: true,
+    },
   });
 
-  // Classes: exactly the (year, section) pairs the spreadsheets contain.
+  // Science & Humanities: a department that runs NO award. It owns every branch's
+  // first-year classes and employs the staff who teach them, which is why
+  // first-years are invisible to a branch HOD. Created empty; first-year classes
+  // are set up through the UI.
+  await db.department.upsert({
+    where: { code: "S&H" },
+    update: { name: "Science and Humanities Department", isActive: true },
+    create: { name: "Science and Humanities Department", code: "S&H", isActive: true },
+  });
+
+  const program = await db.program.upsert({
+    where: { degreeId_branchId: { degreeId: degree.id, branchId: branch.id } },
+    update: { isActive: true, departmentId: department.id },
+    create: {
+      degreeId: degree.id,
+      branchId: branch.id,
+      departmentId: department.id,
+      isActive: true,
+    },
+  });
+
+  // Classes: exactly the (year, section) pairs the spreadsheets contain. Owned by
+  // the branch's own department — these are all year 2+ real data. A first-year
+  // class owned by S&H is created through the UI, not seeded here.
   const classes = new Map<string, string>(); // "2-A" -> classId
   for (const [year, secs] of [...sections].sort((a, b) => a[0] - b[0])) {
     for (const section of [...secs].sort()) {
       const cls = await db.class.upsert({
         where: { programId_year_section: { programId: program.id, year, section } },
         update: { isActive: true },
-        create: { programId: program.id, year, section, isActive: true },
+        create: {
+          programId: program.id,
+          departmentId: department.id,
+          year,
+          section,
+          isActive: true,
+        },
       });
       classes.set(`${year}-${section}`, cls.id);
     }
@@ -201,12 +237,18 @@ async function seedStructureAndTime(sections: Map<number, Set<string>>) {
   });
 
   console.log(`  Academic year ${year.name} (active), Odd semester active.`);
-  return { programId: program.id, academicYearId: year.id, semesterId: odd.id, classes };
+  return {
+    programId: program.id,
+    departmentId: department.id,
+    academicYearId: year.id,
+    semesterId: odd.id,
+    classes,
+  };
 }
 
 // --- 2. faculty ------------------------------------------------------------
 
-async function seedFaculty(programId: string, facultyRoleId: string) {
+async function seedFaculty(programId: string, departmentId: string, facultyRoleId: string) {
   const { faculty, rejected } = readFaculty(FACULTY_FILE);
   failures.push(...rejected);
   console.log(`\nFaculty: ${faculty.length} to import.`);
@@ -233,6 +275,9 @@ async function seedFaculty(programId: string, facultyRoleId: string) {
           roles: { create: { roleId: facultyRoleId } },
           facultyProfile: {
             create: {
+              // The department that EMPLOYS them — required, and set directly here
+              // so a production bootstrap never leaves a null to backfill.
+              departmentId,
               staffId: f.staffId,
               designation: f.designation,
               phone: f.phone,
@@ -408,9 +453,9 @@ async function main() {
   ]);
 
   console.log("\nStructure + time…");
-  const { programId, academicYearId, classes } = await seedStructureAndTime(sections);
+  const { programId, departmentId, academicYearId, classes } = await seedStructureAndTime(sections);
 
-  await seedFaculty(programId, facultyRole.id);
+  await seedFaculty(programId, departmentId, facultyRole.id);
   await seedStudents(programId, studentRole.id, academicYearId, classes, students);
 
   writeReports(rejected);

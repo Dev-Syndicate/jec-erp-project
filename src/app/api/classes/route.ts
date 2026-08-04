@@ -14,14 +14,30 @@ export const dynamic = "force-dynamic";
 
 // Parse + validate a create body. Year is bounded by the selected program's
 // degree duration, so the route fetches the program first (in POST) to check it.
-function parseClassBody(
-  body: unknown,
-): { data: { programId: string; year: number; section: string; advisorId: string | null } } | { error: string } {
+function parseClassBody(body: unknown):
+  | {
+      data: {
+        programId: string;
+        departmentId: string | null;
+        year: number;
+        section: string;
+        advisorId: string | null;
+      };
+    }
+  | { error: string } {
   if (!body || typeof body !== "object") return { error: "Missing request body." };
   const b = body as Record<string, unknown>;
 
   const programId = typeof b.programId === "string" ? b.programId.trim() : "";
   if (!programId) return { error: "Select a program." };
+
+  // The OWNING department. Optional: omitted means "the department that runs the
+  // program", which is every year-2+ class. Supplied means an explicit owner —
+  // how a first-year class is given to S&H while its award stays B.E-CSE.
+  const departmentId =
+    typeof b.departmentId === "string" && b.departmentId.trim() !== ""
+      ? b.departmentId.trim()
+      : null;
 
   const year = b.year;
   if (typeof year !== "number" || !Number.isInteger(year) || year < 1) {
@@ -35,7 +51,7 @@ function parseClassBody(
   const advisorId =
     typeof b.advisorId === "string" && b.advisorId.trim() !== "" ? b.advisorId.trim() : null;
 
-  return { data: { programId, year, section: rawSection, advisorId } };
+  return { data: { programId, departmentId, year, section: rawSection, advisorId } };
 }
 
 export async function GET(req: Request) {
@@ -78,13 +94,22 @@ export async function POST(req: Request) {
     // exist the create below hits P2003 → a clean "select a valid program".
     const program = await db.program.findUnique({
       where: { id: parsed.data.programId },
-      include: { degree: { select: { durationYears: true } } },
+      select: { departmentId: true, degree: { select: { durationYears: true } } },
     });
     if (program && parsed.data.year > program.degree.durationYears) {
       return Response.json(
         { error: "Year is outside this program's duration." },
         { status: 400 },
       );
+    }
+
+    // WHO OWNS THIS CLASS. Explicit when given — that is how a first-year class is
+    // handed to S&H while its award stays B.E-CSE. Defaults to the department that
+    // runs the program, which is the year-2-onwards case and preserves today's
+    // behaviour for every existing caller.
+    const departmentId = parsed.data.departmentId ?? program?.departmentId;
+    if (!departmentId) {
+      return Response.json({ error: "Select a valid program." }, { status: 400 });
     }
 
     // The class teacher (if chosen) must be active staff in this program.
@@ -95,6 +120,7 @@ export async function POST(req: Request) {
       const created = await db.class.create({
         data: {
           programId: parsed.data.programId,
+          departmentId,
           year: parsed.data.year,
           section: parsed.data.section,
           advisorId: advisor.ok,

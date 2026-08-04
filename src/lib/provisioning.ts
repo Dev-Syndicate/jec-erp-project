@@ -111,7 +111,12 @@ export async function provisionStudentAccount(anchor: StudentAnchor): Promise<Pr
 export type FacultyAnchor = {
   email: string;
   displayName: string;
-  programId: string;
+  // The department that EMPLOYS them — required, because every staff member has
+  // exactly one HR home. An S&H lecturer's is S&H, which runs no award at all.
+  departmentId: string;
+  // The award they're attached to, if any. Null for staff in a department that
+  // runs none (S&H): they teach, but graduate nobody.
+  programId: string | null;
   roleIds: string[]; // one or more assignable Role ids (validated by the caller)
   staffId: string; // college-assigned id — required, unique
   designation: string; // HR title, e.g. "Asst. Professor"
@@ -157,6 +162,7 @@ export async function provisionFacultyAccount(anchor: FacultyAnchor): Promise<Pr
           roles: { create: anchor.roleIds.map((roleId) => ({ roleId })) },
           facultyProfile: {
             create: {
+              departmentId: anchor.departmentId,
               staffId: anchor.staffId,
               designation: anchor.designation,
               phone: anchor.phone,

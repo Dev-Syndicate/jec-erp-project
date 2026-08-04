@@ -10,7 +10,12 @@ import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
 import { provisionFacultyAccount } from "@/lib/provisioning";
-import { FACULTY_INCLUDE, toFacultyDto, validateAssignableRoles } from "./dto";
+import {
+  FACULTY_INCLUDE,
+  toFacultyDto,
+  validateAssignableRoles,
+  validateDepartmentAndProgram,
+} from "./dto";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +24,10 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 type ParsedFaculty = {
   email: string;
   displayName: string;
-  programId: string;
+  // The employing department — the anchor. Every staff member has exactly one.
+  departmentId: string;
+  // Null for a department that runs no award (S&H) — see validateDepartmentAndProgram.
+  programId: string | null;
   roleIds: string[];
   staffId: string;
   designation: string;
@@ -42,8 +50,12 @@ function parseFacultyBody(body: unknown): { data: ParsedFaculty } | { error: str
   const displayName = typeof b.displayName === "string" ? b.displayName.trim() : "";
   if (!displayName) return { error: "Name is required." };
 
+  const departmentId = typeof b.departmentId === "string" ? b.departmentId.trim() : "";
+  if (!departmentId) return { error: "Department is required." };
+
+  // Optional here; whether it's actually required depends on the department (does
+  // it run any awards?), which needs a DB read — see validateDepartmentAndProgram.
   const programId = typeof b.programId === "string" ? b.programId.trim() : "";
-  if (!programId) return { error: "Program is required." };
 
   const roleIds = Array.isArray(b.roleIds)
     ? [...new Set(
@@ -93,7 +105,8 @@ function parseFacultyBody(body: unknown): { data: ParsedFaculty } | { error: str
     data: {
       email,
       displayName,
-      programId,
+      departmentId,
+      programId: programId || null,
       roleIds,
       staffId,
       designation,
@@ -123,10 +136,14 @@ export async function GET(req: Request) {
     const ctx = await authenticate(req);
     authorize(ctx, "manage", "Faculty");
 
-    // Super Admin: all faculty. Scoped roles: only their own program.
+    // Super Admin: all faculty. Scoped roles: only their own DEPARTMENT — staff are
+    // scoped by who employs them, so an S&H HOD sees S&H staff even though S&H runs
+    // no award. Filtering on `user.programId` here would silently DROP every S&H
+    // lecturer (they have none) rather than erroring — a wrong answer, not a crash.
+    // departmentId is a column on FacultyProfile, so no `user:` nesting.
     const where = ctx.isInstitutionScoped
       ? {}
-      : { user: { programId: ctx.user.programId ?? "__none__" } };
+      : { departmentId: ctx.departmentId ?? "__none__" };
 
     const faculty = await db.facultyProfile.findMany({
       relationLoadStrategy: "join",
@@ -150,28 +167,31 @@ export async function POST(req: Request) {
     const parsed = parseFacultyBody(body);
     if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 });
 
-    // Can only provision into a program you're allowed to act in.
-    authorize(ctx, "manage", "Faculty", { programId: parsed.data.programId });
+    // Can only provision into a department you're allowed to act in. Staff are
+    // scoped by who EMPLOYS them, so this is the department axis — an S&H HOD adds
+    // S&H staff even though S&H runs no award.
+    authorize(ctx, "manage", "Faculty", { departmentId: parsed.data.departmentId });
 
     // Validate the chosen roles are assignable (exist, PROGRAM-scoped, not Student)
     // and don't grant more than the actor has.
     const roleCheck = await validateAssignableRoles(parsed.data.roleIds, ctx);
     if ("error" in roleCheck) return Response.json({ error: roleCheck.error }, { status: 400 });
 
-    // Guard the program exists (a clean 400 rather than a provisioning failure
-    // after the Firebase user is already created).
-    const program = await db.program.findUnique({
-      where: { id: parsed.data.programId },
-      select: { id: true },
-    });
-    if (!program) return Response.json({ error: "Select a valid program." }, { status: 400 });
+    // Guard the (department, program) pair before any Firebase user is created —
+    // a clean 400 beats a provisioning failure after the identity already exists.
+    const pair = await validateDepartmentAndProgram(
+      parsed.data.departmentId,
+      parsed.data.programId,
+    );
+    if ("error" in pair) return Response.json({ error: pair.error }, { status: 400 });
 
     let result;
     try {
       result = await provisionFacultyAccount({
         email: parsed.data.email,
         displayName: parsed.data.displayName,
-        programId: parsed.data.programId,
+        departmentId: parsed.data.departmentId,
+        programId: pair.ok,
         roleIds: roleCheck.ok,
         staffId: parsed.data.staffId,
         designation: parsed.data.designation,

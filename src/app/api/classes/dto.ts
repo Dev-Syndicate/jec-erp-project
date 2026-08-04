@@ -12,6 +12,7 @@ import { db } from "@/lib/db";
 // for the student total + delete guard; advisor name for display).
 export const CLASS_INCLUDE = {
   program: { include: { degree: true, branch: true } },
+  department: { select: { code: true, name: true } },
   advisor: { select: { displayName: true } },
   _count: { select: { enrollments: true } },
 } as const;
@@ -20,6 +21,8 @@ type ClassRow = {
   id: string;
   programId: string;
   program: { degree: { code: string }; branch: { code: string } };
+  departmentId: string;
+  department: { code: string; name: string };
   year: number;
   section: string;
   advisorId: string | null;
@@ -34,7 +37,13 @@ export function toClassDto(c: ClassRow) {
   return {
     id: c.id,
     programId: c.programId,
+    // The AWARD its students are headed for — never changes.
     programLabel: `${c.program.degree.code} · ${c.program.branch.code}`,
+    // WHO OWNS IT — the scoping key. Differs from the program's own department for
+    // a first-year class (owned by S&H, award B.E-CSE).
+    departmentId: c.departmentId,
+    departmentCode: c.department.code,
+    departmentName: c.department.name,
     year: c.year,
     section: c.section,
     advisorId: c.advisorId,

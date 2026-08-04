@@ -68,7 +68,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       const updated = await db.program.update({
         where: { id },
         data: parsed.data,
-        include: { degree: true, branch: true, _count: { select: { classes: true } } },
+        include: { degree: true, branch: true, department: true, _count: { select: { classes: true } } },
       });
       return Response.json(toDto(updated));
     } catch (e) {

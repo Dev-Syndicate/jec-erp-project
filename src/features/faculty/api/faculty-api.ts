@@ -13,6 +13,8 @@ import type {
   Faculty,
   FacultyInput,
   FacultyPatch,
+  ImportPreview,
+  ImportResult,
   ProvisionResult,
   Role,
 } from "@/features/faculty/types";
@@ -46,6 +48,46 @@ export function regeneratePassword(id: string): Promise<{ tempPassword: string }
 // creates). Returned as-is; the shape already matches the client Role type.
 export function fetchRoles(): Promise<Role[]> {
   return apiFetch<Role[]>("/api/roles");
+}
+
+// --- Bulk import ----------------------------------------------------------
+// FormData bodies: apiFetch leaves Content-Type unset so the browser adds the
+// multipart boundary. dryRun=true parses only (preview); omitting it commits.
+//
+// Roles are sent from the UI, never read from the sheet — the server puts them
+// through the same subset check as a single add, so an importer can't mint an
+// account more powerful than its creator.
+function importForm(
+  file: File,
+  departmentId: string,
+  roleIds: string[],
+  dryRun: boolean,
+): FormData {
+  const form = new FormData();
+  form.append("file", file);
+  if (departmentId) form.append("departmentId", departmentId);
+  for (const id of roleIds) form.append("roleIds", id);
+  if (dryRun) form.append("dryRun", "true");
+  return form;
+}
+
+// Preview only parses the file — no department or roles needed yet.
+export function previewFacultyImport(file: File): Promise<ImportPreview> {
+  return apiFetch<ImportPreview>("/api/faculty/import", {
+    method: "POST",
+    body: importForm(file, "", [], true),
+  });
+}
+
+export function commitFacultyImport(
+  file: File,
+  departmentId: string,
+  roleIds: string[],
+): Promise<ImportResult> {
+  return apiFetch<ImportResult>("/api/faculty/import", {
+    method: "POST",
+    body: importForm(file, departmentId, roleIds, false),
+  });
 }
 
 // --- Cross-department attachments ------------------------------------------

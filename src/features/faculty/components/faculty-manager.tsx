@@ -6,7 +6,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Pencil, KeyRound, Copy, Check, Search } from "lucide-react";
+import { Plus, Pencil, KeyRound, Copy, Check, Search, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -36,6 +36,7 @@ import type {
   Role,
 } from "@/features/faculty/types";
 import { FormSelect } from "@/features/faculty/components/form-select";
+import { ImportFacultyDialog } from "@/features/faculty/components/import-faculty-dialog";
 import {
   useCreateFaculty,
   useDepartmentOptions,
@@ -212,6 +213,7 @@ function TempPasswordPanel({ name, password }: { name: string; password: string 
 export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionScoped?: boolean }) {
   const { data: faculty, isPending, isError, error } = useFaculty();
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [editing, setEditing] = useState<Faculty | null>(null);
   const [resetting, setResetting] = useState<Faculty | null>(null);
   const [query, setQuery] = useState("");
@@ -346,6 +348,10 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
           description="Provision faculty accounts. Faculty sign in with their email."
         />
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
+            <Upload />
+            Import
+          </Button>
           <Button onClick={() => setCreating(true)} data-icon="inline-start">
             <Plus />
             Add faculty
@@ -618,6 +624,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
       )}
 
       {creating && <CreateFacultyDialog onClose={() => setCreating(false)} />}
+      {importing && <ImportFacultyDialog onClose={() => setImporting(false)} />}
       {editing && <EditFacultyDialog faculty={editing} onClose={() => setEditing(null)} />}
       {resetting && <RegenerateDialog faculty={resetting} onClose={() => setResetting(null)} />}
     </div>

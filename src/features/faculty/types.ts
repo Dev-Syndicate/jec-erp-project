@@ -37,6 +37,37 @@ export type Faculty = {
   updatedAt: string;
 };
 
+// --- Bulk import ----------------------------------------------------------
+// Mirrors the student importer's shape (src/features/students/types.ts) so the
+// two flows stay recognisable as the same thing. staffId is the identifier here
+// — faculty log in with EMAIL, so it names the row rather than being a credential.
+export type ImportRowError = { rowNumber: number; staffId: string; reason: string };
+
+// The dry-run response: what the server parsed, before anything is created.
+export type ImportPreview = {
+  rows: Array<{ rowNumber: number; name: string; email: string; staffId: string }>;
+  errors: ImportRowError[];
+  tooManyRows: boolean;
+};
+
+export type ImportOutcome = {
+  rowNumber: number;
+  staffId: string;
+  name: string;
+  email: string;
+  status: "created" | "skipped" | "error";
+  reason?: string;
+  facultyProfileId?: string;
+  tempPassword?: string; // only on created rows — shown once, exportable
+};
+
+// The commit response: per-row provision outcomes + rows that never parsed.
+export type ImportResult = {
+  outcomes: ImportOutcome[];
+  parseErrors: ImportRowError[];
+  tooManyRows: boolean;
+};
+
 // --- Cross-department attachment ------------------------------------------
 // A lecturer LENT to another department for the active semester. Employment
 // doesn't move — `homeDepartment*` is still where they belong — this only widens

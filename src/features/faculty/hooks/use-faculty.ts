@@ -8,6 +8,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import type { AttachmentInput, FacultyInput, FacultyPatch } from "@/features/faculty/types";
 import {
+  commitFacultyImport,
   createAttachment,
   createFaculty,
   deleteAttachment,
@@ -15,6 +16,7 @@ import {
   fetchDepartmentOptions,
   fetchFaculty,
   fetchRoles,
+  previewFacultyImport,
   regeneratePassword,
   updateFaculty,
 } from "@/features/faculty/api/faculty-api";
@@ -69,6 +71,28 @@ export function useUpdateFaculty() {
 export function useRegeneratePassword() {
   // No list change — the caller reveals the returned password.
   return useMutation({ mutationFn: (id: string) => regeneratePassword(id) });
+}
+
+// --- Bulk import ----------------------------------------------------------
+// Preview parses only and writes nothing, so it deliberately does NOT invalidate.
+export function useFacultyImportPreview() {
+  return useMutation({ mutationFn: ({ file }: { file: File }) => previewFacultyImport(file) });
+}
+
+export function useFacultyImportCommit() {
+  const invalidate = useInvalidateFaculty();
+  return useMutation({
+    mutationFn: ({
+      file,
+      departmentId,
+      roleIds,
+    }: {
+      file: File;
+      departmentId: string;
+      roleIds: string[];
+    }) => commitFacultyImport(file, departmentId, roleIds),
+    onSuccess: invalidate,
+  });
 }
 
 // --- Cross-department attachments ------------------------------------------

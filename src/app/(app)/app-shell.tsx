@@ -129,9 +129,14 @@ const NAV: NavGroup[] = [
         href: "/attendance/cover",
         icon: UserRoundCheck,
         // Assigning a stand-in for an absent teacher's period. A supervised act
-        // (it grants the right to sign another teacher's register), so HOD and
-        // Super Admin only — never the teachers themselves.
-        roles: ["Super Admin", "HOD"],
+        // (it grants the right to sign another teacher's register), so a HOD's
+        // job — never the teachers themselves.
+        //
+        // Super Admin keeps the permission but not the nav entry, exactly like
+        // "Mark attendance": running a department's day-to-day cover isn't their
+        // work. The API still accepts them, so a department with no HOD (or an
+        // absent one) can still be unstuck by going to the page directly.
+        roles: ["HOD"],
       },
       {
         title: "Report",

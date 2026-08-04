@@ -58,72 +58,39 @@ export async function validateAssignableRoles(
   return { ok: roles.map((r) => r.id) };
 }
 
-// The include that produces a faculty row with its user, program and roles.
-// Pass to findMany/findUnique.
+// The include that produces a faculty row with its department, user and roles.
+// Pass to findMany/findUnique. No `program`: staff carry no award — the
+// department is what scopes them (src/lib/auth.ts → scopesFor).
 export const FACULTY_INCLUDE = {
   department: { select: { code: true, name: true } },
   user: {
     include: {
-      program: { include: { degree: true, branch: true } },
       roles: { include: { role: true } },
     },
   },
 } as const;
 
-type Deg = { code: string };
-type Br = { code: string };
-type ProgRel = { degree: Deg; branch: Br } | null;
-
 /**
- * Validate the (department, program) pair for a staff account.
+ * Validate the employing department of a staff account: it must exist and be
+ * active. This is the whole rule now — a staff account is scoped by WHO EMPLOYS
+ * THEM and nothing else, so there is no second half to reconcile.
  *
- * The rule can't live in the body parser because it depends on a DB fact the
- * parser can't see: **does this department run any awards?**
- *
- *   - A department that runs awards requires one **of its own** — picking another
- *     department's program would strand the lecturer outside their own unit.
- *   - A department that runs none (S&H) requires **no** program, and REJECTS one
- *     rather than silently discarding it: a caller that sent a program has a
- *     different model of the world in mind and should be told so.
- *
- * Returns the resolved programId (or null) on success.
+ * It can't live in the body parser because it depends on DB facts the parser
+ * can't see (does the department exist? is it still active?), and it must run
+ * BEFORE any Firebase identity is created: a clean 400 beats a provisioning
+ * failure after the account already exists on the auth side.
  */
-export async function validateDepartmentAndProgram(
+export async function validateDepartment(
   departmentId: string,
-  programId: string | null,
-): Promise<{ ok: string | null } | { error: string }> {
+): Promise<{ ok: true } | { error: string }> {
   const department = await db.department.findUnique({
     where: { id: departmentId },
-    select: {
-      name: true,
-      isActive: true,
-      _count: { select: { programs: true } },
-    },
+    select: { name: true, isActive: true },
   });
   if (!department) return { error: "Select a valid department." };
   if (!department.isActive) return { error: `${department.name} is not an active department.` };
 
-  if (department._count.programs === 0) {
-    if (programId) {
-      return {
-        error: `${department.name} runs no programs, so its staff aren't attached to one.`,
-      };
-    }
-    return { ok: null };
-  }
-
-  if (!programId) return { error: "Program is required for this department." };
-
-  const program = await db.program.findUnique({
-    where: { id: programId },
-    select: { departmentId: true },
-  });
-  if (!program) return { error: "Select a valid program." };
-  if (program.departmentId !== departmentId) {
-    return { error: `That program isn't run by ${department.name}.` };
-  }
-
-  return { ok: programId };
+  return { ok: true };
 }
 
 type FacultyRow = {
@@ -147,22 +114,18 @@ type FacultyRow = {
     displayName: string;
     status: "ACTIVE" | "INACTIVE";
     mustChangePassword: boolean;
-    programId: string | null;
-    program: ProgRel;
     roles: Array<{ role: { name: string } }>;
   };
 };
-
-function programLabel(p: ProgRel): string | null {
-  return p ? `${p.degree.code} · ${p.branch.code}` : null;
-}
 
 export function toFacultyDto(f: FacultyRow) {
   return {
     id: f.id,
     userId: f.userId,
-    // Who employs them — the primary fact for staff. programLabel below is null
-    // for a department that runs no award, so the roster leads with this.
+    // Who employs them — the ONLY thing that scopes a staff account. There is
+    // deliberately no program here: a faculty member's User.programId grants
+    // nothing (src/lib/auth.ts → scopesFor reads the department), so shipping it
+    // would only invite the client to act on a fact that means nothing.
     departmentId: f.departmentId,
     departmentCode: f.department.code,
     departmentName: f.department.name,
@@ -179,8 +142,6 @@ export function toFacultyDto(f: FacultyRow) {
     motherName: f.motherName,
     status: f.user.status,
     mustChangePassword: f.user.mustChangePassword,
-    programId: f.user.programId,
-    programLabel: programLabel(f.user.program),
     roles: f.user.roles.map((r) => r.role.name),
     createdAt: f.createdAt,
     updatedAt: f.updatedAt,

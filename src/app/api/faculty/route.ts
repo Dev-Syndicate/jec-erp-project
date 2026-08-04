@@ -1,11 +1,12 @@
 // /api/faculty — list + provision faculty. A faculty member is a Firebase-linked
 // User + a FacultyProfile record; provisioning creates the Firebase identity
 // first, then the Neon rows in a transaction (src/lib/provisioning.ts), rolling
-// back Firebase if the DB write fails. Program-scoped: Super Admin sees all;
-// others their program. Faculty log in with email (no register number).
+// back Firebase if the DB write fails. Department-scoped: Super Admin sees all;
+// others only the staff their own department employs. Faculty log in with email
+// (no register number).
 //
-// Open to Super Admin (all programs) and HOD (their own program only), enforced
-// by the program-scoped `where` + a scoped authorize below.
+// Open to Super Admin (all departments) and HOD (their own only), enforced by
+// the department-scoped `where` + a scoped authorize below.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { isUniqueViolation } from "@/lib/prisma-errors";
@@ -14,7 +15,7 @@ import {
   FACULTY_INCLUDE,
   toFacultyDto,
   validateAssignableRoles,
-  validateDepartmentAndProgram,
+  validateDepartment,
 } from "./dto";
 
 export const dynamic = "force-dynamic";
@@ -24,10 +25,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 type ParsedFaculty = {
   email: string;
   displayName: string;
-  // The employing department — the anchor. Every staff member has exactly one.
+  // The employing department — the anchor, and the ONLY thing that scopes a
+  // staff account. There is deliberately no programId: see validateDepartment.
   departmentId: string;
-  // Null for a department that runs no award (S&H) — see validateDepartmentAndProgram.
-  programId: string | null;
   roleIds: string[];
   staffId: string;
   designation: string;
@@ -53,9 +53,8 @@ function parseFacultyBody(body: unknown): { data: ParsedFaculty } | { error: str
   const departmentId = typeof b.departmentId === "string" ? b.departmentId.trim() : "";
   if (!departmentId) return { error: "Department is required." };
 
-  // Optional here; whether it's actually required depends on the department (does
-  // it run any awards?), which needs a DB read — see validateDepartmentAndProgram.
-  const programId = typeof b.programId === "string" ? b.programId.trim() : "";
+  // Note: any `programId` in the body is ignored outright rather than parsed —
+  // staff carry no award, so there is nothing for it to mean.
 
   const roleIds = Array.isArray(b.roleIds)
     ? [...new Set(
@@ -106,7 +105,6 @@ function parseFacultyBody(body: unknown): { data: ParsedFaculty } | { error: str
       email,
       displayName,
       departmentId,
-      programId: programId || null,
       roleIds,
       staffId,
       designation,
@@ -138,9 +136,7 @@ export async function GET(req: Request) {
 
     // Super Admin: all faculty. Scoped roles: only their own DEPARTMENT — staff are
     // scoped by who employs them, so an S&H HOD sees S&H staff even though S&H runs
-    // no award. Filtering on `user.programId` here would silently DROP every S&H
-    // lecturer (they have none) rather than erroring — a wrong answer, not a crash.
-    // departmentId is a column on FacultyProfile, so no `user:` nesting.
+    // no award. departmentId is a column on FacultyProfile, so no `user:` nesting.
     const where = ctx.isInstitutionScoped
       ? {}
       : { departmentId: ctx.departmentId ?? "__none__" };
@@ -177,13 +173,10 @@ export async function POST(req: Request) {
     const roleCheck = await validateAssignableRoles(parsed.data.roleIds, ctx);
     if ("error" in roleCheck) return Response.json({ error: roleCheck.error }, { status: 400 });
 
-    // Guard the (department, program) pair before any Firebase user is created —
-    // a clean 400 beats a provisioning failure after the identity already exists.
-    const pair = await validateDepartmentAndProgram(
-      parsed.data.departmentId,
-      parsed.data.programId,
-    );
-    if ("error" in pair) return Response.json({ error: pair.error }, { status: 400 });
+    // Guard the employing department before any Firebase user is created — a
+    // clean 400 beats a provisioning failure after the identity already exists.
+    const dept = await validateDepartment(parsed.data.departmentId);
+    if ("error" in dept) return Response.json({ error: dept.error }, { status: 400 });
 
     let result;
     try {
@@ -191,7 +184,6 @@ export async function POST(req: Request) {
         email: parsed.data.email,
         displayName: parsed.data.displayName,
         departmentId: parsed.data.departmentId,
-        programId: pair.ok,
         roleIds: roleCheck.ok,
         staffId: parsed.data.staffId,
         designation: parsed.data.designation,

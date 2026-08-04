@@ -11,7 +11,6 @@ import type {
   Faculty,
   FacultyInput,
   FacultyPatch,
-  ProgramOption,
   ProvisionResult,
   Role,
 } from "@/features/faculty/types";
@@ -48,25 +47,8 @@ export function fetchRoles(): Promise<Role[]> {
 }
 
 // --- Picker options (mapped from the shared structure endpoints) -----------
-type RawProgram = {
-  id: string;
-  degreeCode: string;
-  branchCode: string;
-  departmentId: string;
-  durationYears: number;
-  isActive: boolean;
-};
-
-export async function fetchProgramOptions(): Promise<ProgramOption[]> {
-  const programs = await apiFetch<RawProgram[]>("/api/programs");
-  return programs.map((p) => ({
-    id: p.id,
-    label: `${p.degreeCode} · ${p.branchCode}`,
-    departmentId: p.departmentId,
-    durationYears: p.durationYears,
-    isActive: p.isActive,
-  }));
-}
+// No program fetcher: a staff account carries no award, so the only picker this
+// feature needs is the department one below.
 
 // The departments a staff account can be employed by. programCount is what the
 // dialogs read to decide whether a program is required at all — a department

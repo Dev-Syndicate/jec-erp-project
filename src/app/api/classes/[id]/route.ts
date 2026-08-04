@@ -87,9 +87,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         );
       }
 
-      // The class teacher (if set/changed) must be active staff in this program.
+      // The class teacher (if set/changed) must be active staff in the department
+      // that OWNS this class — S&H for a first-year class, whose staff have no
+      // program of their own.
       if (parsed.data.advisorId !== undefined) {
-        const advisor = await validateAdvisor(parsed.data.advisorId, existing.programId);
+        const advisor = await validateAdvisor(parsed.data.advisorId, existing.departmentId);
         if ("error" in advisor) return Response.json({ error: advisor.error }, { status: 400 });
         parsed.data.advisorId = advisor.ok;
       }

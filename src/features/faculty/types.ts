@@ -25,13 +25,13 @@ export type Faculty = {
   status: "ACTIVE" | "INACTIVE"; // = User.status (login enabled?)
   mustChangePassword: boolean; // still on the temp password (never logged in)
   // Who EMPLOYS them — the primary fact, and what the server scopes the list on.
+  // The employing department — the ONLY thing that scopes a staff account. There
+  // is deliberately no program: a faculty member's award granted nothing (scope,
+  // timetable, advisor and cover eligibility all read the department), so the
+  // server no longer returns one.
   departmentId: string;
   departmentCode: string; // "CSE", "S&H"
   departmentName: string;
-  // Secondary and conditional: null for staff of a department that runs no award
-  // (S&H teaches every branch's first year but graduates nobody).
-  programId: string | null;
-  programLabel: string | null; // "B.E · CSE"
   roles: string[];
   createdAt: string;
   updatedAt: string;
@@ -51,10 +51,7 @@ export type Role = {
 export type FacultyInput = {
   email: string;
   displayName: string;
-  departmentId: string; // required — the employing department is the anchor
-  // null when the department runs no award. The server REJECTS a program for such
-  // a department rather than discarding it, so the dialog must send null, not "".
-  programId: string | null;
+  departmentId: string; // required — the employing department, and the only scope
   roleIds: string[]; // one or more assignable roles
   staffId: string;
   designation: string;
@@ -92,23 +89,11 @@ export type FacultyPatch = {
   motherName?: string | null;
   status?: "ACTIVE" | "INACTIVE";
   departmentId?: string; // re-employ into a different department (the scoping key)
-  // Explicit `null` CLEARS the program — that is how a move into a department
-  // running no award is expressed. Omitted = leave alone; "" is a 400.
-  programId?: string | null;
   roleIds?: string[]; // replace the whole role set (e.g. HOD rotation)
 };
 
 // --- Picker options (this feature's own read-only fetch, to honour the
 // "features don't import each other" rule) --------------------------------
-export type ProgramOption = {
-  id: string;
-  label: string; // "B.E · CSE"
-  // Which department RUNS this award. The dialog filters the program list on it,
-  // so a lecturer is never attached to another department's program.
-  departmentId: string;
-  durationYears: number;
-  isActive: boolean;
-};
 
 export type DepartmentOption = {
   id: string;

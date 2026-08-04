@@ -30,11 +30,9 @@ import {
 import { PageHeader } from "@/app/(app)/page-header";
 import { DepartmentSelect } from "@/components/department-select";
 import type {
-  DepartmentOption,
   Faculty,
   Gender,
   MaritalStatus,
-  ProgramOption,
   Role,
 } from "@/features/faculty/types";
 import { FormSelect } from "@/features/faculty/components/form-select";
@@ -42,7 +40,6 @@ import {
   useCreateFaculty,
   useDepartmentOptions,
   useFaculty,
-  useProgramOptions,
   useRegeneratePassword,
   useRoles,
   useUpdateFaculty,
@@ -167,82 +164,6 @@ function RoleChecklist({
         />
       ))}
     </div>
-  );
-}
-
-/**
- * The (department, program) pairing, shared by the create + edit dialogs so both
- * obey the one rule the server enforces (api/faculty/dto.ts →
- * validateDepartmentAndProgram): a department that runs awards requires one OF
- * ITS OWN; a department that runs none (S&H, which teaches every branch's first
- * year but graduates nobody) requires none and REJECTS one.
- *
- * `runsNoProgram` is derived from the department's own SELECTABLE programs rather
- * than the reported programCount, because that count includes inactive awards a
- * lecturer can't be attached to — going by what's actually on offer keeps the
- * field's presence and the submitted value from disagreeing.
- *
- * It is gated on `programsLoaded` for the same reason: an unresolved (or
- * forbidden) /api/programs leaves the list empty, which is indistinguishable from
- * S&H. Without the gate the dialog would briefly claim a real department runs no
- * degree and submit `programId: null` — which the server rightly rejects.
- *
- * The stored programId is treated as a REQUEST, not the truth: changing the
- * department can strand a selection that belonged to the old one. Deriving the
- * effective value here (rather than resetting it in an effect) means the form
- * can never submit a program the chosen department doesn't run.
- */
-function useDepartmentProgramPair({
-  departmentId,
-  programId,
-  departments,
-  programs,
-  programsLoaded,
-  keepProgramId,
-}: {
-  departmentId: string;
-  programId: string;
-  departments: DepartmentOption[];
-  programs: ProgramOption[];
-  // False until /api/programs has actually answered — see above.
-  programsLoaded: boolean;
-  // The program already on the record, kept selectable even if deactivated since
-  // — the edit dialog must be able to show it without silently reassigning.
-  keepProgramId?: string | null;
-}) {
-  const departmentPrograms = useMemo(
-    () =>
-      programs.filter(
-        (p) => p.departmentId === departmentId && (p.isActive || p.id === keepProgramId),
-      ),
-    [programs, departmentId, keepProgramId],
-  );
-  const department = departments.find((d) => d.id === departmentId) ?? null;
-  const runsNoProgram = departmentId !== "" && programsLoaded && departmentPrograms.length === 0;
-  // "" whenever the selection doesn't belong to the chosen department.
-  const activeProgramId = departmentPrograms.some((p) => p.id === programId) ? programId : "";
-
-  return {
-    department,
-    departmentPrograms,
-    runsNoProgram,
-    activeProgramId,
-    // What the body should carry: null for a no-award department (an empty string
-    // is a 400 on PATCH, and would fail the create validation too).
-    submitProgramId: runsNoProgram ? null : activeProgramId,
-    // The pair is complete once a department is chosen and it either needs no
-    // program or has one selected.
-    pairValid: departmentId !== "" && (runsNoProgram || activeProgramId !== ""),
-  };
-}
-
-// Shown in place of the Program select for a department that runs no award, so
-// the missing field reads as deliberate rather than as a form that failed to load.
-function NoProgramNote({ departmentName }: { departmentName: string }) {
-  return (
-    <p className="text-sm text-muted-foreground">
-      {departmentName} runs no degree of its own — its staff aren’t attached to a program.
-    </p>
   );
 }
 
@@ -379,7 +300,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
       const matchesGender = !activeGender || f.gender === activeGender;
       const matchesQuery =
         q === "" ||
-        [f.staffId, f.displayName, f.email, f.departmentName, f.programLabel, f.designation]
+        [f.staffId, f.displayName, f.email, f.departmentName, f.designation]
           .filter(Boolean)
           .some((field) => field!.toLowerCase().includes(q));
       return (
@@ -596,7 +517,6 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
                     <TableHead>Staff ID</TableHead>
                     <TableHead>Name</TableHead>
                     <TableHead>Department</TableHead>
-                    <TableHead>Program</TableHead>
                     <TableHead>Designation</TableHead>
                     <TableHead>Roles</TableHead>
                     <TableHead>Status</TableHead>
@@ -616,10 +536,6 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
                   {/* Who employs them. The code alone is enough at a glance
                       ("CSE", "S&H"); the full name is the select's job. */}
                   <TableCell className="text-muted-foreground">{f.departmentCode}</TableCell>
-                  {/* Null for a department that runs no award — a neutral dash,
-                      not an empty cell, so it reads as "none" rather than "not
-                      loaded". */}
-                  <TableCell className="text-muted-foreground">{f.programLabel ?? "—"}</TableCell>
                   <TableCell className="text-muted-foreground">{f.designation}</TableCell>
                   <TableCell>
                     {f.roles.length ? (
@@ -711,7 +627,6 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
 function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateFaculty();
   const departments = useDepartmentOptions();
-  const programs = useProgramOptions();
   const roles = useRoles();
   const activeDepartments = (departments.data ?? []).filter((d) => d.isActive);
   const roleOptions = roles.data ?? [];
@@ -719,7 +634,6 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
   const [departmentId, setDepartmentId] = useState("");
-  const [programId, setProgramId] = useState("");
   const [staffId, setStaffId] = useState("");
   const [designation, setDesignation] = useState("");
   const [phone, setPhone] = useState("");
@@ -741,19 +655,12 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
   // On success we swap the form for the one-time password reveal.
   const created = create.data;
 
-  const { department, departmentPrograms, runsNoProgram, activeProgramId, submitProgramId, pairValid } =
-    useDepartmentProgramPair({
-      departmentId,
-      programId,
-      departments: activeDepartments,
-      programs: programs.data ?? [],
-      programsLoaded: programs.isSuccess,
-    });
-
   const valid =
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
     displayName.trim() !== "" &&
-    pairValid &&
+    // The employing department is the whole scope of a staff account — nothing
+    // else to reconcile it against.
+    departmentId !== "" &&
     staffId.trim() !== "" &&
     designation.trim() !== "" &&
     phone.trim() !== "" &&
@@ -766,7 +673,6 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
       email: email.trim(),
       displayName: displayName.trim(),
       departmentId,
-      programId: submitProgramId,
       roleIds: selectedRoleIds,
       staffId: staffId.trim(),
       designation: designation.trim(),
@@ -819,33 +725,6 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
                   onChange={setDepartmentId}
                   departments={activeDepartments}
                 />
-              </div>
-              {/* Hidden outright for a department that runs no award — an empty
-                  or disabled select would imply a choice the server would reject. */}
-              <div className="flex flex-col gap-2">
-                {runsNoProgram ? (
-                  <>
-                    <Label>Program</Label>
-                    <NoProgramNote departmentName={department?.name ?? "This department"} />
-                  </>
-                ) : (
-                  <>
-                    <Label htmlFor="f-program">Program</Label>
-                    <FormSelect
-                      id="f-program"
-                      value={activeProgramId}
-                      onChange={setProgramId}
-                      options={departmentPrograms.map((p) => ({ value: p.id, label: p.label }))}
-                      placeholder={
-                        departmentId === ""
-                          ? "Pick a department first"
-                          : programs.isPending
-                            ? "Loading…"
-                            : "Select a program"
-                      }
-                    />
-                  </>
-                )}
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-staff">Staff ID</Label>
@@ -918,11 +797,9 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
 function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: () => void }) {
   const update = useUpdateFaculty();
   const departments = useDepartmentOptions();
-  const programs = useProgramOptions();
   const roles = useRoles();
   const roleOptions = roles.data ?? [];
   const [departmentId, setDepartmentId] = useState(faculty.departmentId);
-  const [programId, setProgramId] = useState(faculty.programId ?? "");
   const [displayName, setDisplayName] = useState(faculty.displayName);
   // Identity fields. Only email is a credential — faculty sign in with it
   // directly (no register-number step), so a change is flagged before saving.
@@ -976,21 +853,13 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
         ];
   }, [departments.data, faculty.departmentId, faculty.departmentName, faculty.departmentCode]);
 
-  const { department, departmentPrograms, runsNoProgram, activeProgramId, submitProgramId, pairValid } =
-    useDepartmentProgramPair({
-      departmentId,
-      programId,
-      departments: activeDepartments,
-      programs: programs.data ?? [],
-      programsLoaded: programs.isSuccess,
-      keepProgramId: faculty.programId,
-    });
-
   const valid =
     displayName.trim() !== "" &&
     designation.trim() !== "" &&
     phone.trim() !== "" &&
-    pairValid &&
+    // The employing department is the only scope a staff account has, and it may
+    // never be blanked — the server rejects an empty one too.
+    departmentId !== "" &&
     staffId.trim() !== "" &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
     // Until /api/roles resolves, roleOptions is empty, so initialRoleIds is []
@@ -999,13 +868,9 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
     roles.isSuccess &&
     selectedRoleIds.length > 0;
 
-  // Only send either half of the pair when it actually changed — a move re-scopes
-  // the account and busts the auth cache, so don't trigger it needlessly. Note
-  // programId is compared against null, not "": clearing it (a move into a
-  // department that runs no award) is a real change the server must be told about,
-  // and `null` is how PATCH expresses it.
+  // Only sent when it actually changed — a move re-scopes the account and busts
+  // the auth cache, so don't trigger it needlessly.
   const departmentChanged = departmentId !== faculty.departmentId;
-  const programChanged = submitProgramId !== faculty.programId;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -1027,7 +892,6 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
           ...(staffIdChanged ? { staffId: staffId.trim() } : {}),
           ...(emailChanged ? { email: email.trim().toLowerCase() } : {}),
           ...(departmentChanged ? { departmentId } : {}),
-          ...(programChanged ? { programId: submitProgramId } : {}),
           ...(rolesChanged ? { roleIds: selectedRoleIds } : {}),
         },
       },
@@ -1064,28 +928,6 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
               onChange={setDepartmentId}
               departments={activeDepartments}
             />
-          </div>
-          {/* Replaced by a one-line explanation for a department that runs no
-              award — the server rejects a program for those, so offering the
-              select would only invite a 400. */}
-          <div className="flex flex-col gap-2">
-            {runsNoProgram ? (
-              <>
-                <Label>Program</Label>
-                <NoProgramNote departmentName={department?.name ?? "This department"} />
-              </>
-            ) : (
-              <>
-                <Label htmlFor="ef-program">Program</Label>
-                <FormSelect
-                  id="ef-program"
-                  value={activeProgramId}
-                  onChange={setProgramId}
-                  options={departmentPrograms.map((p) => ({ value: p.id, label: p.label }))}
-                  placeholder={programs.isPending ? "Loading…" : "Select a program"}
-                />
-              </>
-            )}
           </div>
           {/* Staff ID + email. Only the email is a credential, so only that one
               raises a warning — a staff ID change is administrative. */}

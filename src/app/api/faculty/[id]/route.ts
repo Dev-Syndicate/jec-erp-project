@@ -1,6 +1,6 @@
-// /api/faculty/[id] — edit a faculty member's detail fields, program + active
-// status. Super-Admin only (program-scoped). params is a Promise in Next 16 —
-// await it.
+// /api/faculty/[id] — edit a faculty member's detail fields, employing
+// department + active status. Department-scoped. params is a Promise in Next 16
+// — await it.
 //
 // staffId (college id) and email (Firebase identity) ARE editable here. They
 // differ in cost, and only one is a login handle:
@@ -13,11 +13,12 @@
 //     therefore happens AFTER the Neon transaction commits, and a Firebase
 //     failure rolls the Neon email back.
 //
-// programId is the SCOPING KEY (lives on User): moving a faculty is allowed only
-// within your scope (target checked too), and busts the auth cache. Setting
-// status to INACTIVE disables the login (User.status = INACTIVE) so a departed
-// faculty member can't sign in; reactivating restores it — also cache-busted so
-// it takes effect immediately rather than after the TTL.
+// departmentId is the SCOPING KEY for staff (lives on FacultyProfile): moving a
+// faculty member is allowed only within your scope (the target department is
+// checked too), and busts the auth cache. Setting status to INACTIVE disables
+// the login (User.status = INACTIVE) so a departed faculty member can't sign in;
+// reactivating restores it — also cache-busted so it takes effect immediately
+// rather than after the TTL.
 import { authenticate, invalidateAuthUser, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { updateFirebaseEmail } from "@/lib/firebase-admin";
@@ -26,7 +27,7 @@ import {
   FACULTY_INCLUDE,
   toFacultyDto,
   validateAssignableRoles,
-  validateDepartmentAndProgram,
+  validateDepartment,
 } from "../dto";
 
 export const dynamic = "force-dynamic";
@@ -44,10 +45,10 @@ type FacultyPatch = {
   fatherName?: string | null;
   motherName?: string | null;
   status?: "ACTIVE" | "INACTIVE";
+  // The employing department — the only scoping key a staff account has. There is
+  // deliberately no programId: a faculty member's award granted nothing, so the
+  // field is neither accepted nor returned.
   departmentId?: string;
-  // `null` CLEARS the program — that is how a move into a department running no
-  // award is expressed. An empty string is still an error (see the parser).
-  programId?: string | null;
   roleIds?: string[];
 };
 
@@ -132,17 +133,8 @@ export function parsePatchBody(body: unknown): { data: FacultyPatch } | { error:
     if (!v) return { error: "Department can't be empty." };
     data.departmentId = v;
   }
-  if (b.programId !== undefined) {
-    // Explicit null clears it (moving into a department that runs no award);
-    // a blank string is a half-filled form and must NOT silently detach them.
-    if (b.programId === null) {
-      data.programId = null;
-    } else {
-      const v = typeof b.programId === "string" ? b.programId.trim() : "";
-      if (!v) return { error: "Program can't be empty." };
-      data.programId = v;
-    }
-  }
+  // Any `programId` in the body is ignored outright rather than parsed — staff
+  // carry no award, so there is nothing for it to mean.
   if (b.roleIds !== undefined) {
     if (!Array.isArray(b.roleIds)) return { error: "Roles must be a list." };
     const ids = [...new Set(
@@ -172,7 +164,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       where: { id },
       select: {
         departmentId: true,
-        user: { select: { id: true, firebaseUid: true, programId: true, email: true } },
+        user: { select: { id: true, firebaseUid: true, email: true } },
       },
     });
     if (!existing) return Response.json({ error: "Faculty not found." }, { status: 404 });
@@ -182,28 +174,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // displayName lives on User, not FacultyProfile — it must be pulled out here
     // alongside the other User-side fields, or it would be spread into the
     // profile update as an unknown column and throw.
-    const { status, departmentId, programId, displayName, email, dateOfBirth, roleIds, ...facultyFields } =
+    const { status, departmentId, displayName, email, dateOfBirth, roleIds, ...facultyFields } =
       parsed.data;
     // Only a real change is worth a Firebase round-trip (and a rollback risk).
     const emailChanged = email !== undefined && email !== existing.user.email;
 
-    // A move re-validates the RESULTING pair, not each field against the old state:
-    // changing only the department would otherwise leave the old program behind and
-    // strand the lecturer in another department's award.
-    const movesDepartment = departmentId !== undefined;
-    const movesProgram = programId !== undefined;
-    let resolvedProgramId: string | null | undefined;
-    if (movesDepartment || movesProgram) {
-      const targetDepartmentId = departmentId ?? existing.departmentId;
-      const targetProgramId = movesProgram ? programId : existing.user.programId;
+    // Moving them between departments — the ONLY move there is, now that a staff
+    // account carries no award. The target must exist, be active, and be one you
+    // may act in (the department they're LEAVING was checked above).
+    if (departmentId !== undefined) {
+      authorize(ctx, "manage", "Faculty", { departmentId });
 
-      // You must be allowed to act in the department they're moving INTO, as well
-      // as the one they're leaving (checked above).
-      authorize(ctx, "manage", "Faculty", { departmentId: targetDepartmentId });
-
-      const pair = await validateDepartmentAndProgram(targetDepartmentId, targetProgramId);
-      if ("error" in pair) return Response.json({ error: pair.error }, { status: 400 });
-      resolvedProgramId = pair.ok;
+      const dept = await validateDepartment(departmentId);
+      if ("error" in dept) return Response.json({ error: dept.error }, { status: 400 });
     }
 
     // Reassigning roles (e.g. HOD rotation): validate they're assignable first.
@@ -214,21 +197,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       validRoleIds = roleCheck.ok;
     }
 
-    // User-side fields (display name, login status + scoping key) vs profile fields.
+    // User-side fields (display name, login status, credential) vs profile fields.
+    // No programId: staff carry no award, and the scoping key (departmentId) lives
+    // on FacultyProfile, so it is written with the profile below.
     const userData: {
       status?: "ACTIVE" | "INACTIVE";
-      programId?: string | null;
       displayName?: string;
       email?: string;
     } = {};
     if (status) userData.status = status;
-    // Written whenever EITHER half moves — a department move can null the program
-    // (that is how a move into a department running no award is expressed).
-    if (resolvedProgramId !== undefined) userData.programId = resolvedProgramId;
     if (displayName !== undefined) userData.displayName = displayName;
     if (email !== undefined) userData.email = email;
 
-    // Keep the User (status/program/roles) and the profile in sync (atomic), then map.
+    // Keep the User (status/roles) and the profile in sync (atomic), then map.
     let updated;
     try {
       updated = await db.$transaction(async (tx) => {
@@ -300,10 +281,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       }
     }
 
-    // A login enable/disable, program move, role change OR an identity change
+    // A login enable/disable, DEPARTMENT move, role change OR an identity change
     // alters authorization — reflect it immediately instead of waiting out the
-    // auth-cache TTL.
-    if (status || programId !== undefined || validRoleIds || emailChanged) {
+    // auth-cache TTL. The department move matters most: it is the scoping key, so
+    // without this the lecturer would keep their old department's reach for 30s.
+    if (status || departmentId !== undefined || validRoleIds || emailChanged) {
       invalidateAuthUser(existing.user.firebaseUid);
     }
 

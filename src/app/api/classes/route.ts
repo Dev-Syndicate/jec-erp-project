@@ -113,7 +113,9 @@ export async function POST(req: Request) {
     }
 
     // The class teacher (if chosen) must be active staff in this program.
-    const advisor = await validateAdvisor(parsed.data.advisorId, parsed.data.programId);
+    // Against the OWNING department, not the award — the class teacher is staff of
+    // whichever unit runs the class (S&H for first year).
+    const advisor = await validateAdvisor(parsed.data.advisorId, departmentId);
     if ("error" in advisor) return Response.json({ error: advisor.error }, { status: 400 });
 
     try {

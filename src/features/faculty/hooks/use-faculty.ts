@@ -11,7 +11,6 @@ import {
   createFaculty,
   fetchDepartmentOptions,
   fetchFaculty,
-  fetchProgramOptions,
   fetchRoles,
   regeneratePassword,
   updateFaculty,
@@ -23,13 +22,6 @@ export function useFaculty() {
   return useQuery({ queryKey: FACULTY_KEY, queryFn: fetchFaculty, staleTime: 30_000 });
 }
 
-export function useProgramOptions() {
-  return useQuery({
-    queryKey: ["faculty", "program-options"],
-    queryFn: fetchProgramOptions,
-    staleTime: 5 * 60_000,
-  });
-}
 
 /**
  * The employing-department options for the create/edit dialogs.

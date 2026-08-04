@@ -58,23 +58,32 @@ export function toClassDto(c: ClassRow) {
 /**
  * Validate a class advisor (class teacher) selection. The advisor is optional —
  * null/undefined clears it. If set, it must be an ACTIVE staff user (has a
- * FacultyProfile) IN THE SAME PROGRAM as the class: the class teacher belongs to
- * the program they advise. Returns the resolved id (or null) on success.
+ * FacultyProfile) employed by the department that OWNS the class.
+ *
+ * Department, not program: the class teacher belongs to the unit that runs the
+ * class day to day. A first-year class is owned by S&H, so its advisor is S&H
+ * staff — and an S&H lecturer has NO program at all, so comparing programs would
+ * have made them ineligible to advise the very classes their department owns.
+ *
+ * Returns the resolved id (or null) on success.
  */
 export async function validateAdvisor(
   advisorId: string | null | undefined,
-  programId: string,
+  departmentId: string,
 ): Promise<{ ok: string | null } | { error: string }> {
   if (advisorId == null || advisorId === "") return { ok: null };
 
   const user = await db.user.findUnique({
     where: { id: advisorId },
-    select: { status: true, programId: true, facultyProfile: { select: { id: true } } },
+    select: {
+      status: true,
+      facultyProfile: { select: { departmentId: true } },
+    },
   });
   if (!user || !user.facultyProfile) return { error: "Select a valid staff member as advisor." };
   if (user.status !== "ACTIVE") return { error: "That staff member is inactive." };
-  if (user.programId !== programId) {
-    return { error: "The advisor must belong to this class's program." };
+  if (user.facultyProfile.departmentId !== departmentId) {
+    return { error: "The advisor must be staff in the department that owns this class." };
   }
   return { ok: advisorId };
 }

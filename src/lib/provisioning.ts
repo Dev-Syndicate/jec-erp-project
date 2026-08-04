@@ -112,11 +112,11 @@ export type FacultyAnchor = {
   email: string;
   displayName: string;
   // The department that EMPLOYS them — required, because every staff member has
-  // exactly one HR home. An S&H lecturer's is S&H, which runs no award at all.
+  // exactly one HR home, and it is the ONLY thing that scopes a staff account.
+  // There is deliberately no programId: a faculty member's award granted nothing
+  // (src/lib/auth.ts → scopesFor reads the department), so staff are created with
+  // User.programId left null.
   departmentId: string;
-  // The award they're attached to, if any. Null for staff in a department that
-  // runs none (S&H): they teach, but graduate nobody.
-  programId: string | null;
   roleIds: string[]; // one or more assignable Role ids (validated by the caller)
   staffId: string; // college-assigned id — required, unique
   designation: string; // HR title, e.g. "Asst. Professor"
@@ -157,7 +157,8 @@ export async function provisionFacultyAccount(anchor: FacultyAnchor): Promise<Pr
           firebaseUid,
           email: anchor.email,
           displayName: anchor.displayName,
-          programId: anchor.programId,
+          // Left null on purpose — staff carry no award; the department below is
+          // what scopes them.
           mustChangePassword: true,
           roles: { create: anchor.roleIds.map((roleId) => ({ roleId })) },
           facultyProfile: {

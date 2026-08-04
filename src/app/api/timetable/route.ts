@@ -112,16 +112,23 @@ export async function POST(req: Request) {
       return Response.json({ error: "That subject isn't in this class's program." }, { status: 400 });
     }
 
-    // The faculty must be an active user of the same program.
+    // The faculty must be active staff of the department that OWNS this class.
+    //
+    // Department, not program: a first-year class is owned by S&H and taught by
+    // S&H staff, who have no program at all — comparing programs would have made
+    // it impossible to put anyone on a first-year grid.
     const faculty = await db.user.findUnique({
       where: { id: facultyId },
-      select: { programId: true, status: true, facultyProfile: { select: { id: true } } },
+      select: { status: true, facultyProfile: { select: { departmentId: true } } },
     });
     if (!faculty || !faculty.facultyProfile || faculty.status !== "ACTIVE") {
       return Response.json({ error: "Select an active faculty member." }, { status: 400 });
     }
-    if (faculty.programId !== klass.programId) {
-      return Response.json({ error: "That faculty is in a different program." }, { status: 400 });
+    if (faculty.facultyProfile.departmentId !== klass.departmentId) {
+      return Response.json(
+        { error: "That faculty isn't in the department that owns this class." },
+        { status: 400 },
+      );
     }
 
     const slot = await db.timetableSlot.upsert({

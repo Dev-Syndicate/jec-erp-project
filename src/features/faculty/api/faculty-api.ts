@@ -7,6 +7,8 @@
 
 import { apiFetch } from "@/lib/api-client";
 import type {
+  Attachment,
+  AttachmentInput,
   DepartmentOption,
   Faculty,
   FacultyInput,
@@ -44,6 +46,30 @@ export function regeneratePassword(id: string): Promise<{ tempPassword: string }
 // creates). Returned as-is; the shape already matches the client Role type.
 export function fetchRoles(): Promise<Role[]> {
   return apiFetch<Role[]>("/api/roles");
+}
+
+// --- Cross-department attachments ------------------------------------------
+// Attachments for the ACTIVE semester only — the server scopes to it, so there's
+// no semester parameter to pass here.
+export function fetchAttachments(): Promise<Attachment[]> {
+  return apiFetch<Attachment[]>("/api/faculty/attachments");
+}
+
+export function createAttachment(input: AttachmentInput): Promise<Attachment> {
+  return apiFetch<Attachment>("/api/faculty/attachments", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+}
+
+// Resolves with the number of timetable slots the lecturer still held in that
+// department — those cells stay on the grid but can't be edited until the
+// lecturer is re-attached, so the caller surfaces the count rather than
+// implying the removal was consequence-free.
+export function deleteAttachment(id: string): Promise<{ ok: true; strandedSlots: number }> {
+  return apiFetch<{ ok: true; strandedSlots: number }>(`/api/faculty/attachments/${id}`, {
+    method: "DELETE",
+  });
 }
 
 // --- Picker options (mapped from the shared structure endpoints) -----------

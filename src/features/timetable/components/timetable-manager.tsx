@@ -236,7 +236,7 @@ function SlotDialog({
   onClose: () => void;
 }) {
   const subjects = useSubjectOptions();
-  const faculty = useFacultyOptions();
+  const faculty = useFacultyOptions(departmentId);
   const upsert = useUpsertSlot();
   const del = useDeleteSlot();
 
@@ -250,13 +250,14 @@ function SlotDialog({
     )
     .map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }));
 
-  // Faculty are matched on the class's OWNING department, not its award — that's
-  // exactly what POST /api/timetable enforces. It also makes an S&H lecturer (who
-  // has no award at all) eligible for the first-year classes S&H runs. The
-  // department code rides along in the label so a lecturer from another
-  // department is recognisable at a glance.
+  // Already scoped by the SERVER to the class's owning department — employed there
+  // or attached for this semester, which is exactly what POST /api/timetable
+  // enforces. Deliberately no `departmentId` filter here: a visiting lecturer's own
+  // department never equals the host's, so filtering locally would hide precisely
+  // the people attachments exist to make available. The department code rides along
+  // in the label so a visitor is recognisable at a glance.
   const facultyOptions = (faculty.data ?? [])
-    .filter((f) => f.status === "ACTIVE" && f.departmentId === departmentId)
+    .filter((f) => f.status === "ACTIVE")
     .map((f) => ({ value: f.id, label: `${f.name} · ${f.departmentCode}` }));
 
   const valid = subjectId !== "" && facultyId !== "";

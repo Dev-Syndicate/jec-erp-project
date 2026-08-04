@@ -37,6 +37,39 @@ export type Faculty = {
   updatedAt: string;
 };
 
+// --- Cross-department attachment ------------------------------------------
+// A lecturer LENT to another department for the active semester. Employment
+// doesn't move — `homeDepartment*` is still where they belong — this only widens
+// where they may be timetabled (S&H staff teaching a CSE hour, say).
+//
+// Semester-bound: attachments lapse at rollover and must be renewed, so a
+// one-term loan can't quietly become permanent.
+export type Attachment = {
+  id: string;
+  facultyProfileId: string;
+  // The USER id — what the timetable and cover pickers post as the teacher.
+  userId: string;
+  facultyName: string;
+  facultyStatus: "ACTIVE" | "INACTIVE";
+  staffId: string;
+  designation: string;
+  homeDepartmentId: string;
+  homeDepartmentCode: string;
+  homeDepartmentName: string;
+  hostDepartmentId: string;
+  hostDepartmentCode: string;
+  hostDepartmentName: string;
+  assignedByName: string;
+  reason: string | null;
+  createdAt: string;
+};
+
+export type AttachmentInput = {
+  facultyProfileId: string;
+  departmentId: string; // the HOST department
+  reason?: string | null;
+};
+
 // An assignable RBAC role (from /api/roles) — configurable data, so the picker
 // is driven by this list, not a hardcoded Faculty/HOD toggle.
 export type Role = {

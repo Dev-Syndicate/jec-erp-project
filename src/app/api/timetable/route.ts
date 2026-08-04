@@ -4,11 +4,13 @@
 // `Timetable` sits on the department axis, so a `{ programId }` resource would
 // match no grant and fail closed. The grid is always for the ACTIVE semester; a
 // slot's subject must be in the class's PROGRAM (the award — a different axis) and
-// its faculty must be an active user of that program.
+// its faculty must be able to teach in the department that OWNS the class —
+// employed there or attached to it this semester (see lib/teaching.ts).
 //
 // Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { canTeachIn } from "@/lib/teaching";
 import { curriculumSemester, roman, SLOT_INCLUDE, toSlotDto } from "./dto";
 
 export const dynamic = "force-dynamic";
@@ -112,23 +114,13 @@ export async function POST(req: Request) {
       return Response.json({ error: "That subject isn't in this class's program." }, { status: 400 });
     }
 
-    // The faculty must be active staff of the department that OWNS this class.
-    //
-    // Department, not program: a first-year class is owned by S&H and taught by
-    // S&H staff, who have no program at all — comparing programs would have made
-    // it impossible to put anyone on a first-year grid.
-    const faculty = await db.user.findUnique({
-      where: { id: facultyId },
-      select: { status: true, facultyProfile: { select: { departmentId: true } } },
-    });
-    if (!faculty || !faculty.facultyProfile || faculty.status !== "ACTIVE") {
-      return Response.json({ error: "Select an active faculty member." }, { status: 400 });
-    }
-    if (faculty.facultyProfile.departmentId !== klass.departmentId) {
-      return Response.json(
-        { error: "That faculty isn't in the department that owns this class." },
-        { status: 400 },
-      );
+    // The faculty must be able to teach in the department that OWNS this class —
+    // employed there, or attached to it for this semester. The attachment half is
+    // what lets an S&H lecturer take a CSE hour: department, not program, because
+    // S&H staff have no award at all.
+    const teaching = await canTeachIn(facultyId, klass.departmentId, semester.id);
+    if ("error" in teaching) {
+      return Response.json({ error: teaching.error }, { status: 400 });
     }
 
     const slot = await db.timetableSlot.upsert({

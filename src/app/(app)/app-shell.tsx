@@ -17,6 +17,7 @@ import {
   CalendarOff,
   Users,
   GraduationCap,
+  ArrowLeftRight,
   BookOpen,
   CalendarClock,
   UsersRound,
@@ -229,6 +230,17 @@ const NAV: NavGroup[] = [
         href: "/faculty",
         icon: GraduationCap,
         roles: ["Super Admin", "HOD"],
+        exact: true, // /faculty/attachments is a sibling entry, not this page
+      },
+      {
+        title: "Attachments",
+        href: "/faculty/attachments",
+        icon: ArrowLeftRight,
+        // Lending staff across departments is an institution-level act, so this is
+        // Super Admin only — a HOD asks the admin. It's a sibling rather than a
+        // child of Faculty because children carry no roles of their own, and an
+        // HOD must not be offered a link that would 403.
+        roles: ["Super Admin"],
       },
     ],
   },

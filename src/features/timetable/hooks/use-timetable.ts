@@ -29,8 +29,17 @@ export function useClassOptions() {
 export function useSubjectOptions() {
   return useQuery({ queryKey: ["timetable", "subjects"], queryFn: fetchSubjectOptions, staleTime: 5 * 60_000 });
 }
-export function useFacultyOptions() {
-  return useQuery({ queryKey: ["timetable", "faculty"], queryFn: fetchFacultyOptions, staleTime: 5 * 60_000 });
+// Scoped to the class's owning department — see fetchFacultyOptions. The key
+// includes it so switching class refetches instead of reusing another
+// department's list. Disabled until known, or the first fetch would cache the
+// unscoped list under an undefined key.
+export function useFacultyOptions(teachingIn?: string) {
+  return useQuery({
+    queryKey: ["timetable", "faculty", teachingIn ?? null],
+    queryFn: () => fetchFacultyOptions(teachingIn),
+    enabled: teachingIn !== undefined,
+    staleTime: 5 * 60_000,
+  });
 }
 
 export function useUpsertSlot() {

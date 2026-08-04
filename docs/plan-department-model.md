@@ -153,8 +153,10 @@ Each is independently `db push`-able and revertable.
 4. **Cross-department promotion.** Drop "target must be the same program"; drive the target
    from the source class's `programId`, moving the student into the branch department's
    year-2 class.
-5. **Cross-department teaching.** Re-introduce the attachment table (S&H staff teaching in
-   other departments' programs) — the one piece of the reverted work worth rebuilding.
+5. **Cross-department teaching.** ✅ **Done.** `FacultyAttachment` (faculty × host department ×
+   semester) lets S&H staff be timetabled in other departments. The rule lives in ONE place,
+   `src/lib/teaching.ts`, because it was previously a bare `===` inlined in two routes and both
+   were wrong the same way. See "Attachments" below.
 6. **UI + importer + docs.** Class creation asks for owner + award; department picker on the
    faculty form; `schema-design.html` and `CLAUDE.md` updated.
 
@@ -169,6 +171,30 @@ Each is independently `db push`-able and revertable.
   marks and attendance queries, and leaving it alone keeps this change contained. **No
   schema change to `Subject`.**
 
+### Attachments (cross-department teaching)
+
+Employment answers *who pays them*, not *where may they teach*. Those diverge for S&H, so
+`FacultyAttachment` records the difference explicitly rather than inferring it.
+
+- **Explicit rows, not a derived rule.** Chosen over "any active faculty may teach anywhere"
+  (removes the guard entirely) and "derive it from the subject's program" (can't express
+  *this one lecturer helps out this term*). Attachments are auditable and revocable.
+- **Semester-bound.** `@@unique([facultyId, departmentId, semesterId])`. A loan lapses at
+  rollover and must be renewed, so it can't quietly become permanent.
+  ⚠️ **Consequence:** the check runs at WRITE time, so a `TimetableSlot` written under an
+  attachment **survives** the lapse. The grid stays intact and those hours can still be
+  marked, but the cell can't be edited until the lecturer is re-attached. `DELETE` returns
+  `strandedSlots` so the UI can say this out loud. **A "these attachments lapsed" view at
+  rollover is still owed** — without it admins will meet uneditable cells with no explanation.
+- **Super Admin only.** Lending staff across departments is institution-level; a HOD asks.
+  Deliberately not department-scoped — a scoped grant would let one HOD claim another
+  department's staff without their agreement.
+- **Pickers ask the server.** `GET /api/faculty?teachingIn=<departmentId>` returns employed +
+  attached staff. The timetable and cover pickers must **not** re-filter on `departmentId`
+  client-side: a visitor's own department never equals the host's, so that would hide exactly
+  the people attachments exist to surface. (That bug already happened once when the pickers
+  filtered on a `programId` the API had stopped sending.)
+
 ## Still open — do NOT block slice 1
 
 1. **Does a branch HOD see their incoming first-years at all**, even read-only, to plan
@@ -176,3 +202,6 @@ Each is independently `db push`-able and revertable.
 2. **Who runs the year-1 → year-2 transfer?** Promotion is Super-Admin-only today; slice 4.
 3. **Department ↔ Branch naming.** Both will exist and both are called "CSE". Worth a
    display convention ("CSE Department" vs the award "B.E · CSE") so the UI isn't ambiguous.
+4. **Attachment rollover.** Attachments are semester-bound, so at rollover every loan lapses
+   at once and the affected timetable cells become uneditable with no explanation. Needs
+   either a "lapsed attachments — renew?" view or a carry-forward step in promotion.

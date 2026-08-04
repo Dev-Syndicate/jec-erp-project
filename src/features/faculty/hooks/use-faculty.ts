@@ -6,9 +6,12 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import type { FacultyInput, FacultyPatch } from "@/features/faculty/types";
+import type { AttachmentInput, FacultyInput, FacultyPatch } from "@/features/faculty/types";
 import {
+  createAttachment,
   createFaculty,
+  deleteAttachment,
+  fetchAttachments,
   fetchDepartmentOptions,
   fetchFaculty,
   fetchRoles,
@@ -66,4 +69,45 @@ export function useUpdateFaculty() {
 export function useRegeneratePassword() {
   // No list change — the caller reveals the returned password.
   return useMutation({ mutationFn: (id: string) => regeneratePassword(id) });
+}
+
+// --- Cross-department attachments ------------------------------------------
+const ATTACHMENTS_KEY = ["faculty", "attachments"] as const;
+
+export function useAttachments() {
+  return useQuery({ queryKey: ATTACHMENTS_KEY, queryFn: fetchAttachments, staleTime: 30_000 });
+}
+
+/**
+ * Invalidate everything an attachment changes.
+ *
+ * Not just this feature's list: attaching someone changes WHO THE TIMETABLE AND
+ * COVER PICKERS MAY OFFER, and both cache their options for five minutes. Without
+ * this, a lecturer you just attached stays missing from those dropdowns until the
+ * cache expires — the same "the API accepts them but the UI never shows them"
+ * failure this whole slice exists to fix.
+ *
+ * Cross-feature cache keys are referenced by string here rather than imported:
+ * features must not import each other (CLAUDE.md), and a query key is data.
+ */
+function useInvalidateAttachments() {
+  const qc = useQueryClient();
+  return () => {
+    void qc.invalidateQueries({ queryKey: ATTACHMENTS_KEY });
+    void qc.invalidateQueries({ queryKey: ["timetable", "faculty"] });
+    void qc.invalidateQueries({ queryKey: ["attendance", "faculty-options"] });
+  };
+}
+
+export function useCreateAttachment() {
+  const invalidate = useInvalidateAttachments();
+  return useMutation({
+    mutationFn: (input: AttachmentInput) => createAttachment(input),
+    onSuccess: invalidate,
+  });
+}
+
+export function useDeleteAttachment() {
+  const invalidate = useInvalidateAttachments();
+  return useMutation({ mutationFn: (id: string) => deleteAttachment(id), onSuccess: invalidate });
 }

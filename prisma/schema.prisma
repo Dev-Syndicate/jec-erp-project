@@ -201,6 +201,7 @@ model Department {
   programs        Program[] // the awards it runs — may span several branches
   classes         Class[] // the groups it owns (S&H owns year 1)
   facultyProfiles FacultyProfile[] // the staff it employs
+  attachments     FacultyAttachment[] // visiting staff it may timetable
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -319,6 +320,7 @@ model User {
   leaveHodActions       LeaveRequest[]      @relation("LeaveHodAction") // requests this user approved/rejected as HOD
   substitutingFor       SlotSubstitution[]  @relation("SubstituteFor") // periods this user is covering
   substitutionsAssigned SlotSubstitution[]  @relation("SubstitutionAssignedBy") // covers this user arranged
+  attachmentsAssigned   FacultyAttachment[] @relation("AttachmentAssignedBy") // cross-department loans this user arranged
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -379,10 +381,49 @@ model FacultyProfile {
   fatherName     String?
   motherName     String?
 
+  attachments FacultyAttachment[] // departments they VISIT to teach
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([departmentId])
+}
+
+// A lecturer lent to ANOTHER department for one semester — the "S&H staff also
+// teach in CSE" case. Employment does not move: FacultyProfile.departmentId is
+// still their home, and this row only widens WHERE THEY MAY BE TIMETABLED.
+//
+// Semester-bound by decision: an attachment lapses at rollover and must be
+// renewed, so a one-term loan can't quietly become permanent. Note the
+// consequence — a TimetableSlot already written under an attachment SURVIVES the
+// lapse (the check runs at write time, not read time). The grid stays intact but
+// that cell can no longer be edited until the attachment is renewed.
+model FacultyAttachment {
+  id        String         @id @default(cuid())
+  facultyId String
+  faculty   FacultyProfile @relation(fields: [facultyId], references: [id], onDelete: Cascade)
+
+  // The HOST department — the one they visit, never their own (enforced in the
+  // route: an attachment to your own department would be a meaningless row).
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  semesterId String
+  semester   Semester @relation(fields: [semesterId], references: [id])
+
+  // Who lent them and why — this is a supervised act, so it records an actor.
+  assignedById String
+  assignedBy   User    @relation("AttachmentAssignedBy", fields: [assignedById], references: [id])
+  reason       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One attachment per person per host department per semester; re-attaching
+  // updates the existing row rather than stacking duplicates.
+  @@unique([facultyId, departmentId, semesterId])
+  @@index([departmentId, semesterId])
+  @@index([semesterId])
 }
 
 // ---------------------------------------------------------------------------
@@ -480,6 +521,7 @@ model Semester {
   periodAttendance   PeriodAttendance[]
   internalMarks      InternalMark[]
   leaveRequests      LeaveRequest[]
+  facultyAttachments FacultyAttachment[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

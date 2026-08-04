@@ -14,6 +14,7 @@
 // Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may).
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { canTeachIn } from "@/lib/teaching";
 import { dayName, parseDateOnly, resolveWeekday, roman } from "../dto";
 
 export const dynamic = "force-dynamic";
@@ -199,31 +200,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // The substitute must be ACTIVE staff of the department that OWNS this class —
-    // cover is not a way to hand an outsider (or a deactivated account) marking
-    // rights. Department, not program: an S&H lecturer covering a first-year hour
-    // has no program at all, so comparing programs would refuse every cover on the
-    // classes S&H runs.
-    const substitute = await db.user.findUnique({
-      where: { id: substituteId },
-      select: {
-        id: true,
-        status: true,
-        student: { select: { id: true } },
-        facultyProfile: { select: { departmentId: true } },
-      },
-    });
-    if (!substitute || substitute.status !== "ACTIVE") {
-      return Response.json({ error: "Select an active member of staff." }, { status: 400 });
-    }
-    if (substitute.student) {
-      return Response.json({ error: "A student can't cover a class." }, { status: 400 });
-    }
-    if (substitute.facultyProfile?.departmentId !== slot.class.departmentId) {
-      return Response.json(
-        { error: "The covering teacher must be staff in the department that owns this class." },
-        { status: 400 },
-      );
+    // The substitute must be able to teach in the department that OWNS this class —
+    // employed there, or attached to it this semester. Cover is not a way to hand
+    // an outsider (or a deactivated account) marking rights, but a lecturer already
+    // lent to this department is not an outsider. Same rule as the timetable, so it
+    // comes from the same helper rather than a second copy that can drift.
+    const teaching = await canTeachIn(substituteId, slot.class.departmentId, semester.id);
+    if ("error" in teaching) {
+      return Response.json({ error: teaching.error }, { status: 400 });
     }
 
     const saved = await db.slotSubstitution.upsert({

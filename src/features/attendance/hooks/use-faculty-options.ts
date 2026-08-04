@@ -5,9 +5,11 @@
 // (CLAUDE.md). The endpoint is already department-scoped server-side, so a HOD
 // only ever sees the staff their own department employs.
 //
-// The caller narrows further by department: a substitute must be staff of the
-// department that OWNS the class being covered. Department, not program —
-// staff carry no award, so there is no programId to filter on.
+// Pass the OWNING department of the class being covered: the server then returns
+// the staff it employs PLUS anyone attached to it this semester — the same set
+// POST /api/attendance/substitutions accepts. The caller must NOT re-filter on
+// departmentId; a visiting lecturer's own department never matches the host's, so
+// that would hide exactly the people attachments exist to make available.
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
@@ -33,11 +35,17 @@ type RawFaculty = {
   status: "ACTIVE" | "INACTIVE";
 };
 
-export function useFacultyOptions() {
+export function useFacultyOptions(teachingIn?: string) {
   return useQuery({
-    queryKey: ["attendance", "faculty-options"],
+    // Keyed on the host department so switching class refetches rather than
+    // reusing another department's list. Disabled until it's known, or the first
+    // fetch would cache the unscoped list under an undefined key.
+    queryKey: ["attendance", "faculty-options", teachingIn ?? null],
+    enabled: teachingIn !== undefined,
     queryFn: async (): Promise<FacultyOption[]> => {
-      const rows = await apiFetch<RawFaculty[]>("/api/faculty");
+      const rows = await apiFetch<RawFaculty[]>(
+        teachingIn ? `/api/faculty?teachingIn=${encodeURIComponent(teachingIn)}` : "/api/faculty",
+      );
       return rows
         // A deactivated account can't be given marking rights (the API refuses
         // it too) — don't offer it.

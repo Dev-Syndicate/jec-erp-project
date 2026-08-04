@@ -79,8 +79,15 @@ type RawFaculty = {
   departmentCode: string;
   status: "ACTIVE" | "INACTIVE";
 };
-export async function fetchFacultyOptions(): Promise<FacultyOption[]> {
-  const faculty = await apiFetch<RawFaculty[]>("/api/faculty");
+// `teachingIn` is the OWNING department of the class being timetabled. The server
+// answers with the staff it employs PLUS anyone attached to it this semester, so
+// the picker offers exactly what POST /api/timetable will accept. Filtering the
+// unscoped list client-side on departmentId (what this used to do) hid every
+// visiting lecturer, since an attached lecturer's own departmentId never matches.
+export async function fetchFacultyOptions(teachingIn?: string): Promise<FacultyOption[]> {
+  const faculty = await apiFetch<RawFaculty[]>(
+    teachingIn ? `/api/faculty?teachingIn=${encodeURIComponent(teachingIn)}` : "/api/faculty",
+  );
   // A slot's facultyId references User.id — so map to userId, not the profile id.
   return faculty.map((f) => ({
     id: f.userId,

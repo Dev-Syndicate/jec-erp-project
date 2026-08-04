@@ -134,6 +134,45 @@ export async function GET(req: Request) {
     const ctx = await authenticate(req);
     authorize(ctx, "manage", "Faculty");
 
+    // ?teachingIn=<departmentId> — "who may be timetabled in this department",
+    // which is a DIFFERENT question from "who does it employ". It answers with the
+    // employed staff PLUS anyone attached there this semester, so the picker offers
+    // exactly the set POST /api/timetable would accept. Without this the two drift:
+    // an attached lecturer is accepted by the API but never offered by the UI.
+    const teachingIn = new URL(req.url).searchParams.get("teachingIn")?.trim();
+
+    if (teachingIn) {
+      // Only for a department the caller may act in — otherwise this parameter
+      // would be a way around the scoping below and let any HOD enumerate another
+      // department's staff.
+      authorize(ctx, "manage", "Faculty", { departmentId: teachingIn });
+
+      const semester = await db.semester.findFirst({
+        where: { isActive: true },
+        select: { id: true },
+      });
+
+      const faculty = await db.facultyProfile.findMany({
+        relationLoadStrategy: "join",
+        where: {
+          OR: [
+            { departmentId: teachingIn },
+            // No active semester → no attachment can be current, so this arm
+            // matches nothing rather than silently matching every attachment ever.
+            {
+              attachments: {
+                some: { departmentId: teachingIn, semesterId: semester?.id ?? "__none__" },
+              },
+            },
+          ],
+        },
+        include: FACULTY_INCLUDE,
+        orderBy: { staffId: "asc" },
+      });
+
+      return Response.json(faculty.map(toFacultyDto));
+    }
+
     // Super Admin: all faculty. Scoped roles: only their own DEPARTMENT — staff are
     // scoped by who employs them, so an S&H HOD sees S&H staff even though S&H runs
     // no award. departmentId is a column on FacultyProfile, so no `user:` nesting.

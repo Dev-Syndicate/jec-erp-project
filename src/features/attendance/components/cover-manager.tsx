@@ -267,17 +267,17 @@ function AssignForm({
   departmentId: string; // the class's OWNER — who may cover
   onDone: () => void;
 }) {
-  const faculty = useFacultyOptions();
+  const faculty = useFacultyOptions(departmentId);
   const [substituteId, setSubstituteId] = useState(period.substitution?.substituteId ?? "");
   const [reason, setReason] = useState(period.substitution?.reason ?? "");
   const assign = useAssignCover();
 
-  // Only staff of the department that OWNS the class, matching what POST
-  // enforces — department, not program, because staff carry no award and a
-  // first-year class is run by S&H whatever its students' award says. The
-  // period's own teacher can't cover their own hour (the API refuses that too).
+  // Already scoped by the SERVER to whoever may teach in the class's owning
+  // department — employed there or attached this semester — which is exactly what
+  // POST enforces. The only filter left is local to this period: a teacher can't
+  // cover their own hour (the API refuses that too).
   const options = (faculty.data ?? [])
-    .filter((f) => f.departmentId === departmentId && f.userId !== period.regularFacultyId)
+    .filter((f) => f.userId !== period.regularFacultyId)
     .map((f) => ({ value: f.userId, label: `${f.displayName} · ${f.departmentCode}` }));
 
   function submit() {

@@ -139,10 +139,20 @@ enum MaritalStatus {
 }
 
 // ---------------------------------------------------------------------------
-// Structure — set up once by the admin.
-// A Program is a Degree x Branch pairing (e.g. B.E x CSE); programId is the
-// scoping key everyone belongs to. A Class is one group within a program
-// (year + section, e.g. II-A).
+// Structure — set up once by the admin. Four models, one job each:
+//
+//   Degree      the qualification            B.E
+//   Branch      the DISCIPLINE only, a label in the award            CSE
+//   Program     Degree x Branch = THE AWARD                          B.E x CSE
+//   Department  the ORGANISATIONAL UNIT: employs staff, has a HOD,
+//               owns classes, runs one or more Programs              CSE Dept, S&H
+//
+// Branch and Department are deliberately separate. A department may run programs
+// across SEVERAL branches (a Civil department running B.E-CIVIL and B.E-STRUCT),
+// and Science & Humanities is a department that is not a discipline at all —
+// nobody graduates in it, so it can never be the Branch half of a pairing.
+//
+// DEPARTMENT is the scoping key, not Program. See docs/plan-department-model.md.
 // ---------------------------------------------------------------------------
 
 model Degree {
@@ -160,6 +170,9 @@ model Degree {
   updatedAt DateTime @updatedAt
 }
 
+// The DISCIPLINE half of an award, and nothing more. A Branch employs nobody and
+// owns nothing — that is the Department's job. "CSE" here is the subject area that
+// appears in "B.E - CSE", not the CSE department.
 model Branch {
   id       String  @id @default(cuid())
   name     String  @unique // "Computer Science and Engineering"
@@ -167,6 +180,27 @@ model Branch {
   isActive Boolean @default(true)
 
   programs Program[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// The organisational unit — the thing with a HOD, a staff roster and classes.
+// This is THE SCOPING KEY: a HOD's reach is everything their department owns.
+//
+// Science & Humanities is a Department with no Branch of its own: it runs no award,
+// but it owns every branch's FIRST-YEAR classes and employs the staff who teach
+// them. That is why first-years are invisible to a branch HOD by construction —
+// those classes belong to S&H, not to CSE.
+model Department {
+  id       String  @id @default(cuid())
+  name     String  @unique // "Computer Science and Engineering Department"
+  code     String  @unique // "CSE", "S&H"
+  isActive Boolean @default(true)
+
+  programs        Program[] // the awards it runs — may span several branches
+  classes         Class[] // the groups it owns (S&H owns year 1)
+  facultyProfiles FacultyProfile[] // the staff it employs
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -180,6 +214,12 @@ model Program {
   branch   Branch  @relation(fields: [branchId], references: [id])
   isActive Boolean @default(true)
 
+  // WHO RUNS THIS AWARD. Exactly one department, but a department may run several
+  // programs (Civil: B.E-CIVIL and B.E-STRUCT) — which is why a HOD's admin reach is
+  // derived from the department rather than stored as a single programId.
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
   users    User[]
   classes  Class[]
   subjects Subject[]
@@ -190,14 +230,30 @@ model Program {
   // One program per Degree x Branch pairing.
   @@unique([degreeId, branchId])
   @@index([branchId])
+  @@index([departmentId])
 }
 
+// A Class carries TWO department-ish facts, and they are genuinely different:
+//
+//   departmentId  WHO OWNS IT — the scoping key. S&H for year 1, the branch's own
+//                 department from year 2. A HOD's classes are the ones their
+//                 department owns, so first-years are invisible to a branch HOD
+//                 BY CONSTRUCTION rather than by a rule anyone has to remember.
+//   programId     WHICH AWARD its students are headed for. Never changes.
+//
+// Both are needed: sections are one-per-program, so CSE-I-A and ECE-I-A are both
+// owned by S&H in year 1 and would otherwise be indistinguishable — and promotion
+// reads programId to know which department's year-2 class to move them into.
 model Class {
   id        String  @id @default(cuid())
   programId String
   program   Program @relation(fields: [programId], references: [id])
-  year      Int // 1..Degree.durationYears (I-IV)
-  section   String // "A".."H"
+
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
+  year    Int // 1..Degree.durationYears (I-IV)
+  section String // "A".."H"
 
   // The class in-charge / mentor (optional). A staff User.
   advisorId String?
@@ -217,6 +273,7 @@ model Class {
 
   @@unique([programId, year, section])
   @@index([programId])
+  @@index([departmentId])
   @@index([advisorId])
 }
 
@@ -303,6 +360,12 @@ model FacultyProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  // The department that EMPLOYS this person — their HR home, and a different
+  // question from which programs they teach in. An S&H lecturer's department is
+  // S&H, which runs no award at all. Branch employs nobody.
+  departmentId String
+  department   Department @relation(fields: [departmentId], references: [id])
+
   // "designation" is the HR title (e.g. "Asst. Professor"), distinct from the
   // login role on User. staffId is the college-assigned id.
   designation String
@@ -318,6 +381,8 @@ model FacultyProfile {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@index([departmentId])
 }
 
 // ---------------------------------------------------------------------------

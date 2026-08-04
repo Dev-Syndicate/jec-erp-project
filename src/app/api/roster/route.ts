@@ -9,7 +9,7 @@
 //
 // Authorized by assertManagesRoster (the class's own advisor, or a `manage Student`
 // holder — HOD/Super Admin — in program scope).
-import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, AuthError, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { STUDENT_INCLUDE, toStudentDto } from "@/app/api/students/dto";
 import { assertManagesRoster } from "./access";
@@ -132,7 +132,7 @@ export async function PATCH(req: Request) {
         user: { select: { programId: true } },
         enrollments: {
           where: { academicYear: { isActive: true } },
-          include: { class: { select: { programId: true, advisorId: true } } },
+          include: { class: { select: { departmentId: true, advisorId: true } } },
           take: 1,
         },
       },
@@ -143,8 +143,12 @@ export async function PATCH(req: Request) {
     if (currentClass) {
       assertManagesRoster(ctx, currentClass);
     } else {
-      // Not in a class this year — only an admin can edit.
-      authorize(ctx, "manage", "Student", { programId: student.user.programId });
+      // Not in a class this year, so no department owns them and there is nothing
+      // departmental to scope against. Institution-scoped roles only (Super Admin
+      // and anything else holding institution scope) until they're placed.
+      if (!ctx.isInstitutionScoped) {
+        throw new AuthError(403, "This student isn't in a class this year.");
+      }
     }
 
     // displayName lives on the linked User; update it via a nested write so the

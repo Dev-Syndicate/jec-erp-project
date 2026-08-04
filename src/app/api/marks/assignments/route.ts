@@ -4,12 +4,13 @@
 //
 // Derived from the TIMETABLE: the timetable IS the teaching allocation, so the
 // markable subjects are the DISTINCT (class, subject) a faculty teaches at least
-// one period of this semester. A marks admin (HOD/Super Admin — `manage Subject`
-// in program scope) gets every (class × subject) scheduled in program scope; a
-// plain Faculty gets only their own. Always filtered to the one active semester.
+// one period of this semester. A marks admin (HOD/Super Admin — `manage Marks` in
+// DEPARTMENT scope) gets every (class × subject) scheduled for the classes their
+// department OWNS; a plain Faculty gets only their own. Always filtered to the one
+// active semester.
 //
-// Each entry carries `canEnter`: an admin can READ any of their program's
-// subjects but may only ENTER marks for one they personally teach, so the picker
+// Each entry carries `canEnter`: an admin can READ any subject of a class they
+// own but may only ENTER marks for one they personally teach, so the picker
 // marks the rest as view-only instead of hiding them.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -33,15 +34,17 @@ export async function GET(req: Request) {
       return Response.json({ semester: null, assignments: [] });
     }
 
-    // Admins see every scheduled (class × subject) in program scope; Faculty only
-    // the ones they personally teach.
-    const admin = isMarksAdmin(ctx, ctx.user.programId);
+    // Admins see every scheduled (class × subject) their DEPARTMENT owns; Faculty
+    // only the ones they personally teach. Filtered on the class's owning
+    // department, not its award — an S&H HOD gets the year-1 classes S&H runs, and
+    // a branch HOD gets only the years their department has taken over.
+    const admin = isMarksAdmin(ctx, ctx.departmentId);
     const where = {
       semesterId: semester.id,
       ...(admin
         ? ctx.isInstitutionScoped
           ? {}
-          : { class: { programId: ctx.user.programId ?? "__none__" } }
+          : { class: { departmentId: ctx.departmentId ?? "__none__" } }
         : { facultyId: ctx.user.id }),
     };
 

@@ -1,8 +1,9 @@
 // Per-faculty internal-marks scoping — the resource-level check layered on top of
 // the `enter Marks` capability. Two levels, deliberately different in width:
 //
-//   READ  marks — a marks admin (HOD/SA in program scope) OR the subject's
-//                 teacher (assertReadsMarks). HODs keep oversight of results.
+//   READ  marks — a marks admin (HOD/SA for the department that OWNS the class)
+//                 OR the subject's teacher (assertReadsMarks). HODs keep
+//                 oversight of results.
 //   ENTER marks — the subject's own teacher, FULL STOP (assertEntersMarks).
 //                 No role overrides it, not even Super Admin.
 //
@@ -16,33 +17,38 @@
 // table exists in the schema but is intentionally unused). Same source the
 // attendance mark-gate uses.
 //
-// Program scope is enforced separately in the routes (the resource-form authorize
-// against the class's programId); this module adds the "which subject/class within
-// the program" layer.
+// Scope is enforced separately in the routes (the resource-form authorize against
+// the class's OWNING departmentId — `Marks` sits on the department axis); this
+// module adds the "which subject/class within that scope" layer.
 import "server-only";
 
 import { db } from "@/lib/db";
 import { AuthError, can, type AuthContext } from "@/lib/auth";
 
 /**
- * Is this user an institution/program admin for marks? True for `manage all`
- * (Super Admin) or an HOD whose program-scoped grants cover this program. The
- * caller passes the target programId so the HOD's scope condition is honored.
+ * Is this user an institution/department admin for marks? True for `manage all`
+ * (Super Admin) or an HOD whose department-scoped grants cover the department that
+ * OWNS the class. The caller passes that departmentId so the scope condition is
+ * honored.
  */
-export function isMarksAdmin(ctx: AuthContext, programId: string | null): boolean {
-  // We model "marks admin" as: may enter marks for this program WITHOUT needing a
-  // per-subject assignment. HOD holds `enter Marks` (program-scoped) AND manages
-  // the subject catalog; Faculty holds `enter Marks` but is confined to their
-  // assignments. `manage Subject` (program-scoped, or `manage all` for SA) cleanly
-  // separates the two — only HOD/Super Admin have it.
-  return can(ctx, "manage", "Subject", { programId });
+export function isMarksAdmin(ctx: AuthContext, departmentId: string | null): boolean {
+  // Marks oversight follows the CLASS OWNER, not the subject catalogue. It used to
+  // ask `manage Subject { programId }` — the award axis — which for a year-1 class
+  // would hand oversight to the branch HOD whose award it is, while the class is
+  // actually run by S&H. `manage Marks { departmentId }` puts it where the rest of
+  // the class's authority already lives: whoever owns the class owns its results.
+  // Faculty hold only `enter Marks` (and are confined to their own timetable
+  // slots), so `manage Marks` still cleanly separates HOD/SA from plain teachers.
+  return can(ctx, "manage", "Marks", { departmentId });
 }
 
 type SubjectTarget = {
   classId: string;
   subjectId: string;
   semesterId: string;
-  programId: string | null;
+  // The department that OWNS the class — the axis `Marks` is scoped by. NOT the
+  // subject's programId (that's the award, and is checked separately).
+  departmentId: string | null;
 };
 
 /** Does this user teach ≥1 timetable period of this subject to this class? */
@@ -61,14 +67,16 @@ export async function teachesSubject(ctx: AuthContext, args: SubjectTarget): Pro
 
 /**
  * READ level: may this user look at marks for THIS (subject, class, semester)?
- * Passes for a marks admin (HOD/SA in program scope) — departmental oversight of
- * results — or the subject's own teacher. Throws 403 otherwise.
+ * Passes for a marks admin (HOD/SA for the department that OWNS the class) —
+ * departmental oversight of results — or the subject's own teacher. Throws 403
+ * otherwise.
  *
- * The class's programId is used for the admin scope check, so pass a class that
- * belongs to the subject's program (the routes validate that pairing first).
+ * The class's departmentId drives the admin scope check: a year-1 class is owned
+ * by S&H, so it is the S&H HOD who oversees its marks even though the award (and
+ * the subject) is the branch's.
  */
 export async function assertReadsMarks(ctx: AuthContext, args: SubjectTarget): Promise<void> {
-  if (isMarksAdmin(ctx, args.programId)) return;
+  if (isMarksAdmin(ctx, args.departmentId)) return;
   if (await teachesSubject(ctx, args)) return;
   throw new AuthError(403, "You can only view marks for a subject you teach this semester.");
 }

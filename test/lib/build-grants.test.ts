@@ -83,23 +83,47 @@ describe("buildGrants — which axis scopes which subject", () => {
     ]);
   });
 
-  it("puts every other subject on the ACADEMIC axis", () => {
+  it("puts everything hanging off a CLASS on the DEPARTMENT axis", () => {
+    // The owning department runs the class, so this is what hides a year-1 class
+    // (owned by S&H) from the branch HOD whose award it leads to.
     const user = {
       ...staff("dept-cse", [CSE]),
       roles: roles("PROGRAM", [["manage", "Class"], ["read", "Student"]]),
     };
     expect(buildGrants(user)).toEqual([
-      { action: "manage", subject: "Class", conditions: { programId: { $in: [CSE] } } },
-      { action: "read", subject: "Student", conditions: { programId: { $in: [CSE] } } },
+      { action: "manage", subject: "Class", conditions: { departmentId: "dept-cse" } },
+      { action: "read", subject: "Student", conditions: { departmentId: "dept-cse" } },
     ]);
   });
 
-  it("keeps `Student` on the ACADEMIC axis", () => {
-    // A student's program IS their program — there is no separate employment
-    // question for them, so they must not land on the department axis.
+  it("puts `Student` on the DEPARTMENT axis", () => {
+    // A student's department is DERIVED from the class they're enrolled in, so a
+    // first-year sits in S&H and moves to their branch at promotion. Their AWARD
+    // never changes, but the award is not what scopes access.
     const user = { ...staff("dept-cse", [CSE]), roles: roles("PROGRAM", [["manage", "Student"]]) };
     const [grant] = buildGrants(user);
-    expect(grant.conditions).toEqual({ programId: { $in: [CSE] } });
+    expect(grant.conditions).toEqual({ departmentId: "dept-cse" });
+  });
+
+  it("keeps structural catalogue subjects on the ACADEMIC axis", () => {
+    // These belong to a DEGREE, not to a class — a Subject sits in a curriculum,
+    // an AcademicYear spans the institution. Scoping them by department would be
+    // the wrong question.
+    const user = {
+      ...staff("dept-cse", [CSE]),
+      roles: roles("PROGRAM", [["manage", "Subject"], ["read", "Program"]]),
+    };
+    expect(buildGrants(user)).toEqual([
+      { action: "manage", subject: "Subject", conditions: { programId: { $in: [CSE] } } },
+      { action: "read", subject: "Program", conditions: { programId: { $in: [CSE] } } },
+    ]);
+  });
+
+  it("defaults an UNKNOWN subject to the academic axis", () => {
+    // DEPARTMENT_SCOPED is an allow-list: a newly added permission subject gets
+    // the narrower, more conservative scope until someone opts it in deliberately.
+    const user = { ...staff("dept-cse", [CSE]), roles: roles("PROGRAM", [["manage", "Whatever"]]) };
+    expect(buildGrants(user)[0].conditions).toEqual({ programId: { $in: [CSE] } });
   });
 
   it("leaves an INSTITUTION role unconditional", () => {
@@ -110,10 +134,12 @@ describe("buildGrants — which axis scopes which subject", () => {
     ]);
   });
 
-  it("matches every program the department runs", () => {
+  it("matches every award the department runs, on the academic axis", () => {
+    // The Civil case: one department, two awards. A single stored programId could
+    // only ever administer one of them.
     const user = {
       ...staff("dept-civil", [CIVIL, STRUCT]),
-      roles: roles("PROGRAM", [["manage", "Class"]]),
+      roles: roles("PROGRAM", [["manage", "Subject"]]),
     };
     expect(buildGrants(user)[0].conditions).toEqual({ programId: { $in: [CIVIL, STRUCT] } });
   });
@@ -126,10 +152,18 @@ describe("buildGrants — which axis scopes which subject", () => {
       expect(buildGrants(user)[0].conditions).toEqual({ departmentId: "__none__" });
     });
 
-    it("an S&H HOD's academic grants match NOTHING", () => {
-      // `$in: []` matches no row on its own, so no sentinel is needed here.
-      const user = { ...staff("dept-sh", []), roles: roles("PROGRAM", [["manage", "Class"]]) };
+    it("an S&H HOD's ACADEMIC grants match NOTHING", () => {
+      // `$in: []` matches no row on its own, so no sentinel is needed here. S&H
+      // runs no award, so it administers no curriculum — but it DOES own classes,
+      // which is the department axis below.
+      const user = { ...staff("dept-sh", []), roles: roles("PROGRAM", [["manage", "Subject"]]) };
       expect(buildGrants(user)[0].conditions).toEqual({ programId: { $in: [] } });
+    });
+
+    it("but an S&H HOD's CLASS grants still reach their own department", () => {
+      // The whole point: S&H owns every first-year class despite running no award.
+      const user = { ...staff("dept-sh", []), roles: roles("PROGRAM", [["manage", "Class"]]) };
+      expect(buildGrants(user)[0].conditions).toEqual({ departmentId: "dept-sh" });
     });
   });
 
@@ -138,7 +172,7 @@ describe("buildGrants — which axis scopes which subject", () => {
       ...staff("dept-cse", [CSE]),
       roles: [
         ...roles("PROGRAM", [["manage", "Faculty"]]),
-        ...roles("PROGRAM", [["mark", "Attendance"]]),
+        ...roles("PROGRAM", [["manage", "Subject"]]),
       ],
     };
     const grants = buildGrants(user);

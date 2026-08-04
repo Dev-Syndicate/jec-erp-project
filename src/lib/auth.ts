@@ -124,19 +124,48 @@ export type GrantRoles = Array<{
  *
  * Two axes, because two different questions scope different subjects:
  *
- *   `Faculty`      → `{ departmentId }`  — a person, scoped by who EMPLOYS them.
- *                    An S&H HOD manages S&H staff even though S&H runs no award.
- *   everything else → `{ programId: { $in: ownProgramIds } }` — a record, scoped
- *                    by which award owns it.
+ *   DEPARTMENT (`{ departmentId }`) — scoped by WHO OWNS IT.
+ *     `Faculty`, because a staff member is scoped by who EMPLOYS them: an S&H HOD
+ *     manages S&H staff even though S&H runs no award.
+ *     Everything hanging off a CLASS — `Class`, `Student`, `Attendance`,
+ *     `Timetable`, `Marks`, `Leave` — because the class's owning department runs
+ *     it. **This is the rule that hides first-years from a branch HOD**: a
+ *     year-1 class is owned by S&H, so it simply isn't in a CSE HOD's scope, and
+ *     nothing has to remember to exclude it.
  *
- * `Student` sits on the ACADEMIC axis deliberately: a student's program is exactly
- * their program, so there is no separate employment question for them.
+ *   ACADEMIC (`{ programId: { $in: ownProgramIds } }`) — scoped by WHICH AWARD.
+ *     Structural catalogue records that belong to a degree rather than to a class:
+ *     `Program`, `Subject`, `Degree`, `Branch`, `AcademicYear`, `Semester`.
+ *
+ * `Student` is on the DEPARTMENT axis deliberately (it was on the academic one):
+ * a student's department is DERIVED from whichever department owns their currently
+ * enrolled class, so a first-year sits in S&H and moves to their branch at
+ * promotion. Their award never changes — that's `Student.programId` — but it is
+ * not what scopes access.
  *
  * Both empty cases fail closed. A PROGRAM role with no department matches nothing
  * via the `__none__` sentinel (a null condition would otherwise match
  * null-department resources), and an empty `ownProgramIds` gives `$in: []`, which
  * matches nothing on its own.
  */
+
+/**
+ * Subjects scoped by the DEPARTMENT that owns the record rather than by the award.
+ *
+ * An allow-list, not a deny-list: a new permission subject defaults to the academic
+ * axis, which is the narrower, more conservative answer for a branch HOD. Adding a
+ * class-owned subject here is a deliberate act.
+ */
+const DEPARTMENT_SCOPED = new Set([
+  "Faculty", // employment — who pays them
+  "Class", // the owner is the scoping key
+  "Student", // derived from the class they're enrolled in
+  "Attendance",
+  "Timetable",
+  "Marks",
+  "Leave",
+]);
+
 export function buildGrants(user: GrantUser & { roles: GrantRoles }): Grant[] {
   const { departmentId, ownProgramIds } = scopesFor(user);
 
@@ -145,7 +174,7 @@ export function buildGrants(user: GrantUser & { roles: GrantRoles }): Grant[] {
       const { action, subject } = rp.permission;
       if (ur.role.scope !== "PROGRAM") return { action, subject, conditions: undefined };
 
-      return subject === "Faculty"
+      return DEPARTMENT_SCOPED.has(subject)
         ? { action, subject, conditions: { departmentId: departmentId ?? "__none__" } }
         : { action, subject, conditions: { programId: { $in: ownProgramIds } } };
     }),

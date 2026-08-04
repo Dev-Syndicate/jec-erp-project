@@ -75,20 +75,26 @@ export async function GET(req: Request) {
 
     const teaches = teachingSlotCount > 0;
 
-    // Admin snapshot (only for a manage-Student holder), scoped to their program
-    // unless they're institution-scoped (Super Admin).
+    // Admin snapshot (only for a manage-Student holder), scoped to their DEPARTMENT
+    // unless they're institution-scoped (Super Admin). All three counts are on the
+    // department axis so the tiles agree with the lists they link to.
     let stats: { students: number; faculty: number; classes: number } | null = null;
     if (ctx.ability.can("manage", "Student")) {
-      const programWhere = ctx.isInstitutionScoped
+      const dept = ctx.departmentId ?? "__none__";
+      const classWhere = ctx.isInstitutionScoped ? {} : { departmentId: dept };
+      // Students: derived from the class they sit in this year, matching
+      // /api/students. Counting by the stored award would include first-years
+      // sitting in S&H-owned classes.
+      const studentWhere = ctx.isInstitutionScoped
         ? {}
-        : { programId: ctx.user.programId ?? "__none__" };
-      const userProgramWhere = ctx.isInstitutionScoped
-        ? {}
-        : { user: { programId: ctx.user.programId ?? "__none__" } };
+        : { enrollments: { some: { academicYear: { isActive: true }, class: { departmentId: dept } } } };
+      // Faculty: the employment axis. Counting these by `user.programId` (as this
+      // did) silently omits every lecturer whose department runs no award.
+      const facultyWhere = ctx.isInstitutionScoped ? {} : { departmentId: dept };
       const [students, faculty, classes] = await Promise.all([
-        db.student.count({ where: userProgramWhere }),
-        db.facultyProfile.count({ where: userProgramWhere }),
-        db.class.count({ where: programWhere }),
+        db.student.count({ where: studentWhere }),
+        db.facultyProfile.count({ where: facultyWhere }),
+        db.class.count({ where: classWhere }),
       ]);
       stats = { students, faculty, classes };
     }

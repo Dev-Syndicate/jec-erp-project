@@ -1,8 +1,10 @@
 // /api/timetable — read a class's weekly grid (GET ?classId=) + upsert one cell
-// (POST). Open to Super Admin (all programs) and HOD (their own program only),
-// program-scoped via a scoped authorize (resource form). The grid is always for the ACTIVE
-// semester; a slot's subject must be in the class's program and its faculty must
-// be an active user of that program.
+// (POST). Open to Super Admin (all departments) and HOD (the classes their own
+// department OWNS), department-scoped via a scoped authorize (resource form) —
+// `Timetable` sits on the department axis, so a `{ programId }` resource would
+// match no grant and fail closed. The grid is always for the ACTIVE semester; a
+// slot's subject must be in the class's PROGRAM (the award — a different axis) and
+// its faculty must be an active user of that program.
 //
 // Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may) — CASL grants, not role names.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
@@ -31,14 +33,16 @@ export async function GET(req: Request) {
     if (!classId) return Response.json({ error: "Select a class." }, { status: 400 });
 
     // NOTE: this stays sequential on purpose — the scope check below needs
-    // klass.programId before we're allowed to read the class's slots.
+    // klass.departmentId before we're allowed to read the class's slots.
     const klass = await db.class.findUnique({
       relationLoadStrategy: "join",
       where: { id: classId },
       include: { program: { include: { degree: true, branch: true } } },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    authorize(ctx, "manage", "Timetable", { programId: klass.programId });
+    // Scoped on the class's OWNING department, not its award: whoever runs the
+    // class builds its grid, so a year-1 B.E·CSE class is S&H's to timetable.
+    authorize(ctx, "manage", "Timetable", { departmentId: klass.departmentId });
 
     const semester = await activeSemester();
     if (!semester) {
@@ -87,9 +91,15 @@ export async function POST(req: Request) {
     if (!subjectId) return Response.json({ error: "Select a subject." }, { status: 400 });
     if (!facultyId) return Response.json({ error: "Select a faculty." }, { status: 400 });
 
-    const klass = await db.class.findUnique({ where: { id: classId }, select: { programId: true } });
+    const klass = await db.class.findUnique({
+      where: { id: classId },
+      select: { programId: true, departmentId: true },
+    });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    authorize(ctx, "manage", "Timetable", { programId: klass.programId });
+    // Owner runs the class: the department that owns it timetables it (year-1 is
+    // S&H-owned). programId is still selected — it's the AWARD, used below to keep
+    // the subject and faculty inside the class's own program.
+    authorize(ctx, "manage", "Timetable", { departmentId: klass.departmentId });
 
     const semester = await activeSemester();
     if (!semester) {

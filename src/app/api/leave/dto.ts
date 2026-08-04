@@ -55,6 +55,9 @@ type LeaveRow = {
     year: number;
     section: string;
     programId: string;
+    // The OWNING department — what the access helpers scope stage-2 approval on
+    // (programId here is only the award, used for the display label).
+    departmentId: string;
     advisorId: string | null;
     program: { degree: { code: string }; branch: { code: string } };
   };
@@ -93,7 +96,9 @@ export function toLeaveDto(l: LeaveRow, actionable = false) {
 }
 
 // The include that produces a LeaveRow. Pass to findMany/findUnique. The class's
-// advisorId + programId are needed to decide per-request actionability.
+// advisorId + departmentId are needed to decide per-request actionability (stage 1
+// is the advisor, stage 2 the OWNING department's HOD); `include` on the class
+// brings both scalars through with the program relation used for the label.
 export const LEAVE_INCLUDE = {
   class: { include: { program: { include: { degree: true, branch: true } } } },
   student: { include: { user: { select: { displayName: true } } } },

@@ -11,7 +11,7 @@
 // Only valid while the student is still on their temp password (mustChangePassword
 // = true). Once they've set their own, regenerating is refused — that's a proper
 // account-recovery flow, not this convenience (matches provisioning.ts).
-import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
+import { authenticate, AuthError, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { regenerateTempPassword } from "@/lib/provisioning";
 import { assertManagesRoster } from "@/app/api/roster/access";
@@ -31,7 +31,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         // manage-Student admin in the program (assertManagesRoster).
         enrollments: {
           where: { academicYear: { isActive: true } },
-          include: { class: { select: { programId: true, advisorId: true } } },
+          include: { class: { select: { departmentId: true, advisorId: true } } },
           take: 1,
         },
       },
@@ -42,8 +42,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if (currentClass) {
       assertManagesRoster(ctx, currentClass);
     } else {
-      // Not in a class this year — only an admin (manage Student, program-scoped) can.
-      authorize(ctx, "manage", "Student", { programId: student.user.programId });
+      // Not in a class this year, so no department owns them. Institution-scoped
+      // roles only until they're placed — same rule as the roster edit.
+      if (!ctx.isInstitutionScoped) {
+        throw new AuthError(403, "This student isn't in a class this year.");
+      }
     }
 
     if (!student.user.mustChangePassword) {

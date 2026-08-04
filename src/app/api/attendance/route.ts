@@ -19,7 +19,9 @@
 // (SA/HOD/Faculty). The GET returns the WHOLE-CLASS roster + everyone's marks, so
 // it must NOT use plain `read Attendance`, which the Student role also holds (that
 // grant is for a future per-student self-view, not the class roster). Both are
-// program-scoped via a scoped authorize on the class's program.
+// DEPARTMENT-scoped via a scoped authorize on the class's owning department —
+// attendance belongs to whoever runs the class, and a year-1 class is run by S&H
+// no matter which award it leads to.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
@@ -70,7 +72,10 @@ export async function GET(req: Request) {
 
     const klass = await loadClass(classId);
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
+    // Scoped on the class's OWNING department, not its award: the department that
+    // runs the class owns its attendance, and a year-1 class is owned by S&H even
+    // though its award is B.E·CSE.
+    authorize(ctx, "mark", "Attendance", { departmentId: klass.departmentId });
 
     const day = await resolveWeekday(date);
     if ("error" in day) return Response.json({ error: day.error }, { status: 400 });
@@ -215,10 +220,12 @@ export async function POST(req: Request) {
 
     const klass = await db.class.findUnique({
       where: { id: classId },
-      select: { programId: true },
+      select: { departmentId: true },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
+    // Owning department, not award — the department running the class owns its
+    // attendance (a year-1 class is S&H's, whatever degree it leads to).
+    authorize(ctx, "mark", "Attendance", { departmentId: klass.departmentId });
 
     const day = await resolveWeekday(date);
     if ("error" in day) return Response.json({ error: day.error }, { status: 400 });

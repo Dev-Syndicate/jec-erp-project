@@ -8,7 +8,7 @@
 // `mark Attendance` — the staff capability (SA/HOD/Faculty), NOT plain `read
 // Attendance`, which the Student role also holds (for a future self-view). Gating
 // the class report on `read` would let any enrolled student pull their whole
-// class's records. Program-scoped on the class's program.
+// class's records. Department-scoped on the class's OWNING department.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { assertTeachesOrAdvises } from "../access";
@@ -33,7 +33,9 @@ export async function GET(req: Request) {
       include: { program: { include: { degree: true, branch: true } } },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
+    // Owning department, not award — the department running the class owns its
+    // attendance (a year-1 class is S&H's, whatever degree it leads to).
+    authorize(ctx, "mark", "Attendance", { departmentId: klass.departmentId });
 
     const semester = await db.semester.findFirst({
       where: { isActive: true },

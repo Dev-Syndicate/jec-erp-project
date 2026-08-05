@@ -8,6 +8,7 @@ import { useState } from "react";
 import { Plus, Pencil, Power, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -36,6 +37,8 @@ import { PageHeader } from "@/app/(app)/page-header";
 import type { Class, Program } from "@/features/structure/types";
 import { usePrograms } from "@/features/structure/hooks/use-programs";
 import { useStaffOptions } from "@/features/structure/hooks/use-staff";
+import { useDepartments } from "@/features/structure/hooks/use-departments";
+import { DepartmentSelect } from "@/components/department-select";
 import {
   useClasses,
   useCreateClass,
@@ -47,8 +50,8 @@ import {
 // are cuids so this never collides with a real staff id.
 const NO_ADVISOR = "none";
 
-// Sections a class can take. Year options are derived from the program duration.
-const SECTIONS = ["A", "B", "C", "D", "E", "F", "G", "H"] as const;
+// Section is free text (upper-cased); Year options are derived from the program's
+// degree duration.
 
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -106,6 +109,7 @@ export function ClassManager() {
             <TableHeader>
               <TableRow>
                 <TableHead>Program</TableHead>
+                <TableHead>Owned by</TableHead>
                 <TableHead className="text-right">Year</TableHead>
                 <TableHead>Section</TableHead>
                 <TableHead>Class teacher</TableHead>
@@ -118,6 +122,9 @@ export function ClassManager() {
               {classes.map((c) => (
                 <TableRow key={c.id}>
                   <TableCell className="font-mono text-xs">{c.programLabel}</TableCell>
+                  {/* The owning department — the scoping key, and the column that
+                      shows a first year sitting with S&H while its award is CSE. */}
+                  <TableCell className="text-sm">{c.departmentName}</TableCell>
                   <TableCell className="text-right tabular-nums">{c.year}</TableCell>
                   <TableCell className="font-medium">{c.section}</TableCell>
                   <TableCell className="text-sm">
@@ -212,8 +219,9 @@ function RowActions({
 }
 
 // Create (cls = null) or edit an existing class. On create the Program is a
-// dropdown that bounds the Year options; on edit the Program is fixed and only
-// Year + Section are editable.
+// dropdown that bounds the Year options and the owning department defaults to the
+// one that runs that program; on edit both are fixed and only Year + Section (and
+// the class teacher) are editable.
 function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => void }) {
   const isEdit = cls !== null;
   const create = useCreateClass();
@@ -222,16 +230,39 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
   const { data: programs } = usePrograms();
   const activePrograms = (programs ?? []).filter((p) => p.isActive);
   const staff = useStaffOptions();
+  const departments = useDepartments();
+  const activeDepartments = (departments.data ?? []).filter((d) => d.isActive);
 
   const [programId, setProgramId] = useState(cls?.programId ?? "");
+  // "" = follow the program's own department. Picking one overrides that — the
+  // control that hands a first year to S&H without touching its award.
+  const [departmentId, setDepartmentId] = useState(cls?.departmentId ?? "");
   const [year, setYear] = useState(cls ? String(cls.year) : "");
   const [section, setSection] = useState(cls?.section ?? "");
   const [advisorId, setAdvisorId] = useState(cls?.advisorId ?? NO_ADVISOR);
 
-  // The advisor must be staff in the class's program. On create that's the
-  // selected program; on edit it's fixed to the class's program.
-  const advisorProgramId = isEdit ? cls.programId : programId;
-  const advisorOptions = (staff.data ?? []).filter((s) => s.programId === advisorProgramId);
+  // The advisor must be staff of the department that OWNS the class — the "Owned
+  // by" field above, not the award. That is what makes an S&H lecturer eligible to
+  // be class teacher of a first-year class whose award is B.E · CSE.
+  //
+  // Resolved the same way the server does: an explicit owner wins, otherwise the
+  // department that runs the selected program. On edit the class already has one.
+  const ownerDepartmentId = isEdit
+    ? (departmentId || cls.departmentId)
+    : departmentId || (activePrograms.find((p) => p.id === programId)?.departmentId ?? "");
+  const advisorOptions = (staff.data ?? []).filter((s) => s.departmentId === ownerDepartmentId);
+
+  // The stored advisor is treated as a REQUEST, not the truth: handing the class
+  // to another department can strand a pick that belonged to the old one. Deriving
+  // the effective value (rather than resetting it in an effect) means the form can
+  // never submit an advisor the owning department doesn't employ. The edit dialog
+  // keeps the advisor already on the record even once staff have loaded, so opening
+  // it never silently clears a class teacher nobody asked to change.
+  const advisorStillValid =
+    advisorId === NO_ADVISOR ||
+    (isEdit && advisorId === cls.advisorId) ||
+    advisorOptions.some((s) => s.userId === advisorId);
+  const effectiveAdvisorId = advisorStillValid ? advisorId : NO_ADVISOR;
 
   const pending = create.isPending || update.isPending;
   const mutationError = create.error ?? update.error;
@@ -244,23 +275,38 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
   const yearOptions = Array.from({ length: durationYears }, (_, i) => i + 1);
 
   const yearNum = Number(year);
+  // Section is free text; the same bounds the server applies (non-empty, ≤4 chars
+  // after trimming). It's already upper-cased by the input's onChange.
+  const trimmedSection = section.trim();
   const valid =
     programId !== "" &&
     Number.isInteger(yearNum) &&
     yearNum >= 1 &&
-    /^[A-H]$/.test(section);
+    trimmedSection !== "" &&
+    trimmedSection.length <= 4;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
-    const advisor = advisorId === NO_ADVISOR ? null : advisorId;
+    const advisor = effectiveAdvisorId === NO_ADVISOR ? null : effectiveAdvisorId;
     if (isEdit) {
       update.mutate(
-        { id: cls.id, input: { year: yearNum, section, advisorId: advisor } },
+        { id: cls.id, input: { year: yearNum, section: trimmedSection, advisorId: advisor } },
         { onSuccess: onClose },
       );
     } else {
-      create.mutate({ programId, year: yearNum, section, advisorId: advisor }, { onSuccess: onClose });
+      // Send the owner only when it differs from the program's own department —
+      // omitting it lets the server apply that default.
+      create.mutate(
+        {
+          programId,
+          departmentId: departmentId === "" ? undefined : departmentId,
+          year: yearNum,
+          section: trimmedSection,
+          advisorId: advisor,
+        },
+        { onSuccess: onClose },
+      );
     }
   }
 
@@ -271,8 +317,8 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
           <DialogTitle>{isEdit ? "Edit class" : "New class"}</DialogTitle>
           <DialogDescription>
             {isEdit
-              ? "Update this class's year and section. The program it belongs to can't be changed."
-              : "Add a class group within a program — pick the program, then its year and section."}
+              ? "Update this class's year and section. The program and the department that owns it can't be changed."
+              : "Add a class group within a program — pick the award, who owns the class, then its year and section."}
           </DialogDescription>
         </DialogHeader>
 
@@ -288,11 +334,15 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
               <Select
                 value={programId}
                 onValueChange={(v) => {
-                  setProgramId((v as string) ?? "");
+                  const next = (v as string) ?? "";
+                  setProgramId(next);
                   // Reset year (duration bound changed) + advisor (staff are
                   // program-scoped, so the previous pick may no longer apply).
                   setYear("");
                   setAdvisorId(NO_ADVISOR);
+                  // Default the owner to the department that runs the new program;
+                  // the admin can still hand the class to another one.
+                  setDepartmentId(activePrograms.find((p) => p.id === next)?.departmentId ?? "");
                 }}
               >
                 <SelectTrigger id="class-program" className="h-10! w-full">
@@ -312,6 +362,37 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
                 </SelectContent>
               </Select>
             )}
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="class-department">Owned by</Label>
+            {isEdit ? (
+              // The owner is fixed after create — show it read-only.
+              <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                {cls.departmentName}
+              </div>
+            ) : activeDepartments.length === 0 ? (
+              // /api/departments is Super-Admin-only, so a HOD gets nothing here.
+              // That's correct rather than broken: they can only create a class for
+              // their own department anyway, and the server derives that from the
+              // program. Show what will happen instead of an empty, dead control.
+              <div className="flex h-10 items-center rounded-lg border border-input bg-muted/40 px-3 text-sm text-muted-foreground">
+                The department that runs the selected program
+              </div>
+            ) : (
+              <DepartmentSelect
+                id="class-department"
+                value={departmentId}
+                onChange={setDepartmentId}
+                departments={activeDepartments}
+              />
+            )}
+            <p className="text-xs text-muted-foreground">
+              The department this class belongs to day to day — its HOD and staff.
+              Defaults to the department that runs the program. Change it to hand a
+              first-year class to Science &amp; Humanities while its award stays
+              B.E · CSE.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -336,29 +417,33 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="class-section">Section</Label>
-              <Select value={section} onValueChange={(v) => setSection((v as string) ?? "")}>
-                <SelectTrigger id="class-section" className="h-10! w-full">
-                  <SelectValue placeholder="Section">
-                    {(v) => (v ? String(v) : "Section")}
-                  </SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  {SECTIONS.map((s) => (
-                    <SelectItem key={s} value={s}>
-                      {s}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              {/* Free text rather than a fixed A–H list, so a college running
+                  "P1" or more than eight sections isn't blocked. Upper-cased on
+                  the way IN, not just on save: the field shows exactly what will
+                  be stored, and (programId, year, section) is unique — "a" and
+                  "A" must never be able to become two different sections. The
+                  server upper-cases too, since the form isn't the only caller. */}
+              <Input
+                id="class-section"
+                value={section}
+                onChange={(e) => setSection(e.target.value.toUpperCase())}
+                placeholder="A"
+                maxLength={4}
+                autoCapitalize="characters"
+                autoCorrect="off"
+                spellCheck={false}
+                className="h-10! uppercase"
+                required
+              />
             </div>
           </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="class-advisor">Class teacher</Label>
             <Select
-              value={advisorId}
+              value={effectiveAdvisorId}
               onValueChange={(v) => setAdvisorId((v as string) ?? NO_ADVISOR)}
-              disabled={advisorProgramId === ""}
+              disabled={ownerDepartmentId === ""}
             >
               <SelectTrigger id="class-advisor" className="h-10! w-full">
                 <SelectValue placeholder="Optional">
@@ -381,9 +466,10 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
                 ))}
               </SelectContent>
             </Select>
-            {advisorProgramId !== "" && !staff.isPending && advisorOptions.length === 0 && (
+            {ownerDepartmentId !== "" && !staff.isPending && advisorOptions.length === 0 && (
               <p className="text-xs text-muted-foreground">
-                No staff in this program yet — add faculty first, then set the class teacher.
+                No staff in the owning department yet — add faculty to it first, then set the
+                class teacher.
               </p>
             )}
           </div>

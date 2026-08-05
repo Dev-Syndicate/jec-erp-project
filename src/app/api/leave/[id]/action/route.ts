@@ -43,7 +43,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const request = await db.leaveRequest.findUnique({
       where: { id },
-      include: { class: { select: { programId: true, advisorId: true } } },
+      // departmentId (the class's OWNER), not programId (the award): stage 2 is the
+      // owning department's HOD, so a year-1 request goes to S&H — the same
+      // department that runs its attendance and marks.
+      include: { class: { select: { departmentId: true, advisorId: true } } },
     });
     if (!request) return Response.json({ error: "Request not found." }, { status: 404 });
 
@@ -72,7 +75,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return Response.json(toLeaveDto(updated));
     }
 
-    // --- Stage 2: HOD acting on a PENDING_HOD request ---
+    // --- Stage 2: the OWNING department's HOD acting on a PENDING_HOD request ---
     assertCanHodAct(ctx, request.class);
 
     if (action === "reject") {

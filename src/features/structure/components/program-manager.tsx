@@ -42,6 +42,8 @@ import {
 } from "@/features/structure/hooks/use-programs";
 import { useDegrees } from "@/features/structure/hooks/use-degrees";
 import { useBranches } from "@/features/structure/hooks/use-branches";
+import { useDepartments } from "@/features/structure/hooks/use-departments";
+import { DepartmentSelect } from "@/components/department-select";
 
 function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
@@ -98,6 +100,7 @@ export function ProgramManager() {
                 <TableHead>Program</TableHead>
                 <TableHead>Degree</TableHead>
                 <TableHead>Branch</TableHead>
+                <TableHead>Run by</TableHead>
                 <TableHead className="text-right">Duration</TableHead>
                 <TableHead className="text-right">Classes</TableHead>
                 <TableHead>Status</TableHead>
@@ -112,6 +115,9 @@ export function ProgramManager() {
                   </TableCell>
                   <TableCell className="font-medium">{p.degreeName}</TableCell>
                   <TableCell>{p.branchName}</TableCell>
+                  {/* The department that runs the award — often the same code as
+                      the branch, but a separate thing and not always a match. */}
+                  <TableCell className="text-sm">{p.departmentName}</TableCell>
                   <TableCell className="text-right tabular-nums">
                     {p.durationYears} {p.durationYears === 1 ? "year" : "years"}
                   </TableCell>
@@ -185,19 +191,23 @@ function RowActions({ program, onDelete }: { program: Program; onDelete: () => v
   );
 }
 
-// Create a program — pick a degree and a branch (the only two inputs; the pairing
-// IS the program). Both dropdowns show only active options. Base UI's Select needs
-// a value → label render fn on Select.Value, else it renders the raw cuid.
+// Create a program — pick a degree and a branch (the pairing IS the program), plus
+// the department that runs it. All three dropdowns show only active options. Base
+// UI's Select needs a value → label render fn on Select.Value, else it renders the
+// raw cuid.
 function ProgramFormDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateProgram();
   const degrees = useDegrees();
   const branches = useBranches();
+  const departments = useDepartments();
 
   const [degreeId, setDegreeId] = useState("");
   const [branchId, setBranchId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
 
   const activeDegrees = (degrees.data ?? []).filter((d) => d.isActive);
   const activeBranches = (branches.data ?? []).filter((b) => b.isActive);
+  const activeDepartments = (departments.data ?? []).filter((d) => d.isActive);
 
   const degreeLabel = (id: unknown) => {
     const d = activeDegrees.find((x) => x.id === id);
@@ -208,12 +218,12 @@ function ProgramFormDialog({ onClose }: { onClose: () => void }) {
     return b ? `${b.name} (${b.code})` : "Select a branch";
   };
 
-  const valid = degreeId !== "" && branchId !== "";
+  const valid = degreeId !== "" && branchId !== "" && departmentId !== "";
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!valid) return;
-    create.mutate({ degreeId, branchId }, { onSuccess: onClose });
+    create.mutate({ degreeId, branchId, departmentId }, { onSuccess: onClose });
   }
 
   return (
@@ -222,8 +232,9 @@ function ProgramFormDialog({ onClose }: { onClose: () => void }) {
         <DialogHeader>
           <DialogTitle>New program</DialogTitle>
           <DialogDescription>
-            Pair a degree with a branch (e.g. B.E × CSE). Each pairing is unique and
-            becomes the scoping key its classes, students and subjects belong to.
+            Pair a degree with a branch (e.g. B.E × CSE), then say which department
+            runs it. Each pairing is unique and becomes the scoping key its classes,
+            students and subjects belong to.
           </DialogDescription>
         </DialogHeader>
 
@@ -257,6 +268,19 @@ function ProgramFormDialog({ onClose }: { onClose: () => void }) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="program-department">Run by</Label>
+            <DepartmentSelect
+              id="program-department"
+              value={departmentId}
+              onChange={setDepartmentId}
+              departments={activeDepartments}
+            />
+            <p className="text-xs text-muted-foreground">
+              The department that runs this award and employs its staff. One
+              department can run several — the branch is only the name in the award.
+            </p>
           </div>
           {create.error && (
             <p

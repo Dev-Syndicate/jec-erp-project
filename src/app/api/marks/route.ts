@@ -9,7 +9,8 @@
 //      markedById. Transactional so the whole assessment saves atomically.
 //
 // Authorized by assertMarksSubject: the assigned faculty for this exact tuple, or a
-// marks admin (HOD/SA) in program scope. Marks are always the active semester's —
+// marks admin (HOD/SA) for the department that OWNS the class — `Marks` is scoped
+// on the department axis, not the award. Marks are always the active semester's —
 // there's no back-dating a closed term here.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -30,8 +31,9 @@ const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 const roman = (n: number) => ROMAN[n] ?? String(n);
 
 // Load the class + subject and confirm they pair within one program (a subject is
-// per-program; a class belongs to a program). Returns the shared programId + the
-// active semester, or an error tuple the caller maps to a 4xx.
+// per-program; a class carries an award). Returns the class (whose departmentId —
+// the owning department — is what scopes marks) + the active semester, or an error
+// tuple the caller maps to a 4xx.
 async function resolveContext(classId: string, subjectId: string) {
   const [klass, subject, semester] = await Promise.all([
     db.class.findUnique({
@@ -66,15 +68,17 @@ export async function GET(req: Request) {
     if ("error" in rc) return Response.json({ error: rc.error }, { status: rc.status });
     const { klass, subject, semester } = rc;
 
-    // Read gate: the subject's teacher, or a HOD/SA overseeing the program.
-    await assertReadsMarks(ctx, { classId, subjectId, semesterId: semester.id, programId: klass.programId });
+    // Read gate: the subject's teacher, or a HOD/SA overseeing the department that
+    // OWNS the class — the owner runs the class, so a year-1 class's marks are
+    // S&H's oversight even though the subject sits in the branch's award.
+    await assertReadsMarks(ctx, { classId, subjectId, semesterId: semester.id, departmentId: klass.departmentId });
     // Whether THIS viewer may also SAVE, so the grid opens read-only for a HOD
     // looking at someone else's subject instead of letting them edit-then-403.
     const canEnter = await teachesSubject(ctx, {
       classId,
       subjectId,
       semesterId: semester.id,
-      programId: klass.programId,
+      departmentId: klass.departmentId,
     });
 
     const year = await db.academicYear.findFirst({ where: { isActive: true }, select: { id: true, name: true } });
@@ -210,7 +214,9 @@ export async function POST(req: Request) {
 
     // Write gate: the subject's own teacher only — a HOD may read these marks but
     // not record them (markedById must name whoever actually assessed the work).
-    await assertEntersMarks(ctx, { classId, subjectId, semesterId: semester.id, programId: klass.programId });
+    // departmentId (the class's owner) is the marks scope axis; it's inert here
+    // since the write gate is teacher-only, but the target shape is shared.
+    await assertEntersMarks(ctx, { classId, subjectId, semesterId: semester.id, departmentId: klass.departmentId });
 
     const year = await db.academicYear.findFirst({ where: { isActive: true }, select: { id: true } });
     if (!year) return Response.json({ error: "No academic year is active." }, { status: 400 });

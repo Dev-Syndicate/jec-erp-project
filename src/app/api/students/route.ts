@@ -84,14 +84,31 @@ export async function GET(req: Request) {
     const pageSize = Math.min(100, Math.max(1, Number(url.searchParams.get("pageSize")) || 50));
     const q = url.searchParams.get("q")?.trim() || "";
 
-    // Super Admin: all students. Scoped roles: only their own program.
+    // Super Admin: all students. Scoped roles: only students whose CURRENT class
+    // is owned by their department.
+    //
+    // Derived from the enrolment, not from the student's stored award: a first-year
+    // B.E-CSE student sits in an S&H-owned class, so they belong to S&H this year
+    // and are invisible to the CSE HOD until promotion moves them. Filtering on
+    // `user.programId` (the award) would show them to CSE a year early.
+    //
+    // A student enrolled in NO class this year has no derivable department and so
+    // matches no scoped role — by design. They stay visible to institution-scoped
+    // roles until someone places them in a class.
     //
     // NOTE: `scope` is ANDed with every filter below and is never derived from
     // user input — a scoped role cannot widen it by passing ?programId=. The
     // programId filter can only ever NARROW what this role may already see.
     const scope = ctx.isInstitutionScoped
       ? {}
-      : { user: { programId: ctx.user.programId ?? "__none__" } };
+      : {
+          enrollments: {
+            some: {
+              academicYear: { isActive: true },
+              class: { departmentId: ctx.departmentId ?? "__none__" },
+            },
+          },
+        };
     // Server-side search over register/roll number, name and email (so the client
     // never has to download the whole list to filter it).
     const search = q
@@ -169,9 +186,6 @@ export async function POST(req: Request) {
     const parsed = parseStudentBody(body);
     if ("error" in parsed) return Response.json({ error: parsed.error }, { status: 400 });
 
-    // Can only provision into a program you're allowed to act in.
-    authorize(ctx, "manage", "Student", { programId: parsed.data.programId });
-
     const studentRole = await db.role.findUnique({ where: { name: "Student" }, select: { id: true } });
     if (!studentRole) {
       return Response.json({ error: "Student role is not seeded. Run the seed." }, { status: 500 });
@@ -191,11 +205,16 @@ export async function POST(req: Request) {
     if (parsed.data.classId) {
       const klass = await db.class.findUnique({
         where: { id: parsed.data.classId },
-        select: { programId: true },
+        select: { programId: true, departmentId: true },
       });
+      // The AWARD must still match — a B.E-CSE student can't sit in an ECE class.
       if (!klass || klass.programId !== parsed.data.programId) {
         return Response.json({ error: "Select a valid class in this program." }, { status: 400 });
       }
+      // But the AUTHORIZATION is the class's OWNER: an S&H HOD provisions the
+      // incoming first-year B.E-CSE cohort into their own S&H-owned classes, which
+      // scoping on the award would refuse (S&H runs no award).
+      authorize(ctx, "manage", "Student", { departmentId: klass.departmentId });
       const activeYear = await db.academicYear.findFirst({
         where: { isActive: true },
         select: { id: true },
@@ -207,6 +226,17 @@ export async function POST(req: Request) {
         );
       }
       enrollment = { classId: parsed.data.classId, academicYearId: activeYear.id };
+    } else {
+      // No class means no derivable department, so there is nothing departmental to
+      // scope against — creating an unplaced student is an institution-level act.
+      // Matches the list filter above, which shows such students only to
+      // institution-scoped roles.
+      if (!ctx.isInstitutionScoped) {
+        return Response.json(
+          { error: "Select a class — a student must be placed in one to be created." },
+          { status: 400 },
+        );
+      }
     }
 
     let result;

@@ -17,6 +17,11 @@ export type TimetableSlot = {
   subjectName: string;
   facultyId: string; // = User.id
   facultyName: string;
+  // A PRACTICAL hour of the same subject. On the slot rather than the subject:
+  // the college timetable writes "CS25C08" and "CS25C08 LAB" for one course, so
+  // splitting them into two subjects would halve each one's attendance
+  // percentage and marks.
+  isLab: boolean;
 };
 
 // The whole grid for one class in the active semester, plus the context the UI
@@ -37,6 +42,7 @@ export type SlotInput = {
   period: number;
   subjectId: string;
   facultyId: string;
+  isLab?: boolean; // omitted = a lecture
 };
 
 // --- Picker options (this feature's own read-only fetches) ----------------
@@ -46,6 +52,12 @@ export type ClassOption = {
   shortLabel: string; // within a program: "II-A"
   programId: string;
   programLabel: string; // "B.E · CSE" — for the program picker
+  // WHO OWNS the class — the department that timetables it, which for a
+  // first-year class is S&H even though the award is B.E · CSE. The faculty
+  // picker filters on this; the subject picker still uses programId (subjects
+  // belong to the award, teachers to the owning department).
+  departmentId: string;
+  departmentCode: string;
   isActive: boolean;
 };
 
@@ -61,6 +73,9 @@ export type SubjectOption = {
 export type FacultyOption = {
   id: string; // = User.id (what a slot's facultyId references)
   name: string;
-  programId: string | null;
+  // The department that EMPLOYS them — the only thing scoping a staff account.
+  // Staff carry no award, so there is no programId here to filter by.
+  departmentId: string;
+  departmentCode: string;
   status: "ACTIVE" | "INACTIVE";
 };

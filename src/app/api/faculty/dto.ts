@@ -58,24 +58,46 @@ export async function validateAssignableRoles(
   return { ok: roles.map((r) => r.id) };
 }
 
-// The include that produces a faculty row with its user, program and roles.
-// Pass to findMany/findUnique.
+// The include that produces a faculty row with its department, user and roles.
+// Pass to findMany/findUnique. No `program`: staff carry no award — the
+// department is what scopes them (src/lib/auth.ts → scopesFor).
 export const FACULTY_INCLUDE = {
+  department: { select: { code: true, name: true } },
   user: {
     include: {
-      program: { include: { degree: true, branch: true } },
       roles: { include: { role: true } },
     },
   },
 } as const;
 
-type Deg = { code: string };
-type Br = { code: string };
-type ProgRel = { degree: Deg; branch: Br } | null;
+/**
+ * Validate the employing department of a staff account: it must exist and be
+ * active. This is the whole rule now — a staff account is scoped by WHO EMPLOYS
+ * THEM and nothing else, so there is no second half to reconcile.
+ *
+ * It can't live in the body parser because it depends on DB facts the parser
+ * can't see (does the department exist? is it still active?), and it must run
+ * BEFORE any Firebase identity is created: a clean 400 beats a provisioning
+ * failure after the account already exists on the auth side.
+ */
+export async function validateDepartment(
+  departmentId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const department = await db.department.findUnique({
+    where: { id: departmentId },
+    select: { name: true, isActive: true },
+  });
+  if (!department) return { error: "Select a valid department." };
+  if (!department.isActive) return { error: `${department.name} is not an active department.` };
+
+  return { ok: true };
+}
 
 type FacultyRow = {
   id: string;
   userId: string;
+  departmentId: string;
+  department: { code: string; name: string };
   staffId: string;
   designation: string;
   phone: string;
@@ -92,20 +114,21 @@ type FacultyRow = {
     displayName: string;
     status: "ACTIVE" | "INACTIVE";
     mustChangePassword: boolean;
-    programId: string | null;
-    program: ProgRel;
     roles: Array<{ role: { name: string } }>;
   };
 };
-
-function programLabel(p: ProgRel): string | null {
-  return p ? `${p.degree.code} · ${p.branch.code}` : null;
-}
 
 export function toFacultyDto(f: FacultyRow) {
   return {
     id: f.id,
     userId: f.userId,
+    // Who employs them — the ONLY thing that scopes a staff account. There is
+    // deliberately no program here: a faculty member's User.programId grants
+    // nothing (src/lib/auth.ts → scopesFor reads the department), so shipping it
+    // would only invite the client to act on a fact that means nothing.
+    departmentId: f.departmentId,
+    departmentCode: f.department.code,
+    departmentName: f.department.name,
     staffId: f.staffId,
     designation: f.designation,
     displayName: f.user.displayName,
@@ -119,8 +142,6 @@ export function toFacultyDto(f: FacultyRow) {
     motherName: f.motherName,
     status: f.user.status,
     mustChangePassword: f.user.mustChangePassword,
-    programId: f.user.programId,
-    programLabel: programLabel(f.user.program),
     roles: f.user.roles.map((r) => r.role.name),
     createdAt: f.createdAt,
     updatedAt: f.updatedAt,

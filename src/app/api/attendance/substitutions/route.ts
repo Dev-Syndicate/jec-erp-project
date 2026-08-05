@@ -14,6 +14,7 @@
 // Auth is the CLAUDE.md two-step: authenticate() (who) then authorize() (may).
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { canTeachIn } from "@/lib/teaching";
 import { dayName, parseDateOnly, resolveWeekday, roman } from "../dto";
 
 export const dynamic = "force-dynamic";
@@ -65,11 +66,11 @@ export async function GET(req: Request) {
 
     const klass = await db.class.findUnique({
       where: { id: classId },
-      select: { id: true, programId: true, year: true, section: true },
+      select: { id: true, programId: true, departmentId: true, year: true, section: true },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    // Scoped: a HOD may only arrange cover inside their own program.
-    authorize(ctx, "manage", "Attendance", { programId: klass.programId });
+    // Scoped: a HOD may only arrange cover in a class their own department owns.
+    authorize(ctx, "manage", "Attendance", { departmentId: klass.departmentId });
 
     const semester = await activeSemesterId();
     if (!semester) return Response.json({ error: "No academic semester is active." }, { status: 400 });
@@ -102,6 +103,10 @@ export async function GET(req: Request) {
 
     return Response.json({
       classId,
+      // The class's OWNING department — the picker needs it to offer only the
+      // staff POST will accept as a substitute. Sent from here because the class
+      // list the screen already has is filtered by award, not by owner.
+      departmentId: klass.departmentId,
       date: dateStr,
       weekday: day.weekday,
       ...(dayName(date) === "SAT" ? { followsDay: day.weekday } : {}),
@@ -161,12 +166,12 @@ export async function POST(req: Request) {
         facultyId: true,
         semesterId: true,
         dayOfWeek: true,
-        class: { select: { programId: true } },
+        class: { select: { programId: true, departmentId: true } },
       },
     });
     if (!slot) return Response.json({ error: "That period isn't on the timetable." }, { status: 404 });
-    // Scoped: a HOD may only arrange cover inside their own program.
-    authorize(ctx, "manage", "Attendance", { programId: slot.class.programId });
+    // Scoped: a HOD may only arrange cover in a class their own department owns.
+    authorize(ctx, "manage", "Attendance", { departmentId: slot.class.departmentId });
 
     // Cover belongs to the semester the slot is in — a stale slot id from a past
     // semester must not become a grant against today's timetable.
@@ -195,23 +200,14 @@ export async function POST(req: Request) {
       );
     }
 
-    // The substitute must be an ACTIVE staff user of the same program — cover is
-    // not a way to hand an outsider (or a deactivated account) marking rights.
-    const substitute = await db.user.findUnique({
-      where: { id: substituteId },
-      select: { id: true, status: true, programId: true, student: { select: { id: true } } },
-    });
-    if (!substitute || substitute.status !== "ACTIVE") {
-      return Response.json({ error: "Select an active member of staff." }, { status: 400 });
-    }
-    if (substitute.student) {
-      return Response.json({ error: "A student can't cover a class." }, { status: 400 });
-    }
-    if (substitute.programId !== slot.class.programId) {
-      return Response.json(
-        { error: "The covering teacher must belong to the same program." },
-        { status: 400 },
-      );
+    // The substitute must be able to teach in the department that OWNS this class —
+    // employed there, or attached to it this semester. Cover is not a way to hand
+    // an outsider (or a deactivated account) marking rights, but a lecturer already
+    // lent to this department is not an outsider. Same rule as the timetable, so it
+    // comes from the same helper rather than a second copy that can drift.
+    const teaching = await canTeachIn(substituteId, slot.class.departmentId, semester.id);
+    if ("error" in teaching) {
+      return Response.json({ error: teaching.error }, { status: 400 });
     }
 
     const saved = await db.slotSubstitution.upsert({
@@ -253,10 +249,10 @@ export async function DELETE(req: Request) {
 
     const existing = await db.slotSubstitution.findUnique({
       where: { slotId_date: { slotId, date } },
-      select: { id: true, slot: { select: { class: { select: { programId: true } } } } },
+      select: { id: true, slot: { select: { class: { select: { departmentId: true } } } } },
     });
     if (!existing) return Response.json({ error: "No cover is arranged for that period." }, { status: 404 });
-    authorize(ctx, "manage", "Attendance", { programId: existing.slot.class.programId });
+    authorize(ctx, "manage", "Attendance", { departmentId: existing.slot.class.departmentId });
 
     await db.slotSubstitution.delete({ where: { id: existing.id } });
     return Response.json({ ok: true });

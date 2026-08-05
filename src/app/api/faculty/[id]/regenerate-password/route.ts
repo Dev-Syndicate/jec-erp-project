@@ -19,12 +19,14 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
     const faculty = await db.facultyProfile.findUnique({
       where: { id },
-      include: {
-        user: { select: { id: true, firebaseUid: true, programId: true, mustChangePassword: true } },
+      select: {
+        departmentId: true,
+        user: { select: { id: true, firebaseUid: true, mustChangePassword: true } },
       },
     });
     if (!faculty) return Response.json({ error: "Faculty not found." }, { status: 404 });
-    authorize(ctx, "manage", "Faculty", { programId: faculty.user.programId });
+    // Employment axis — you may reissue a password for staff YOUR department employs.
+    authorize(ctx, "manage", "Faculty", { departmentId: faculty.departmentId });
 
     if (!faculty.user.mustChangePassword) {
       return Response.json(

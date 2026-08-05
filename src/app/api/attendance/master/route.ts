@@ -8,7 +8,7 @@
 //   auto-seed won't overwrite it later (Option C hybrid, see schema-design).
 //
 // This is the class teacher's domain: authorization needs `mark Attendance` +
-// program scope + assertOwnsDayRecord (manage Attendance OR the class advisor) —
+// department scope + assertOwnsDayRecord (manage Attendance OR the class advisor) —
 // a plain subject teacher can mark their period but not override the day record.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
@@ -44,7 +44,9 @@ export async function GET(req: Request) {
 
     const klass = await loadClass(classId);
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
+    // Owning department, not award — the department running the class owns its
+    // day record (a year-1 class is S&H's, whatever degree it leads to).
+    authorize(ctx, "mark", "Attendance", { departmentId: klass.departmentId });
     assertOwnsDayRecord(ctx, klass.advisorId);
 
     // Roster = students enrolled in this class for the active academic year.
@@ -122,10 +124,11 @@ export async function POST(req: Request) {
 
     const klass = await db.class.findUnique({
       where: { id: classId },
-      select: { programId: true, advisorId: true },
+      select: { departmentId: true, advisorId: true },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
+    // Owning department, not award — same reason as the GET above.
+    authorize(ctx, "mark", "Attendance", { departmentId: klass.departmentId });
     assertOwnsDayRecord(ctx, klass.advisorId);
 
     const semester = await db.semester.findFirst({ where: { isActive: true }, select: { id: true } });

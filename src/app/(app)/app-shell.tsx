@@ -17,6 +17,7 @@ import {
   CalendarOff,
   Users,
   GraduationCap,
+  ArrowLeftRight,
   BookOpen,
   CalendarClock,
   UsersRound,
@@ -128,9 +129,14 @@ const NAV: NavGroup[] = [
         href: "/attendance/cover",
         icon: UserRoundCheck,
         // Assigning a stand-in for an absent teacher's period. A supervised act
-        // (it grants the right to sign another teacher's register), so HOD and
-        // Super Admin only — never the teachers themselves.
-        roles: ["Super Admin", "HOD"],
+        // (it grants the right to sign another teacher's register), so a HOD's
+        // job — never the teachers themselves.
+        //
+        // Super Admin keeps the permission but not the nav entry, exactly like
+        // "Mark attendance": running a department's day-to-day cover isn't their
+        // work. The API still accepts them, so a department with no HOD (or an
+        // absent one) can still be unstuck by going to the page directly.
+        roles: ["HOD"],
       },
       {
         title: "Report",
@@ -176,14 +182,27 @@ const NAV: NavGroup[] = [
         href: "/structure/degrees",
         icon: Building2,
         roles: ["Super Admin"],
-        // The dependency chain: a Program pairs a Degree × Branch; a Class sits
-        // within a Program.
+        // Ordered by the dependency chain, so setting the college up top to bottom
+        // works: a Program pairs a Degree × Branch AND names the Department that
+        // runs it, and a Class sits within a Program while being OWNED by a
+        // department (S&H for first year, the branch's own from year 2).
         children: [
           { title: "Degrees", href: "/structure/degrees" },
           { title: "Branches", href: "/structure/branches" },
+          { title: "Departments", href: "/structure/departments" },
           { title: "Programs", href: "/structure/programs" },
           { title: "Classes", href: "/structure/classes" },
         ],
+      },
+      {
+        title: "Classes",
+        href: "/structure/classes",
+        icon: UsersRound,
+        // A HOD runs their own department's classes — setting the class teacher
+        // above all. Super Admin reaches the same page through "Structure setup"
+        // above, so this entry is HOD-only to avoid listing it twice for them.
+        // The API scopes it: a HOD sees only the classes their department owns.
+        roles: ["HOD"],
       },
     ],
   },
@@ -226,6 +245,17 @@ const NAV: NavGroup[] = [
         href: "/faculty",
         icon: GraduationCap,
         roles: ["Super Admin", "HOD"],
+        exact: true, // /faculty/attachments is a sibling entry, not this page
+      },
+      {
+        title: "Attachments",
+        href: "/faculty/attachments",
+        icon: ArrowLeftRight,
+        // Lending staff across departments is an institution-level act, so this is
+        // Super Admin only — a HOD asks the admin. It's a sibling rather than a
+        // child of Faculty because children carry no roles of their own, and an
+        // HOD must not be offered a link that would 403.
+        roles: ["Super Admin"],
       },
     ],
   },

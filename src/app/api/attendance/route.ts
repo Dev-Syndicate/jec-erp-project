@@ -19,11 +19,14 @@
 // (SA/HOD/Faculty). The GET returns the WHOLE-CLASS roster + everyone's marks, so
 // it must NOT use plain `read Attendance`, which the Student role also holds (that
 // grant is for a future per-student self-view, not the class roster). Both are
-// program-scoped via a scoped authorize on the class's program.
+// DEPARTMENT-scoped via a scoped authorize on the class's owning department —
+// attendance belongs to whoever runs the class, and a year-1 class is run by S&H
+// no matter which award it leads to.
 import { authenticate, authorize, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import {
+  assertInClassDepartment,
   assertMarksPeriod,
   assertTeachesOrAdvises,
   canMarkPeriod,
@@ -70,7 +73,6 @@ export async function GET(req: Request) {
 
     const klass = await loadClass(classId);
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
 
     const day = await resolveWeekday(date);
     if ("error" in day) return Response.json({ error: day.error }, { status: 400 });
@@ -82,6 +84,13 @@ export async function GET(req: Request) {
         { status: 400 },
       );
     }
+
+    // Scoped on the class's OWNING department, not its award: the department that
+    // runs the class owns its attendance, and a year-1 class is owned by S&H even
+    // though its award is B.E·CSE. Runs AFTER the semester is resolved because it
+    // also admits a teacher who holds a slot here — the form an attachment takes on
+    // the grid — which the plain CASL check can't see.
+    await assertInClassDepartment(ctx, klass, semester.id, date);
 
     // A program-scoped Faculty may only view a class they teach or advise; HOD/SA
     // (manage Attendance) can view any class in program scope. A substitute
@@ -157,6 +166,9 @@ export async function GET(req: Request) {
         subjectId: s.subjectId,
         subjectCode: s.subject.code,
         subjectName: s.subject.name,
+        // Practical hour of the same subject — the period tabs badge it so a
+        // teacher can tell which of their hours is the lab.
+        isLab: s.isLab,
         facultyId: s.facultyId,
         facultyName: s.faculty.displayName,
         // Whether THIS viewer may mark this period, so the UI locks the hours that
@@ -215,16 +227,21 @@ export async function POST(req: Request) {
 
     const klass = await db.class.findUnique({
       where: { id: classId },
-      select: { programId: true },
+      select: { id: true, departmentId: true },
     });
     if (!klass) return Response.json({ error: "Class not found." }, { status: 404 });
-    authorize(ctx, "mark", "Attendance", { programId: klass.programId });
 
     const day = await resolveWeekday(date);
     if ("error" in day) return Response.json({ error: day.error }, { status: 400 });
 
     const semester = await activeSemester();
     if (!semester) return Response.json({ error: "No academic semester is active." }, { status: 400 });
+
+    // Owning department, not award — the department running the class owns its
+    // attendance (a year-1 class is S&H's, whatever degree it leads to). Ordered
+    // after the semester lookup because it also admits an attached or covering
+    // teacher, which is a fact about the timetable rather than about employment.
+    await assertInClassDepartment(ctx, klass, semester.id, date);
 
     // The period must be scheduled — that's where the subject for the record
     // comes from (a Saturday borrowing Monday records Monday's subject).

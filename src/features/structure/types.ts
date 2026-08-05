@@ -43,6 +43,28 @@ export type BranchInput = {
   code: string;
 };
 
+// --- Department -----------------------------------------------------------
+// The ORGANISATIONAL unit (CSE Department, S&H) — it employs staff, has a HOD,
+// owns classes and runs one or more Programs, possibly across several branches.
+// Distinct from Branch, which is only the discipline label inside an award.
+// The three counts are what it owns; they drive the display and the delete guard.
+export type Department = {
+  id: string;
+  name: string;
+  code: string;
+  isActive: boolean;
+  programCount: number;
+  classCount: number;
+  facultyCount: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DepartmentInput = {
+  name: string;
+  code: string;
+};
+
 // --- Program (Degree × Branch pairing) ------------------------------------
 // The scoping key everyone belongs to (e.g. B.E × CSE). It has no name/code of
 // its own — it's the pairing. The degree/branch names + codes are denormalised
@@ -57,16 +79,23 @@ export type Program = {
   durationYears: number;
   branchName: string;
   branchCode: string;
+  // The department that RUNS this award — not derivable from the branch, since a
+  // department may run programs across several branches.
+  departmentId: string;
+  departmentName: string;
+  departmentCode: string;
   isActive: boolean;
   classCount: number;
   createdAt: string;
   updatedAt: string;
 };
 
-// Only the pairing is set on create; nothing else is editable but isActive.
+// The pairing plus the department that runs it are set on create; nothing else is
+// editable but isActive.
 export type ProgramInput = {
   degreeId: string;
   branchId: string;
+  departmentId: string;
 };
 
 // --- Class (a group within a Program) -------------------------------------
@@ -79,6 +108,11 @@ export type Class = {
   id: string;
   programId: string;
   programLabel: string;
+  // WHO OWNS IT — the scoping key, and not always the program's own department: a
+  // first-year class is owned by S&H while its award stays B.E · CSE.
+  departmentId: string;
+  departmentCode: string;
+  departmentName: string;
   year: number;
   section: string;
   advisorId: string | null;
@@ -91,6 +125,10 @@ export type Class = {
 
 export type ClassInput = {
   programId: string;
+  // The owning department. Optional — omitted means "the department that runs the
+  // program", which is every year-2+ class; supplied hands the class to another
+  // department (S&H owning a first year) without touching its award.
+  departmentId?: string;
   year: number;
   section: string;
   advisorId?: string | null;
@@ -102,6 +140,9 @@ export type ClassInput = {
 export type StaffOption = {
   userId: string;
   displayName: string;
-  programId: string | null;
+  // The department that EMPLOYS them — what the advisor picker filters on. Staff
+  // carry no award, so there is no program here to filter by.
+  departmentId: string;
+  departmentCode: string;
   designation: string | null;
 };

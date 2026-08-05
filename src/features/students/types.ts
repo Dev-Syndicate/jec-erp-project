@@ -79,6 +79,30 @@ export type ProvisionResult = {
   tempPassword: string;
 };
 
+// --- Bulk credentials -----------------------------------------------------
+// Login slips for students who have not logged in yet ("Invited"). The server
+// RESETS each password and returns it once — the originals can't be read back
+// (Firebase keeps only hashes). Grouped by class because slips are handed out
+// class by class, and the client writes one CSV per group.
+export type CredentialGroup = {
+  classId: string;
+  classLabel: string; // "B.E · CSE · 2-B"
+  fileLabel: string; // "B.E-CSE-2B" — safe for a filename
+  students: Array<{
+    registerNumber: string;
+    rollNumber: string;
+    name: string;
+    email: string;
+    tempPassword: string;
+  }>;
+};
+
+export type CredentialResult = {
+  groups: CredentialGroup[];
+  total: number;
+  failed: Array<{ registerNumber: string; reason: string }>;
+};
+
 // Body for PATCH /api/students/[id] — editable detail fields; every one optional.
 export type StudentPatch = {
   displayName?: string;

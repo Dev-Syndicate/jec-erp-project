@@ -112,10 +112,28 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
     const existing = await db.student.findUnique({
       where: { id },
-      include: { user: { select: { id: true, firebaseUid: true, programId: true, email: true } } },
+      include: {
+        user: { select: { id: true, firebaseUid: true, programId: true, email: true } },
+        // The current class decides who may edit them — a student's department is
+        // derived from it, never stored.
+        enrollments: {
+          where: { academicYear: { isActive: true } },
+          select: { class: { select: { departmentId: true, advisorId: true } } },
+          take: 1,
+        },
+      },
     });
     if (!existing) return Response.json({ error: "Student not found." }, { status: 404 });
-    authorize(ctx, "manage", "Student", { programId: existing.user.programId });
+
+    const currentClass = existing.enrollments[0]?.class;
+    if (currentClass) {
+      // Scoped to the department that OWNS their class: a first-year in an
+      // S&H-owned class is S&H's to edit, not the branch HOD's.
+      authorize(ctx, "manage", "Student", { departmentId: currentClass.departmentId });
+    } else if (!ctx.isInstitutionScoped) {
+      // No class this year — nothing departmental to scope against.
+      return Response.json({ error: "This student isn't in a class this year." }, { status: 403 });
+    }
 
     // displayName and email live on User, not Student — pull them out here or
     // they'd be spread into the student update as unknown columns and throw.

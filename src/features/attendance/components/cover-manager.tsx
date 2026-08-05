@@ -7,7 +7,8 @@
 // grant: it lets the covering teacher mark that ONE hour on that ONE date and
 // leaves the permanent timetable untouched.
 //
-// HOD / Super Admin only, program-scoped — the API re-checks. Note the assigner
+// HOD / Super Admin only, scoped to the department that OWNS the class — the API
+// re-checks, and so does the covering-teacher picker below. Note the assigner
 // does NOT gain the right to mark the hour themselves; they name who may.
 "use client";
 
@@ -175,14 +176,29 @@ function Loaded({ view }: { view: CoverView }) {
 
       <div className="flex flex-col gap-2">
         {view.periods.map((p) => (
-          <PeriodRow key={p.slotId} period={p} date={view.date} />
+          // The owning department comes from the view, not the class list: it's
+          // what decides who may cover, and only the server knows it per class.
+          <PeriodRow
+            key={p.slotId}
+            period={p}
+            date={view.date}
+            departmentId={view.departmentId}
+          />
         ))}
       </div>
     </div>
   );
 }
 
-function PeriodRow({ period, date }: { period: CoverPeriod; date: string }) {
+function PeriodRow({
+  period,
+  date,
+  departmentId,
+}: {
+  period: CoverPeriod;
+  date: string;
+  departmentId: string;
+}) {
   const [open, setOpen] = useState(false);
   const covered = period.substitution;
 
@@ -232,6 +248,7 @@ function PeriodRow({ period, date }: { period: CoverPeriod; date: string }) {
         <AssignForm
           period={period}
           date={date}
+          departmentId={departmentId}
           onDone={() => setOpen(false)}
         />
       )}
@@ -242,21 +259,26 @@ function PeriodRow({ period, date }: { period: CoverPeriod; date: string }) {
 function AssignForm({
   period,
   date,
+  departmentId,
   onDone,
 }: {
   period: CoverPeriod;
   date: string;
+  departmentId: string; // the class's OWNER — who may cover
   onDone: () => void;
 }) {
-  const faculty = useFacultyOptions();
+  const faculty = useFacultyOptions(departmentId);
   const [substituteId, setSubstituteId] = useState(period.substitution?.substituteId ?? "");
   const [reason, setReason] = useState(period.substitution?.reason ?? "");
   const assign = useAssignCover();
 
-  // The period's own teacher can't cover their own hour (the API refuses it too).
+  // Already scoped by the SERVER to whoever may teach in the class's owning
+  // department — employed there or attached this semester — which is exactly what
+  // POST enforces. The only filter left is local to this period: a teacher can't
+  // cover their own hour (the API refuses that too).
   const options = (faculty.data ?? [])
     .filter((f) => f.userId !== period.regularFacultyId)
-    .map((f) => ({ value: f.userId, label: f.displayName }));
+    .map((f) => ({ value: f.userId, label: `${f.displayName} · ${f.departmentCode}` }));
 
   function submit() {
     if (!substituteId) return;
@@ -279,7 +301,7 @@ function AssignForm({
                 faculty.isPending
                   ? "Loading…"
                   : options.length === 0
-                    ? "No other staff in this program"
+                    ? "No other staff in the department that owns this class"
                     : "Select a teacher"
               }
               disabled={faculty.isPending || options.length === 0}

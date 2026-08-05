@@ -65,6 +65,7 @@ const PERMISSIONS: Array<{ action: string; subject: string }> = [
   { action: "manage", subject: "Attendance" }, // mark ANY class in scope (HOD/SA)
   { action: "mark", subject: "Attendance" }, // mark only what you teach/advise (Faculty)
   { action: "read", subject: "Attendance" },
+  { action: "manage", subject: "Marks" }, // oversight of a department's results (HOD/SA) — never authorship
   { action: "enter", subject: "Marks" },
   { action: "read", subject: "Marks" },
   { action: "apply", subject: "Leave" }, // student raises an OD/leave request
@@ -94,14 +95,25 @@ const DEFAULT_GRANTS: Record<string, Array<[string, string]>> = {
     ["manage", "Faculty"],
     ["manage", "Subject"],
     ["manage", "Timetable"],
-    ["manage", "Attendance"], // mark any class in their program (covers mark + read)
+    ["manage", "Attendance"], // mark any class in their department (covers mark + read)
     ["read", "Attendance"],
+    ["manage", "Marks"], // oversight: view their department's results without teaching them
     ["enter", "Marks"],
     ["read", "Marks"],
     ["approve", "Leave"], // stage-2 approver (HOD)
     ["read", "Leave"],
+    // Their own department's classes: set the class teacher, add/retire sections.
+    // `Class` is DEPARTMENT-scoped, so the grant carries { departmentId } and a HOD
+    // reaches only the classes their department OWNS — a first-year B.E-CSE class
+    // belongs to S&H, not to the CSE HOD. The routes pass that resource on every
+    // path; `manage Class` on its own is an unscoped, institution-wide check.
+    ["manage", "Class"],
     ["read", "Class"],
     ["read", "Program"],
+    // Needed for the department picker on the faculty form — an HOD provisions
+    // staff into their own department, so they must be able to name it. The GET is
+    // scoped to their own department; creating one stays Super-Admin-only.
+    ["read", "Branch"],
   ],
   Faculty: [
     ["read", "Student"],

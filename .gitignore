@@ -47,3 +47,6 @@ next-env.d.ts
 /prisma/data/import-credentials.csv
 /prisma/data/import-rejected.csv
 /*.xlsx
+# One-time passwords written by the seeding scripts. Hand over, then delete.
+/faculty-passwords*.csv
+/production-passwords*.csv

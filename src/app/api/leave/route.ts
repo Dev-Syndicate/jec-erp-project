@@ -3,7 +3,8 @@
 // GET  → role-scoped list:
 //   • a student sees their OWN requests (resolved from ctx.user; never a client id).
 //   • an approver (Faculty who advises / HOD / SA) sees the requests they can act
-//     on — their advised classes (Faculty) or the whole program (HOD/SA).
+//     on — their advised classes (Faculty) or every class their department OWNS
+//     (HOD/SA).
 // POST { type, fromDate, toDate, reason } → a student raises a request for their
 //   own active-year class. Starts at PENDING_TEACHER. No attendance is touched
 //   until the final HOD approval (see [id]/action).
@@ -29,8 +30,10 @@ export async function GET(req: Request) {
     if (student) {
       where = { studentId: student.id };
     } else if (ctx.ability.can("manage", "Attendance")) {
-      // HOD/SA: the whole program (SA unscoped).
-      where = ctx.isInstitutionScoped ? {} : { class: { programId: ctx.user.programId ?? "__none__" } };
+      // HOD/SA: every class their DEPARTMENT owns (SA unscoped). Scoped on the
+      // owner, not the award — a first-year's requests land in the S&H HOD's queue
+      // because S&H runs the class, which is also who approves them at stage 2.
+      where = ctx.isInstitutionScoped ? {} : { class: { departmentId: ctx.departmentId ?? "__none__" } };
     } else {
       // A plain approver (Faculty): only requests for classes they advise.
       where = { class: { advisorId: ctx.user.id } };

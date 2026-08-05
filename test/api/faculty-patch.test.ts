@@ -121,9 +121,25 @@ describe("pre-existing behaviour still holds", () => {
     expect(data({ roleIds: ["r1", "r1", "r2"] }).roleIds).toEqual(["r1", "r2"]);
   });
 
-  it("rejects an unknown status and an empty program", () => {
+  it("rejects an unknown status", () => {
     expect(error({ status: "RETIRED" })).toMatch(/invalid status/i);
-    expect(error({ programId: "  " })).toMatch(/program can't be empty/i);
+  });
+
+  it("rejects an empty department — the scoping key may never be blanked", () => {
+    // Same rule the login handles get: a half-filled form must not silently
+    // detach a lecturer from the department that scopes their whole account.
+    expect(error({ departmentId: "  " })).toMatch(/department can't be empty/i);
+  });
+
+  it("IGNORES programId rather than acting on it", () => {
+    // A staff account carries no award — their department is the only scoping key
+    // (src/lib/auth.ts → scopesFor never reads a faculty user's programId). A
+    // stale client still sending one must not write it, and must not 400 either.
+    expect(error({ programId: "prog-cse" })).toMatch(/nothing to update/i);
+    // Alongside a real field it is dropped, and the real field still applies.
+    const parsed = data({ displayName: "Dr. Asha", programId: "prog-cse" });
+    expect(parsed.displayName).toBe("Dr. Asha");
+    expect("programId" in parsed).toBe(false);
   });
 
   it("rejects an empty patch rather than issuing a no-op write", () => {

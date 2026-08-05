@@ -15,12 +15,67 @@
 // who arranged it) rather than a role that can reach into anyone's hours — and
 // PeriodAttendance.markedById still records who actually marked.
 //
-// Program scope is enforced separately in the routes (the resource-form authorize); this
-// module adds the "which class within the program" layer.
+// Department scope is enforced separately in the routes (assertInClassDepartment
+// below); this module adds the "which class within the department" layer.
 import "server-only";
 
 import { db } from "@/lib/db";
-import { AuthError, type AuthContext } from "@/lib/auth";
+import { AuthError, authorize, type AuthContext } from "@/lib/auth";
+
+/**
+ * Department-level gate: may this user work with attendance for a class owned by
+ * `departmentId` at all?
+ *
+ * This exists because the plain scoped `authorize(ctx, "mark", "Attendance",
+ * { departmentId })` is ATTACHMENT-BLIND. A lecturer's CASL condition is built
+ * from `FacultyProfile.departmentId` alone (lib/auth.ts → scopesFor), so an S&H
+ * lecturer attached to CSE — whom the timetable happily accepts and the class
+ * picker happily offers — was rejected here, BEFORE reaching canMarkPeriod, which
+ * would have granted them the hour. The same 403 hit any substitute employed by a
+ * different department, contradicting the substitutions route that had just
+ * validated them with the attachment-aware helper.
+ *
+ * So: pass the CASL check (employed here, or an unscoped admin), OR hold a
+ * timetable slot in this class, OR be covering a period in it on this date. The
+ * last two are what an attachment actually manifests as — we check the SLOT rather
+ * than re-reading the attachment, so a lapsed attachment still lets the teacher
+ * mark the hours already on the grid, which is exactly the documented rollover
+ * behaviour.
+ *
+ * This is deliberately COARSE. It only decides "may you be in this class's
+ * attendance at all"; canMarkPeriod remains the strict per-period authority and
+ * still lets nobody sign another teacher's register.
+ */
+export async function assertInClassDepartment(
+  ctx: AuthContext,
+  klass: { id: string; departmentId: string },
+  semesterId: string,
+  date?: Date,
+): Promise<void> {
+  try {
+    authorize(ctx, "mark", "Attendance", { departmentId: klass.departmentId });
+    return;
+  } catch {
+    // Not scoped to this department by employment — fall through to the
+    // teaches-here checks below rather than refusing outright.
+  }
+
+  const teaches = await db.timetableSlot.findFirst({
+    where: { classId: klass.id, semesterId, facultyId: ctx.user.id },
+    select: { id: true },
+  });
+  if (teaches) return;
+
+  if (date) {
+    const covering = await db.slotSubstitution.findFirst({
+      where: { date, substituteId: ctx.user.id, slot: { classId: klass.id, semesterId } },
+      select: { id: true },
+    });
+    if (covering) return;
+  }
+
+  throw new AuthError(403, "You don't have permission to do this.");
+}
 
 /**
  * Read-level: may this user view/work with this class's attendance at all?

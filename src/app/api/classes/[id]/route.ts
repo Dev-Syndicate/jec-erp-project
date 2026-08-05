@@ -39,8 +39,11 @@ function parsePatchBody(body: unknown): { data: ClassPatch } | { error: string }
   }
 
   if (b.section !== undefined) {
+    // Same rule as create: free text, stored uppercase so "a" and "A" can never
+    // become two sections under the (programId, year, section) unique key.
     const section = typeof b.section === "string" ? b.section.trim().toUpperCase() : "";
-    if (!/^[A-H]$/.test(section)) return { error: "Section must be a single letter A–H." };
+    if (!section) return { error: "Section can't be empty." };
+    if (section.length > 4) return { error: "Section can be at most 4 characters." };
     data.section = section;
   }
 
@@ -71,28 +74,35 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       return Response.json({ error: parsed.error }, { status: 400 });
     }
 
-    // Changing the year or the advisor both need the class's program (year bound /
-    // advisor scope), so fetch the existing class once when either is present.
-    if (parsed.data.year !== undefined || parsed.data.advisorId !== undefined) {
-      const existing = await db.class.findUnique({
-        where: { id },
-        include: { program: { include: { degree: { select: { durationYears: true } } } } },
-      });
-      if (!existing) return Response.json({ error: "Class not found." }, { status: 404 });
+    // Always load the class: the SCOPE CHECK below needs its owning department, so
+    // this is no longer conditional on which fields are being changed. Without it
+    // the capability check above would pass for any HOD against any class in the
+    // college — `manage Class` alone is unscoped.
+    const existing = await db.class.findUnique({
+      where: { id },
+      include: { program: { include: { degree: { select: { durationYears: true } } } } },
+    });
+    if (!existing) return Response.json({ error: "Class not found." }, { status: 404 });
 
-      if (parsed.data.year !== undefined && parsed.data.year > existing.program.degree.durationYears) {
-        return Response.json(
-          { error: "Year is outside this program's duration." },
-          { status: 400 },
-        );
-      }
+    // Scoped to the department that OWNS the class, not its award: a HOD manages
+    // the classes their own department runs, and a first-year B.E-CSE class belongs
+    // to S&H. Super Admin is unscoped and passes either way.
+    authorize(ctx, "manage", "Class", { departmentId: existing.departmentId });
 
-      // The class teacher (if set/changed) must be active staff in this program.
-      if (parsed.data.advisorId !== undefined) {
-        const advisor = await validateAdvisor(parsed.data.advisorId, existing.programId);
-        if ("error" in advisor) return Response.json({ error: advisor.error }, { status: 400 });
-        parsed.data.advisorId = advisor.ok;
-      }
+    if (parsed.data.year !== undefined && parsed.data.year > existing.program.degree.durationYears) {
+      return Response.json(
+        { error: "Year is outside this program's duration." },
+        { status: 400 },
+      );
+    }
+
+    // The class teacher (if set/changed) must be active staff in the department
+    // that OWNS this class — S&H for a first-year class, whose staff have no
+    // program of their own.
+    if (parsed.data.advisorId !== undefined) {
+      const advisor = await validateAdvisor(parsed.data.advisorId, existing.departmentId);
+      if ("error" in advisor) return Response.json({ error: advisor.error }, { status: 400 });
+      parsed.data.advisorId = advisor.ok;
     }
 
     try {
@@ -127,9 +137,11 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
     // a Class with enrolled students must be deactivated, not deleted.
     const cls = await db.class.findUnique({
       where: { id },
-      include: { _count: { select: { enrollments: true } } },
+      select: { departmentId: true, _count: { select: { enrollments: true } } },
     });
     if (!cls) return Response.json({ error: "Class not found." }, { status: 404 });
+    // Scoped on the owner — a HOD may only delete classes their own department runs.
+    authorize(ctx, "manage", "Class", { departmentId: cls.departmentId });
     if (cls._count.enrollments > 0) {
       return Response.json(
         {

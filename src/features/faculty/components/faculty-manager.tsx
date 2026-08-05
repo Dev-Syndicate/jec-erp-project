@@ -6,7 +6,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Pencil, KeyRound, Copy, Check, Search } from "lucide-react";
+import { Plus, Pencil, KeyRound, Copy, Check, Search, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,12 +28,20 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { PageHeader } from "@/app/(app)/page-header";
-import type { Faculty, Gender, MaritalStatus, Role } from "@/features/faculty/types";
+import { DepartmentSelect } from "@/components/department-select";
+import type {
+  Faculty,
+  Gender,
+  MaritalStatus,
+  Role,
+} from "@/features/faculty/types";
 import { FormSelect } from "@/features/faculty/components/form-select";
+import { ImportFacultyDialog } from "@/features/faculty/components/import-faculty-dialog";
+import { StaffCredentialsDialog } from "@/features/faculty/components/credentials-dialog";
 import {
   useCreateFaculty,
+  useDepartmentOptions,
   useFaculty,
-  useProgramOptions,
   useRegeneratePassword,
   useRoles,
   useUpdateFaculty,
@@ -195,22 +203,24 @@ function TempPasswordPanel({ name, password }: { name: string; password: string 
 }
 
 /**
- * `isInstitutionScoped` decides whether the Program filter is worth showing —
- * an institution role (Super Admin) spans every program; a program-scoped role
- * has exactly one. Passed in by the page rather than read here, because a
- * feature must not import another feature's hooks (CLAUDE.md).
+ * `isInstitutionScoped` decides whether the Department filter is worth showing —
+ * an institution role (Super Admin) spans every department; a scoped role has
+ * exactly one. Passed in by the page rather than read here, because a feature
+ * must not import another feature's hooks (CLAUDE.md).
  *
- * Presentation only: /api/faculty scopes the list to the caller's own program
+ * Presentation only: /api/faculty scopes the list to the caller's own department
  * independently, so this is never what keeps data safe.
  */
 export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionScoped?: boolean }) {
   const { data: faculty, isPending, isError, error } = useFaculty();
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [credentials, setCredentials] = useState(false);
   const [editing, setEditing] = useState<Faculty | null>(null);
   const [resetting, setResetting] = useState<Faculty | null>(null);
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("ALL");
-  const [programFilter, setProgramFilter] = useState("");
+  const [departmentFilter, setDepartmentFilter] = useState("");
   const [designationFilter, setDesignationFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [genderFilter, setGenderFilter] = useState("");
@@ -224,16 +234,20 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
     return [...set].sort();
   }, [faculty]);
 
-  // Programs and designations are derived from the rows on screen for the same
+  // Departments and designations are derived from the rows on screen for the same
   // reason: never offer a filter value that would return nothing. The list is
-  // already program-scoped server-side, so for an HOD this collapses to their
-  // own program (and the picker is hidden — see below).
-  const programOptions = useMemo(() => {
+  // already department-scoped server-side, so for an HOD this collapses to their
+  // own department (and the picker is hidden — see below).
+  //
+  // Department, not program, is the axis: it is what the server scopes on, and
+  // every staff member has one — filtering by program would leave S&H's staff
+  // unreachable, since they have none.
+  const departmentOptions = useMemo(() => {
     const map = new Map<string, string>();
-    (faculty ?? []).forEach((f) => {
-      if (f.programId && f.programLabel) map.set(f.programId, f.programLabel);
-    });
-    return [...map].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+    (faculty ?? []).forEach((f) => map.set(f.departmentId, f.departmentName));
+    return [...map]
+      .map(([value, label]) => ({ value, label }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }, [faculty]);
 
   const designationOptions = useMemo(() => {
@@ -254,12 +268,14 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
   // can cascade), the stored value is treated as a REQUEST and the effective
   // one is derived here: a filter only counts while its control is on screen
   // and its value still matches an available option.
-  const showProgramFilter = isInstitutionScoped && programOptions.length > 1;
+  const showDepartmentFilter = isInstitutionScoped && departmentOptions.length > 1;
   const showDesignationFilter = designationOptions.length > 1;
   const showRoleFilter = roles.length > 1;
 
-  const activeProgram =
-    showProgramFilter && programOptions.some((p) => p.value === programFilter) ? programFilter : "";
+  const activeDepartment =
+    showDepartmentFilter && departmentOptions.some((d) => d.value === departmentFilter)
+      ? departmentFilter
+      : "";
   const activeDesignation =
     showDesignationFilter && designationOptions.some((d) => d.value === designationFilter)
       ? designationFilter
@@ -274,7 +290,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
     const q = query.trim().toLowerCase();
     return faculty.filter((f) => {
       const matchesRole = activeRole === "ALL" || f.roles.includes(activeRole);
-      const matchesProgram = !activeProgram || f.programId === activeProgram;
+      const matchesDepartment = !activeDepartment || f.departmentId === activeDepartment;
       const matchesDesignation = !activeDesignation || f.designation === activeDesignation;
       // "Invited" isn't a stored status — it's an ACTIVE account still on its
       // temp password, which is what the Status column renders.
@@ -288,30 +304,30 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
       const matchesGender = !activeGender || f.gender === activeGender;
       const matchesQuery =
         q === "" ||
-        [f.staffId, f.displayName, f.email, f.programLabel, f.designation]
+        [f.staffId, f.displayName, f.email, f.departmentName, f.designation]
           .filter(Boolean)
           .some((field) => field!.toLowerCase().includes(q));
       return (
         matchesRole &&
-        matchesProgram &&
+        matchesDepartment &&
         matchesDesignation &&
         matchesStatus &&
         matchesGender &&
         matchesQuery
       );
     });
-  }, [faculty, query, activeRole, activeProgram, activeDesignation, statusFilter, activeGender]);
+  }, [faculty, query, activeRole, activeDepartment, activeDesignation, statusFilter, activeGender]);
 
   const activeFilterCount =
     (activeRole !== "ALL" ? 1 : 0) +
-    (activeProgram ? 1 : 0) +
+    (activeDepartment ? 1 : 0) +
     (activeDesignation ? 1 : 0) +
     (statusFilter ? 1 : 0) +
     (activeGender ? 1 : 0);
 
   const clearFilters = () => {
     setRoleFilter("ALL");
-    setProgramFilter("");
+    setDepartmentFilter("");
     setDesignationFilter("");
     setStatusFilter("");
     setGenderFilter("");
@@ -334,6 +350,14 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
           description="Provision faculty accounts. Faculty sign in with their email."
         />
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setCredentials(true)} data-icon="inline-start">
+            <KeyRound />
+            Credentials
+          </Button>
+          <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
+            <Upload />
+            Import
+          </Button>
           <Button onClick={() => setCreating(true)} data-icon="inline-start">
             <Plus />
             Add faculty
@@ -364,7 +388,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
                   setQuery(e.target.value);
                   setPage(1);
                 }}
-                placeholder="Search by name, staff ID, email, program…"
+                placeholder="Search by name, staff ID, email, department…"
                 aria-label="Search faculty"
                 className="h-10! pl-9"
               />
@@ -394,26 +418,26 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
             )}
           </div>
 
-          {/* Program / designation / status / gender. The Program picker is
-              shown only to an institution role — a program-scoped user (HOD)
-              receives a single program from the API, so the control would be a
+          {/* Department / designation / status / gender. The Department picker
+              is shown only to an institution role — a scoped user (HOD) receives
+              a single department from the API, so the control would be a
               one-entry no-op. Presentation only: the list is scoped server-side
               regardless of what is selected here. */}
           <div className="flex flex-wrap items-end gap-3">
-            {showProgramFilter && (
-              <div className="flex min-w-44 flex-col gap-1.5">
-                <Label htmlFor="ff-program" className="text-xs text-muted-foreground">
-                  Program
+            {showDepartmentFilter && (
+              <div className="flex min-w-52 flex-col gap-1.5">
+                <Label htmlFor="ff-department" className="text-xs text-muted-foreground">
+                  Department
                 </Label>
                 <FormSelect
-                  id="ff-program"
-                  value={activeProgram}
+                  id="ff-department"
+                  value={activeDepartment}
                   onChange={(v) => {
-                    setProgramFilter(v);
+                    setDepartmentFilter(v);
                     setPage(1);
                   }}
-                  options={[{ value: "", label: "All programs" }, ...programOptions]}
-                  placeholder="All programs"
+                  options={[{ value: "", label: "All departments" }, ...departmentOptions]}
+                  placeholder="All departments"
                 />
               </div>
             )}
@@ -504,7 +528,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
                   <TableRow>
                     <TableHead>Staff ID</TableHead>
                     <TableHead>Name</TableHead>
-                    <TableHead>Program</TableHead>
+                    <TableHead>Department</TableHead>
                     <TableHead>Designation</TableHead>
                     <TableHead>Roles</TableHead>
                     <TableHead>Status</TableHead>
@@ -521,7 +545,9 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
                       <span className="text-xs text-muted-foreground">{f.email}</span>
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{f.programLabel ?? "—"}</TableCell>
+                  {/* Who employs them. The code alone is enough at a glance
+                      ("CSE", "S&H"); the full name is the select's job. */}
+                  <TableCell className="text-muted-foreground">{f.departmentCode}</TableCell>
                   <TableCell className="text-muted-foreground">{f.designation}</TableCell>
                   <TableCell>
                     {f.roles.length ? (
@@ -604,6 +630,8 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
       )}
 
       {creating && <CreateFacultyDialog onClose={() => setCreating(false)} />}
+      {importing && <ImportFacultyDialog onClose={() => setImporting(false)} />}
+      {credentials && <StaffCredentialsDialog onClose={() => setCredentials(false)} />}
       {editing && <EditFacultyDialog faculty={editing} onClose={() => setEditing(null)} />}
       {resetting && <RegenerateDialog faculty={resetting} onClose={() => setResetting(null)} />}
     </div>
@@ -612,14 +640,14 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
 
 function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateFaculty();
-  const programs = useProgramOptions();
+  const departments = useDepartmentOptions();
   const roles = useRoles();
-  const activePrograms = (programs.data ?? []).filter((p) => p.isActive);
+  const activeDepartments = (departments.data ?? []).filter((d) => d.isActive);
   const roleOptions = roles.data ?? [];
 
   const [email, setEmail] = useState("");
   const [displayName, setDisplayName] = useState("");
-  const [programId, setProgramId] = useState("");
+  const [departmentId, setDepartmentId] = useState("");
   const [staffId, setStaffId] = useState("");
   const [designation, setDesignation] = useState("");
   const [phone, setPhone] = useState("");
@@ -644,7 +672,9 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
   const valid =
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) &&
     displayName.trim() !== "" &&
-    programId !== "" &&
+    // The employing department is the whole scope of a staff account — nothing
+    // else to reconcile it against.
+    departmentId !== "" &&
     staffId.trim() !== "" &&
     designation.trim() !== "" &&
     phone.trim() !== "" &&
@@ -656,7 +686,7 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
     create.mutate({
       email: email.trim(),
       displayName: displayName.trim(),
-      programId,
+      departmentId,
       roleIds: selectedRoleIds,
       staffId: staffId.trim(),
       designation: designation.trim(),
@@ -676,7 +706,7 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
           <DialogDescription>
             {created
               ? "The account is ready. Save the temporary password below."
-              : "Provision a faculty account. A temporary password is generated and shown once."}
+              : "Provision a faculty account against the department that employs them. A temporary password is generated and shown once."}
           </DialogDescription>
         </DialogHeader>
 
@@ -699,14 +729,15 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
                 <Label htmlFor="f-email">Email</Label>
                 <Input id="f-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="h-10!" required />
               </div>
+              {/* Department first: employment is the anchor, and it decides
+                  whether the program field below exists at all. */}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="f-program">Program</Label>
-                <FormSelect
-                  id="f-program"
-                  value={programId}
-                  onChange={setProgramId}
-                  options={activePrograms.map((p) => ({ value: p.id, label: p.label }))}
-                  placeholder={programs.isPending ? "Loading…" : "Select a program"}
+                <Label htmlFor="f-department">Department</Label>
+                <DepartmentSelect
+                  id="f-department"
+                  value={departmentId}
+                  onChange={setDepartmentId}
+                  departments={activeDepartments}
                 />
               </div>
               <div className="flex flex-col gap-2">
@@ -746,6 +777,16 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
                 <Label htmlFor="f-marital">Marital status (optional)</Label>
                 <FormSelect id="f-marital" value={maritalStatus} onChange={setMaritalStatus} options={MARITAL_OPTIONS} placeholder="Select" />
               </div>
+              {/* Without the department list nothing can be submitted, so say so
+                  rather than leaving an empty select. /api/departments is
+                  Structure (Super-Admin only), so an HOD lands here. */}
+              {departments.isError && (
+                <div className="col-span-2">
+                  <FormError>
+                    Couldn’t load departments — {errorMessage(departments.error)}
+                  </FormError>
+                </div>
+              )}
               {create.isError && (
                 <div className="col-span-2">
                   <FormError>{errorMessage(create.error)}</FormError>
@@ -769,10 +810,10 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
 
 function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: () => void }) {
   const update = useUpdateFaculty();
-  const programs = useProgramOptions();
+  const departments = useDepartmentOptions();
   const roles = useRoles();
   const roleOptions = roles.data ?? [];
-  const [programId, setProgramId] = useState(faculty.programId ?? "");
+  const [departmentId, setDepartmentId] = useState(faculty.departmentId);
   const [displayName, setDisplayName] = useState(faculty.displayName);
   // Identity fields. Only email is a credential — faculty sign in with it
   // directly (no register-number step), so a change is flagged before saving.
@@ -802,11 +843,37 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
   const staffIdChanged = staffId.trim() !== faculty.staffId;
   const emailChanged = email.trim().toLowerCase() !== faculty.email.toLowerCase();
 
+  // The department they're employed by must stay selectable even if it has since
+  // been deactivated, or opening the dialog would blank the field and the form
+  // would demand a move nobody asked for. Also covers the degenerate case where
+  // the list hasn't resolved: the field still shows the truth and offers no move.
+  const activeDepartments = useMemo(() => {
+    const loaded = (departments.data ?? []).filter(
+      (d) => d.isActive || d.id === faculty.departmentId,
+    );
+    return loaded.some((d) => d.id === faculty.departmentId)
+      ? loaded
+      : [
+          ...loaded,
+          {
+            id: faculty.departmentId,
+            name: faculty.departmentName,
+            code: faculty.departmentCode,
+            isActive: true,
+            // Unknown from here; the pair hook derives "runs no award" from the
+            // programs actually on offer, so this value is never read.
+            programCount: 0,
+          },
+        ];
+  }, [departments.data, faculty.departmentId, faculty.departmentName, faculty.departmentCode]);
+
   const valid =
     displayName.trim() !== "" &&
     designation.trim() !== "" &&
     phone.trim() !== "" &&
-    programId !== "" &&
+    // The employing department is the only scope a staff account has, and it may
+    // never be blanked — the server rejects an empty one too.
+    departmentId !== "" &&
     staffId.trim() !== "" &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
     // Until /api/roles resolves, roleOptions is empty, so initialRoleIds is []
@@ -815,9 +882,9 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
     roles.isSuccess &&
     selectedRoleIds.length > 0;
 
-  // Only include programId when it actually changed — a program move re-scopes the
-  // account and busts the auth cache, so don't trigger it needlessly.
-  const activePrograms = (programs.data ?? []).filter((p) => p.isActive || p.id === programId);
+  // Only sent when it actually changed — a move re-scopes the account and busts
+  // the auth cache, so don't trigger it needlessly.
+  const departmentChanged = departmentId !== faculty.departmentId;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -838,7 +905,7 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
           // otherwise cost a pointless Firebase round-trip on every save.
           ...(staffIdChanged ? { staffId: staffId.trim() } : {}),
           ...(emailChanged ? { email: email.trim().toLowerCase() } : {}),
-          ...(programId && programId !== faculty.programId ? { programId } : {}),
+          ...(departmentChanged ? { departmentId } : {}),
           ...(rolesChanged ? { roleIds: selectedRoleIds } : {}),
         },
       },
@@ -852,26 +919,28 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
         <DialogHeader>
           <DialogTitle>Edit {faculty.displayName}</DialogTitle>
           <DialogDescription>
-            Update details, program or active status. Moving a program re-scopes the account. An
-            inactive status disables sign-in until set back to Active. Email is the address this
-            account signs in with.
+            Update details, employing department or active status. Moving them to another
+            department re-scopes the account, and takes their program with it. An inactive status
+            disables sign-in until set back to Active. Email is the address this account signs in
+            with.
           </DialogDescription>
         </DialogHeader>
         {/* Landscape: 3 columns on desktop, 1 on narrow screens — matches the
             student dialogs so every edit form reads the same way. */}
         <form id="edit-faculty-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="flex flex-col gap-2 sm:col-span-2">
+          <div className="flex flex-col gap-2">
             <Label htmlFor="ef-name">Full name</Label>
             <Input id="ef-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" required />
           </div>
+          {/* Department before program: it's who employs them, and it decides
+              whether the program field beside it exists at all. */}
           <div className="flex flex-col gap-2">
-            <Label htmlFor="ef-program">Program</Label>
-            <FormSelect
-              id="ef-program"
-              value={programId}
-              onChange={setProgramId}
-              options={activePrograms.map((p) => ({ value: p.id, label: p.label }))}
-              placeholder={programs.isPending ? "Loading…" : "Select a program"}
+            <Label htmlFor="ef-department">Department</Label>
+            <DepartmentSelect
+              id="ef-department"
+              value={departmentId}
+              onChange={setDepartmentId}
+              departments={activeDepartments}
             />
           </div>
           {/* Staff ID + email. Only the email is a credential, so only that one

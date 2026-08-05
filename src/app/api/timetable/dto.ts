@@ -13,6 +13,7 @@ type SlotRow = {
   period: number;
   subjectId: string;
   facultyId: string;
+  isLab: boolean;
   subject: { code: string; name: string };
   faculty: { displayName: string };
 };
@@ -27,6 +28,9 @@ export function toSlotDto(s: SlotRow) {
     subjectName: s.subject.name,
     facultyId: s.facultyId,
     facultyName: s.faculty.displayName,
+    // A practical hour of the SAME subject — the grid badges it so a lab block
+    // is recognisable without opening the cell.
+    isLab: s.isLab,
   };
 }
 

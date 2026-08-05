@@ -37,6 +37,8 @@ export async function GET(req: Request) {
         period: s.period,
         subjectCode: s.subject.code,
         subjectName: s.subject.name,
+        // Practical hour of the same subject — badged in the grid.
+        isLab: s.isLab,
         classId: s.classId,
         classLabel: `${s.class.program.degree.code} · ${s.class.program.branch.code} · ${roman(s.class.year)}-${s.class.section}`,
         classShort: `${roman(s.class.year)}-${s.class.section}`,

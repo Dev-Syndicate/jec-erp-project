@@ -1,7 +1,8 @@
 // Timetable grid — build the Mon–Fri period grid for a class in the active
 // semester. Pick a class, then each (day, period) cell holds a subject + the
 // faculty who takes it. Subjects are filtered to the class's curriculum semester
-// and program; faculty to the program. One slot per (class, day, period).
+// and program; faculty to the department that OWNS the class. One slot per
+// (class, day, period).
 "use client";
 
 import { useState } from "react";
@@ -173,7 +174,16 @@ export function TimetableManager() {
                               onClick={() => setEditing({ day, period, slot })}
                               className="flex min-h-16 w-full flex-col items-center justify-center gap-0.5 rounded-lg px-2 py-1.5 text-center transition-colors hover:bg-muted"
                             >
-                              <span className="font-medium">{slot.subjectCode}</span>
+                              <span className="flex items-center gap-1.5 font-medium">
+                                {slot.subjectCode}
+                                {/* Practical hour of the same subject — badged so a
+                                    lab block reads at a glance without opening it. */}
+                                {slot.isLab && (
+                                  <span className="rounded bg-primary/10 px-1 py-px font-mono text-[0.6rem] font-semibold uppercase tracking-wide text-primary">
+                                    Lab
+                                  </span>
+                                )}
+                              </span>
                               <span className="w-full truncate text-center text-xs text-muted-foreground">
                                 {slot.facultyName}
                               </span>
@@ -203,6 +213,7 @@ export function TimetableManager() {
         <SlotDialog
           classId={classId}
           programId={selectedClass.programId}
+          departmentId={selectedClass.departmentId}
           curriculumSemesterNumber={view.data?.curriculumSemesterNumber ?? 0}
           day={editing.day}
           period={editing.period}
@@ -217,6 +228,7 @@ export function TimetableManager() {
 function SlotDialog({
   classId,
   programId,
+  departmentId,
   curriculumSemesterNumber,
   day,
   period,
@@ -224,7 +236,8 @@ function SlotDialog({
   onClose,
 }: {
   classId: string;
-  programId: string;
+  programId: string; // the AWARD — scopes the subject list
+  departmentId: string; // the class's OWNER — scopes the faculty list
   curriculumSemesterNumber: number;
   day: DayOfWeek;
   period: number;
@@ -232,12 +245,13 @@ function SlotDialog({
   onClose: () => void;
 }) {
   const subjects = useSubjectOptions();
-  const faculty = useFacultyOptions();
+  const faculty = useFacultyOptions(departmentId);
   const upsert = useUpsertSlot();
   const del = useDeleteSlot();
 
   const [subjectId, setSubjectId] = useState(slot?.subjectId ?? "");
   const [facultyId, setFacultyId] = useState(slot?.facultyId ?? "");
+  const [isLab, setIsLab] = useState(slot?.isLab ?? false);
 
   const subjectOptions = (subjects.data ?? [])
     .filter(
@@ -246,9 +260,15 @@ function SlotDialog({
     )
     .map((s) => ({ value: s.id, label: `${s.code} — ${s.name}` }));
 
+  // Already scoped by the SERVER to the class's owning department — employed there
+  // or attached for this semester, which is exactly what POST /api/timetable
+  // enforces. Deliberately no `departmentId` filter here: a visiting lecturer's own
+  // department never equals the host's, so filtering locally would hide precisely
+  // the people attachments exist to make available. The department code rides along
+  // in the label so a visitor is recognisable at a glance.
   const facultyOptions = (faculty.data ?? [])
-    .filter((f) => f.status === "ACTIVE" && f.programId === programId)
-    .map((f) => ({ value: f.id, label: f.name }));
+    .filter((f) => f.status === "ACTIVE")
+    .map((f) => ({ value: f.id, label: `${f.name} · ${f.departmentCode}` }));
 
   const valid = subjectId !== "" && facultyId !== "";
   const pending = upsert.isPending || del.isPending;
@@ -257,7 +277,7 @@ function SlotDialog({
   function save() {
     if (!valid) return;
     upsert.mutate(
-      { classId, dayOfWeek: day, period, subjectId, facultyId },
+      { classId, dayOfWeek: day, period, subjectId, facultyId, isLab },
       { onSuccess: onClose },
     );
   }
@@ -307,9 +327,35 @@ function SlotDialog({
                   onChange={setFacultyId}
                   options={facultyOptions}
                   placeholder={
-                    facultyOptions.length === 0 ? "No faculty in this program" : "Select faculty"
+                    facultyOptions.length === 0
+                      ? "No faculty in the department that owns this class"
+                      : "Select faculty"
                   }
                 />
+              </div>
+              {/* Lecture vs lab for THIS hour. The subject stays the same either
+                  way — a course's theory and practical hours share one Subject, so
+                  its attendance % and marks cover the whole course. */}
+              <div className="flex flex-col gap-2">
+                <Label>Session type</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant={isLab ? "outline" : "default"}
+                    size="sm"
+                    onClick={() => setIsLab(false)}
+                  >
+                    Lecture
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={isLab ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setIsLab(true)}
+                  >
+                    Lab
+                  </Button>
+                </div>
               </div>
             </>
           )}

@@ -24,11 +24,99 @@ export type Faculty = {
   motherName: string | null;
   status: "ACTIVE" | "INACTIVE"; // = User.status (login enabled?)
   mustChangePassword: boolean; // still on the temp password (never logged in)
-  programId: string | null;
-  programLabel: string | null; // "B.E · CSE"
+  // Who EMPLOYS them — the primary fact, and what the server scopes the list on.
+  // The employing department — the ONLY thing that scopes a staff account. There
+  // is deliberately no program: a faculty member's award granted nothing (scope,
+  // timetable, advisor and cover eligibility all read the department), so the
+  // server no longer returns one.
+  departmentId: string;
+  departmentCode: string; // "CSE", "S&H"
+  departmentName: string;
   roles: string[];
   createdAt: string;
   updatedAt: string;
+};
+
+// --- Bulk credentials -----------------------------------------------------
+// Login slips for staff who have not logged in yet ("Invited"). The server
+// RESETS each password and returns it once — the originals can't be read back
+// (Firebase keeps only hashes). One flat list, unlike students: staff get their
+// slips as a department, not a class.
+export type StaffCredentialResult = {
+  staff: Array<{
+    staffId: string;
+    name: string;
+    email: string;
+    department: string;
+    designation: string;
+    tempPassword: string;
+  }>;
+  total: number;
+  failed: Array<{ staffId: string; reason: string }>;
+};
+
+// --- Bulk import ----------------------------------------------------------
+// Mirrors the student importer's shape (src/features/students/types.ts) so the
+// two flows stay recognisable as the same thing. staffId is the identifier here
+// — faculty log in with EMAIL, so it names the row rather than being a credential.
+export type ImportRowError = { rowNumber: number; staffId: string; reason: string };
+
+// The dry-run response: what the server parsed, before anything is created.
+export type ImportPreview = {
+  rows: Array<{ rowNumber: number; name: string; email: string; staffId: string }>;
+  errors: ImportRowError[];
+  tooManyRows: boolean;
+};
+
+export type ImportOutcome = {
+  rowNumber: number;
+  staffId: string;
+  name: string;
+  email: string;
+  status: "created" | "skipped" | "error";
+  reason?: string;
+  facultyProfileId?: string;
+  tempPassword?: string; // only on created rows — shown once, exportable
+};
+
+// The commit response: per-row provision outcomes + rows that never parsed.
+export type ImportResult = {
+  outcomes: ImportOutcome[];
+  parseErrors: ImportRowError[];
+  tooManyRows: boolean;
+};
+
+// --- Cross-department attachment ------------------------------------------
+// A lecturer LENT to another department for the active semester. Employment
+// doesn't move — `homeDepartment*` is still where they belong — this only widens
+// where they may be timetabled (S&H staff teaching a CSE hour, say).
+//
+// Semester-bound: attachments lapse at rollover and must be renewed, so a
+// one-term loan can't quietly become permanent.
+export type Attachment = {
+  id: string;
+  facultyProfileId: string;
+  // The USER id — what the timetable and cover pickers post as the teacher.
+  userId: string;
+  facultyName: string;
+  facultyStatus: "ACTIVE" | "INACTIVE";
+  staffId: string;
+  designation: string;
+  homeDepartmentId: string;
+  homeDepartmentCode: string;
+  homeDepartmentName: string;
+  hostDepartmentId: string;
+  hostDepartmentCode: string;
+  hostDepartmentName: string;
+  assignedByName: string;
+  reason: string | null;
+  createdAt: string;
+};
+
+export type AttachmentInput = {
+  facultyProfileId: string;
+  departmentId: string; // the HOST department
+  reason?: string | null;
 };
 
 // An assignable RBAC role (from /api/roles) — configurable data, so the picker
@@ -45,7 +133,7 @@ export type Role = {
 export type FacultyInput = {
   email: string;
   displayName: string;
-  programId: string;
+  departmentId: string; // required — the employing department, and the only scope
   roleIds: string[]; // one or more assignable roles
   staffId: string;
   designation: string;
@@ -82,15 +170,18 @@ export type FacultyPatch = {
   fatherName?: string | null;
   motherName?: string | null;
   status?: "ACTIVE" | "INACTIVE";
-  programId?: string; // reassign to a different program (the scoping key)
+  departmentId?: string; // re-employ into a different department (the scoping key)
   roleIds?: string[]; // replace the whole role set (e.g. HOD rotation)
 };
 
 // --- Picker options (this feature's own read-only fetch, to honour the
 // "features don't import each other" rule) --------------------------------
-export type ProgramOption = {
+
+export type DepartmentOption = {
   id: string;
-  label: string; // "B.E · CSE"
-  durationYears: number;
+  name: string; // "Computer Science and Engineering Department"
+  code: string; // "CSE", "S&H"
   isActive: boolean;
+  // 0 = runs no award (S&H), which is what makes the program field disappear.
+  programCount: number;
 };

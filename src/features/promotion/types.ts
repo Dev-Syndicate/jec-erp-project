@@ -12,14 +12,30 @@ export type PromotionStudent = {
 };
 
 export type TargetYear = { id: string; name: string };
-export type TargetClass = { id: string; year: number; section: string };
+
+// A candidate landing class. It carries its OWNING department because that is
+// what promotion changes: the same award's year-2 class belongs to the branch's
+// department, while the year-1 class it came from belongs to S&H.
+export type TargetClass = {
+  id: string;
+  year: number;
+  section: string;
+  departmentId: string;
+  departmentCode: string; // "CSE"
+  departmentName: string; // "Computer Science and Engineering Department"
+};
 
 // The context for promoting one source class (GET /api/promotion?classId=).
 export type PromotionContext = {
   sourceClass: {
     id: string;
     programId: string;
-    programLabel: string; // "B.E · CSE"
+    programLabel: string; // "B.E · CSE" — the award, unchanged by promotion
+    // The department that owns it today. Compare with the chosen TargetClass's to
+    // show the hand-off ("S&H → CSE Department") on a year-1 source.
+    departmentId: string;
+    departmentCode: string; // "S&H"
+    departmentName: string;
     year: number;
     section: string;
     label: string; // "B.E · CSE · II-A"
@@ -29,7 +45,7 @@ export type PromotionContext = {
   activeYear: { id: string; name: string };
   targetYears: TargetYear[]; // years you can promote INTO (not the active one)
   suggestedTargetYearId: string | null; // earliest year starting after the active one
-  targetClasses: TargetClass[]; // year-(N+1) classes in the program (empty if final year)
+  targetClasses: TargetClass[]; // year-(N+1) classes for the same award, whichever department owns them (empty if final year)
   suggestedTargetClassId: string | null; // same section, next year
   roster: PromotionStudent[]; // active students enrolled this year
 };
@@ -43,7 +59,13 @@ export type PromotionInput = {
   studentIds: string[];
 };
 
-export type PromotionResult = { processed: number; mode: PromotionMode };
+export type PromotionResult = {
+  processed: number;
+  mode: PromotionMode;
+  // The department that now owns the promoted roster (PROMOTE only) — absent on
+  // GRADUATE, which moves nobody into a class.
+  departmentId?: string;
+};
 
 // This feature's own read-only class fetch (features don't import each other).
 export type ClassOption = {

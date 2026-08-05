@@ -32,12 +32,13 @@ export async function POST(req: Request) {
 
     const programId = String(form.get("programId") ?? "").trim();
     if (!programId) return Response.json({ error: "Choose a program for the import." }, { status: 400 });
-    authorize(ctx, "manage", "Student", { programId: programId });
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const parsed = parseStudentSheet(buffer);
 
     // Dry run: return the parse result for the preview step, provision nothing.
+    // Only the capability check above gates it — it reads the uploaded file and
+    // touches no records, so there is nothing departmental to scope against yet.
     if (String(form.get("dryRun") ?? "") === "true") {
       return Response.json(parsed);
     }
@@ -55,10 +56,19 @@ export async function POST(req: Request) {
     // active year — so an import lands enrolled, not in limbo.
     const classId = String(form.get("classId") ?? "").trim();
     if (!classId) return Response.json({ error: "Choose a class for the import." }, { status: 400 });
-    const klass = await db.class.findUnique({ where: { id: classId }, select: { programId: true } });
+    const klass = await db.class.findUnique({
+      where: { id: classId },
+      select: { programId: true, departmentId: true },
+    });
+    // The AWARD must match the chosen program...
     if (!klass || klass.programId !== programId) {
       return Response.json({ error: "Select a valid class in this program." }, { status: 400 });
     }
+    // ...but the WRITE is authorized on the class's OWNER, so an S&H HOD can import
+    // the incoming first-year cohort into their own classes. Deliberately checked
+    // here rather than up front: the owning department isn't known until the class
+    // is, and this is the first point that actually writes anything.
+    authorize(ctx, "manage", "Student", { departmentId: klass.departmentId });
     const activeYear = await db.academicYear.findFirst({
       where: { isActive: true },
       select: { id: true },

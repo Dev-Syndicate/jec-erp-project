@@ -193,9 +193,24 @@ async function main() {
   }
   console.log(`  ${data.roles.length} roles, ${data.permissions.length} permissions, ${data.rolePermissions.length} grants`);
 
-  // Classes need departments + programs, which now exist.
+  // Classes need departments + programs, which now exist. Advisors are set in a
+  // second pass, after the staff they point at have been provisioned.
   await copy("classes (without advisors)", data.classes, (r) =>
     dst.class.create({ data: { ...(r as { advisorId?: string | null }), advisorId: null } as never }));
+
+  // Verify rather than trust: a create that fails here is easy to miss in a
+  // 500-row run, and a missing class silently loses its students' placement.
+  // (An earlier run dropped exactly one — the S&H-owned first year, which has no
+  // enrolments yet and so produced no other symptom.)
+  const copiedClasses = await dst.class.count();
+  if (copiedClasses !== data.classes.length) {
+    const got = new Set((await dst.class.findMany({ select: { id: true } })).map((c) => c.id));
+    const lost = data.classes.filter((c) => !got.has(c.id));
+    throw new Error(
+      `Only ${copiedClasses} of ${data.classes.length} classes copied. Missing: ` +
+      lost.map((c) => `Y${c.year}-${c.section}`).join(", "),
+    );
+  }
 
   // --- people: new identity, same row id -----------------------------------
   console.log("\nRe-provisioning identities (Firebase + Neon)…");

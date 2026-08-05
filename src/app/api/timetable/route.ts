@@ -84,6 +84,9 @@ export async function POST(req: Request) {
     const period = body?.period;
     const subjectId = typeof body?.subjectId === "string" ? body.subjectId.trim() : "";
     const facultyId = typeof body?.facultyId === "string" ? body.facultyId.trim() : "";
+    // Optional, defaults false — a practical hour of the same subject. Absent
+    // means "lecture", so every existing caller keeps working unchanged.
+    const isLab = body?.isLab === true;
 
     if (!classId) return Response.json({ error: "Select a class." }, { status: 400 });
     if (!DAYS.includes(dayOfWeek)) return Response.json({ error: "Invalid day." }, { status: 400 });
@@ -132,8 +135,8 @@ export async function POST(req: Request) {
           period,
         },
       },
-      update: { subjectId, facultyId },
-      create: { classId, semesterId: semester.id, dayOfWeek, period, subjectId, facultyId },
+      update: { subjectId, facultyId, isLab },
+      create: { classId, semesterId: semester.id, dayOfWeek, period, subjectId, facultyId, isLab },
       include: SLOT_INCLUDE,
     });
 

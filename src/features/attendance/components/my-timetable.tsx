@@ -107,7 +107,14 @@ export function MyTimetable() {
 function Cell({ slot }: { slot: MyTimetableSlot }) {
   return (
     <div className="flex flex-col gap-0.5 rounded-md bg-primary/5 px-2 py-1.5 ring-1 ring-primary/15">
-      <span className="text-sm font-medium leading-tight">{slot.subjectCode}</span>
+      <span className="flex items-center gap-1.5 text-sm font-medium leading-tight">
+        {slot.subjectCode}
+        {slot.isLab && (
+          <span className="rounded bg-primary/15 px-1 py-px font-mono text-[0.6rem] font-semibold uppercase tracking-wide text-primary">
+            Lab
+          </span>
+        )}
+      </span>
       <span className="text-xs leading-tight text-foreground/80">{slot.subjectName}</span>
       <span className="text-[0.7rem] text-muted-foreground">{slot.classShort}</span>
     </div>

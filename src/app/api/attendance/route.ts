@@ -166,6 +166,9 @@ export async function GET(req: Request) {
         subjectId: s.subjectId,
         subjectCode: s.subject.code,
         subjectName: s.subject.name,
+        // Practical hour of the same subject — the period tabs badge it so a
+        // teacher can tell which of their hours is the lab.
+        isLab: s.isLab,
         facultyId: s.facultyId,
         facultyName: s.faculty.displayName,
         // Whether THIS viewer may mark this period, so the UI locks the hours that

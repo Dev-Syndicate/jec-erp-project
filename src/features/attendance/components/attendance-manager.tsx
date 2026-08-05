@@ -297,6 +297,13 @@ function Loaded({
                   </span>
                   <span className="inline-flex items-center gap-1 text-sm font-medium">
                     {p.subjectCode}
+                    {/* Practical hour of the same subject — a teacher taking both
+                        theory and lab of one course needs to tell them apart. */}
+                    {p.isLab && (
+                      <span className="rounded bg-primary/10 px-1 py-px font-mono text-[0.55rem] font-semibold uppercase tracking-wide text-primary">
+                        Lab
+                      </span>
+                    )}
                     {/* Cover is worth showing even on a locked hour: it says the
                         class IS being taken, just not by its usual teacher. */}
                     {p.coveredBy && (

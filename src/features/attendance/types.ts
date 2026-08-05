@@ -31,6 +31,7 @@ export type DayPeriod = {
   subjectId: string;
   subjectCode: string;
   subjectName: string;
+  isLab: boolean; // a practical hour of the same subject
   facultyId: string;
   facultyName: string;
   // Whether the current viewer may mark this period (server-computed: they are
@@ -117,6 +118,7 @@ export type MyTimetableSlot = {
   period: number;
   subjectCode: string;
   subjectName: string;
+  isLab: boolean; // a practical hour of the same subject
   classId: string;
   classLabel: string; // full: "B.E · CSE · II-A"
   classShort: string; // "II-A"

@@ -17,6 +17,11 @@ export type TimetableSlot = {
   subjectName: string;
   facultyId: string; // = User.id
   facultyName: string;
+  // A PRACTICAL hour of the same subject. On the slot rather than the subject:
+  // the college timetable writes "CS25C08" and "CS25C08 LAB" for one course, so
+  // splitting them into two subjects would halve each one's attendance
+  // percentage and marks.
+  isLab: boolean;
 };
 
 // The whole grid for one class in the active semester, plus the context the UI
@@ -37,6 +42,7 @@ export type SlotInput = {
   period: number;
   subjectId: string;
   facultyId: string;
+  isLab?: boolean; // omitted = a lecture
 };
 
 // --- Picker options (this feature's own read-only fetches) ----------------

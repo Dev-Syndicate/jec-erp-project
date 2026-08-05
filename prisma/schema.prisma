@@ -650,6 +650,16 @@ model TimetableSlot {
   facultyId  String
   faculty    User      @relation(fields: [facultyId], references: [id])
 
+  // Is this hour a LAB session rather than a lecture?
+  //
+  // On the SLOT, not the Subject, because it is a property of the hour: the
+  // college timetable writes "CS25C08" and "CS25C08 LAB" for the SAME course —
+  // Data Structures has both theory and practical hours. A separate lab Subject
+  // would split one course into two, so its attendance percentage and internal
+  // marks would be computed over half the hours each. One Subject per course
+  // code (as the syllabus has it), with the practical hours flagged here.
+  isLab Boolean @default(false)
+
   // Dated one-day covers for this slot (see SlotSubstitution).
   substitutions SlotSubstitution[]
 

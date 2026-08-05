@@ -31,7 +31,7 @@ function firebaseErrorCode(e: unknown): string | null {
   return null;
 }
 
-function errorMessage(e: unknown): string {
+export function errorMessage(e: unknown): string {
   switch (firebaseErrorCode(e)) {
     case "auth/invalid-credential":
     case "auth/invalid-email":
@@ -57,7 +57,7 @@ function errorMessage(e: unknown): string {
 
 // A small labelled slot above each state so the form reads like a step in a
 // verification flow rather than a generic card. Mono eyebrow = system voice.
-function StepHeading({ step, title, hint }: { step: string; title: string; hint: string }) {
+export function StepHeading({ step, title, hint }: { step: string; title: string; hint: string }) {
   return (
     <div className="flex flex-col gap-1.5">
       <span className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-primary">
@@ -72,7 +72,7 @@ function StepHeading({ step, title, hint }: { step: string; title: string; hint:
 }
 
 // A field row: label + control, consistent spacing across all states.
-function Field({
+export function Field({
   label,
   htmlFor,
   children,
@@ -96,7 +96,7 @@ function Field({
 
 // Inline password field with a show/hide toggle — the reset step in particular
 // benefits from letting people confirm what they typed.
-function PasswordInput({
+export function PasswordInput({
   id,
   value,
   onChange,
@@ -137,7 +137,7 @@ function PasswordInput({
   );
 }
 
-function FormError({ children }: { children: React.ReactNode }) {
+export function FormError({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="alert"

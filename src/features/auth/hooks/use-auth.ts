@@ -4,11 +4,13 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  confirmPasswordReset,
   onAuthStateChanged,
   sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signOut,
   updatePassword,
+  verifyPasswordResetCode,
   type User as FirebaseUser,
 } from "firebase/auth";
 import { useEffect, useState } from "react";
@@ -124,8 +126,8 @@ const resetContinueUrl = () => {
       ? (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/+$/, "")
       : window.location.origin;
   // No origin to build on — let Firebase use its own default rather than send a
-  // malformed "/login".
-  return origin ? `${origin}/login` : undefined;
+  // malformed URL.
+  return origin ? `${origin}/reset` : undefined;
 };
 
 export function useSendPasswordReset() {
@@ -147,10 +149,13 @@ export function useSendPasswordReset() {
             continueUrl
               ? {
                   url: continueUrl,
-                  // Firebase handles the reset form itself and then continues to
-                  // `url`. True would require our own /reset page to consume the
-                  // oobCode, which does not exist yet.
-                  handleCodeInApp: false,
+                  // TRUE sends the oobCode straight to our /reset page, which
+                  // consumes it (features/auth/components/reset-password-form).
+                  // False would have Firebase host the form on
+                  // <project>.firebaseapp.com and only THEN redirect — an
+                  // unbranded page on an unfamiliar domain, reached from a
+                  // password email, which is what a phishing link looks like.
+                  handleCodeInApp: true,
                 }
               : undefined,
           );
@@ -177,6 +182,45 @@ export function useSendPasswordReset() {
         if (code !== "auth/user-not-found" && code !== "auth/invalid-email") throw e;
       }
     },
+  });
+}
+
+/**
+ * Check a reset code from the emailed link, before showing the form.
+ *
+ * Doing this FIRST means a stale or already-used link fails on arrival with an
+ * explanation, rather than after someone has typed a new password twice. It
+ * also returns the account's email, so the page can confirm whose password is
+ * being changed — the reassurance Firebase's own page gives.
+ *
+ * Codes are single-use and expire (Firebase's default is an hour).
+ */
+export function useVerifyResetCode(oobCode: string | null) {
+  return useQuery({
+    queryKey: ["auth", "reset-code", oobCode],
+    enabled: !!oobCode,
+    // A reset code is single-use: retrying a rejected one cannot succeed, and
+    // refetching a valid one on focus would be a wasted round-trip.
+    retry: false,
+    refetchOnWindowFocus: false,
+    staleTime: Infinity,
+    queryFn: () => verifyPasswordResetCode(auth, oobCode!),
+  });
+}
+
+/**
+ * Apply a new password using the emailed reset code.
+ *
+ * Note this does NOT sign the user in — Firebase invalidates the code and
+ * leaves them signed out, so the page sends them to /login afterwards. It also
+ * cannot clear `mustChangePassword` in Neon the way useChangePassword does,
+ * because that needs an authenticated session; the flag clears on their next
+ * sign-in instead (see the change-password step).
+ */
+export function useConfirmPasswordReset() {
+  return useMutation({
+    mutationFn: ({ oobCode, newPassword }: { oobCode: string; newPassword: string }) =>
+      confirmPasswordReset(auth, oobCode, newPassword),
   });
 }
 

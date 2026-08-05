@@ -49,3 +49,4 @@ next-env.d.ts
 /*.xlsx
 # One-time passwords written by the seeding scripts. Hand over, then delete.
 /faculty-passwords*.csv
+/production-passwords*.csv

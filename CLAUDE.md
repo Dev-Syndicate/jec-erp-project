@@ -210,5 +210,17 @@ not carry over. After bootstrap, all further intake goes through the UI importer
 **Env:** copy [.env.example](.env.example) → `.env` (it documents every variable). Groups:
 `DATABASE_URL` (pooled) + `DIRECT_URL` (unpooled) for Neon; `NEXT_PUBLIC_FIREBASE_*` (public web
 config) and `FIREBASE_ADMIN_*` (server-side secret — private key on one line with literal `\n`);
-`SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_TEMP_PASSWORD` / `SUPER_ADMIN_NAME` (seed only); and
-`CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` (student doc uploads).
+`SUPER_ADMIN_EMAIL` / `SUPER_ADMIN_TEMP_PASSWORD` / `SUPER_ADMIN_NAME` (seed only);
+`CLOUDINARY_CLOUD_NAME` / `CLOUDINARY_API_KEY` / `CLOUDINARY_API_SECRET` (student doc uploads);
+and `NEXT_PUBLIC_SITE_URL` (where a password-reset link returns to — only a fallback, since
+the browser reads its own origin).
+
+⚠️ **Password-reset links and Firebase's authorised domains.** The continue URL's host must be
+listed under Firebase Auth → Settings → Authorised domains or the send is REJECTED. `localhost`
+is allowlisted by default, so a broken production domain looks fine locally —
+`jec-erp.vercel.app` was not allowlisted when this was written. The code falls back to a plain
+send (Firebase's own hosted page) rather than failing, so account recovery keeps working; a
+console warning names the fix. Reset mail currently lands in Gmail's **spam**: it is sent from
+`noreply@<project>.firebaseapp.com`, which has no DKIM/SPF alignment to `jeppiaarcollege.org`.
+Fixing that means setting a custom sender domain in the Console — deferred, so treat the
+Credentials button (per-class login slips) as the primary way to get people their passwords.

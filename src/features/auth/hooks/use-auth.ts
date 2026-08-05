@@ -114,13 +114,19 @@ type ResetInput =
 // phishing link, and it is one of the reasons Gmail files these as spam.
 // Returning them to our own /login keeps the whole flow on one domain.
 //
-// Derived from the browser rather than hardcoded so previews and localhost work
-// unchanged; the constant is only the server-render fallback. NOTE: every host
-// used here must be listed under Firebase Auth → Settings → Authorised domains,
-// or Firebase rejects the call.
-const PRODUCTION_ORIGIN = "https://jec-erp.vercel.app";
-const resetContinueUrl = () =>
-  `${typeof window === "undefined" ? PRODUCTION_ORIGIN : window.location.origin}/login`;
+// Read from the BROWSER first so previews and localhost work with no config,
+// falling back to NEXT_PUBLIC_SITE_URL when there is no window. NOTE: whichever
+// host ends up here must be listed under Firebase Auth → Settings → Authorised
+// domains, or Firebase rejects the call (handled below).
+const resetContinueUrl = () => {
+  const origin =
+    typeof window === "undefined"
+      ? (process.env.NEXT_PUBLIC_SITE_URL ?? "").replace(/\/+$/, "")
+      : window.location.origin;
+  // No origin to build on — let Firebase use its own default rather than send a
+  // malformed "/login".
+  return origin ? `${origin}/login` : undefined;
+};
 
 export function useSendPasswordReset() {
   return useMutation({
@@ -130,15 +136,24 @@ export function useSendPasswordReset() {
           ? await resolveRegisterToEmail(input.registerNumber).catch(() => null)
           : input.email;
       if (!email) return; // unknown register number — stay generic, don't leak
+      const continueUrl = resetContinueUrl();
       try {
         try {
-          await sendPasswordResetEmail(auth, email, {
-            url: resetContinueUrl(),
-            // Firebase handles the reset form itself and then continues to `url`.
-            // True would require our own /reset page to consume the oobCode,
-            // which does not exist yet.
-            handleCodeInApp: false,
-          });
+          await sendPasswordResetEmail(
+            auth,
+            email,
+            // Omit the settings object entirely when there is no origin to
+            // return to — `{ url: undefined }` is rejected by Firebase.
+            continueUrl
+              ? {
+                  url: continueUrl,
+                  // Firebase handles the reset form itself and then continues to
+                  // `url`. True would require our own /reset page to consume the
+                  // oobCode, which does not exist yet.
+                  handleCodeInApp: false,
+                }
+              : undefined,
+          );
         } catch (e) {
           // Firebase rejects a continue URL whose host is not allowlisted under
           // Auth → Settings → Authorised domains. Falling back to the plain send
@@ -150,8 +165,8 @@ export function useSendPasswordReset() {
             e && typeof e === "object" && "code" in e && typeof e.code === "string" ? e.code : "";
           if (code !== "auth/unauthorized-continue-uri" && code !== "auth/invalid-continue-uri") throw e;
           console.warn(
-            `[auth] ${window.location.origin} is not an authorised Firebase domain — ` +
-              `password-reset links will land on Firebase's hosted page. Add it under ` +
+            `[auth] ${continueUrl} is not an authorised Firebase domain — password-reset ` +
+              `links will land on Firebase's hosted page instead. Add the host under ` +
               `Auth → Settings → Authorised domains.`,
           );
           await sendPasswordResetEmail(auth, email);

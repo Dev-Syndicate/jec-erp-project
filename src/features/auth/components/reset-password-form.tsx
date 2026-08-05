@@ -54,9 +54,13 @@ function codeMessage(e: unknown): string {
 export function ResetPasswordForm() {
   const router = useRouter();
   const params = useSearchParams();
-  // Firebase names these; `mode` is also present but this route only ever
-  // handles resetPassword.
   const oobCode = params.get("oobCode");
+  // A CUSTOM ACTION URL routes every auth email here, not just this one:
+  // verifyEmail, recoverEmail and the MFA notices all arrive with their own
+  // `mode`. Only resetPassword is handled, so anything else must say so rather
+  // than silently presenting a password form for the wrong operation.
+  const mode = params.get("mode");
+  const wrongMode = mode !== null && mode !== "resetPassword";
 
   const verify = useVerifyResetCode(oobCode);
   const confirm = useConfirmPasswordReset();
@@ -67,6 +71,22 @@ export function ResetPasswordForm() {
 
   const tooShort = password.length > 0 && password.length < 8;
   const mismatch = confirmValue.length > 0 && password !== confirmValue;
+
+  // --- an auth email we don't handle ---------------------------------------
+  if (wrongMode) {
+    return (
+      <div className="flex w-full flex-col gap-7">
+        <StepHeading
+          step="Access"
+          title="This link isn’t a password reset"
+          hint="It looks like a different kind of account email. Sign in, or ask the ERP administrator."
+        />
+        <Button size="lg" className="h-11" render={<Link href="/login" />}>
+          Back to sign in
+        </Button>
+      </div>
+    );
+  }
 
   // --- no code in the URL --------------------------------------------------
   if (!oobCode) {

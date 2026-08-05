@@ -166,11 +166,31 @@ export async function GET(req: Request) {
             },
           ],
         },
-        include: FACULTY_INCLUDE,
+        // A DELIBERATELY SLIM SELECT, not FACULTY_INCLUDE. The attachment arm above
+        // returns people employed by ANOTHER department — the caller has authority
+        // over the host department, not over those staff — so returning the HR DTO
+        // here would hand a CSE HOD an S&H lecturer's date of birth, marital status,
+        // parents' names and personal phone. These five fields are exactly what the
+        // two consumers map (the timetable and cover pickers); nothing more is owed.
+        select: {
+          userId: true,
+          staffId: true,
+          departmentId: true,
+          department: { select: { code: true } },
+          user: { select: { displayName: true, status: true } },
+        },
         orderBy: { staffId: "asc" },
       });
 
-      return Response.json(faculty.map(toFacultyDto));
+      return Response.json(
+        faculty.map((f) => ({
+          userId: f.userId,
+          displayName: f.user.displayName,
+          departmentId: f.departmentId,
+          departmentCode: f.department.code,
+          status: f.user.status,
+        })),
+      );
     }
 
     // Super Admin: all faculty. Scoped roles: only their own DEPARTMENT — staff are

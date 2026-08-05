@@ -39,10 +39,27 @@ export async function GET(req: Request) {
     const ctx = await authenticate(req);
     authorize(ctx, "manage", "Subject");
 
-    // Super Admin: all subjects. Scoped roles: only their own program.
+    // Super Admin: all subjects. Scoped roles: two sources, because a department
+    // TEACHES more awards than it RUNS.
+    //
+    //   1. The awards their own department runs (the ordinary case). A department
+    //      may run several — Civil running B.E-CIVIL and B.E-STRUCT.
+    //   2. The awards of every class their department OWNS. This is what makes
+    //      Science & Humanities work: S&H runs no award at all, but owns every
+    //      first-year class, so its subjects are other departments' B.E-CSE /
+    //      B.E-ECE ones. Without this arm an S&H HOD sees ZERO subjects and can't
+    //      build the first-year timetable POST /api/timetable would happily accept.
+    //
+    // (Was `ctx.user.programId`, which is null for every staff account since the
+    // department model landed — an empty list for every HOD.)
     const where = ctx.isInstitutionScoped
       ? {}
-      : { programId: ctx.user.programId ?? "__none__" };
+      : {
+          OR: [
+            { programId: { in: ctx.ownProgramIds } },
+            { program: { classes: { some: { departmentId: ctx.departmentId ?? "__none__" } } } },
+          ],
+        };
 
     const subjects = await db.subject.findMany({
       relationLoadStrategy: "join",

@@ -223,6 +223,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
             data: validRoleIds.map((roleId) => ({ userId: existing.user.id, roleId })),
           });
         }
+        // Moving someone INTO a department they were only visiting makes that
+        // attachment meaningless — it would read as a live "CSE → CSE" loan in the
+        // admin list, the exact row POST /api/faculty/attachments refuses to
+        // create. Drop it in the same transaction so the invariant can't be walked
+        // around through the back door.
+        if (departmentId !== undefined) {
+          await tx.facultyAttachment.deleteMany({ where: { facultyId: id, departmentId } });
+        }
         return tx.facultyProfile.update({
           where: { id },
           data: {

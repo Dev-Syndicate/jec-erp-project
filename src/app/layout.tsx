@@ -13,9 +13,16 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// icon.png / apple-icon.png sit beside this file, so Next picks them up by
+// convention and emits the <link> tags — they are the college crest, derived
+// from public/erplogo.png. Declared here as well so the intent is greppable.
 export const metadata: Metadata = {
   title: "JEC ERP",
   description: "Jeppiaar Engineering College ERP",
+  icons: {
+    icon: "/icon.png",
+    apple: "/apple-icon.png",
+  },
 };
 
 export default function RootLayout({

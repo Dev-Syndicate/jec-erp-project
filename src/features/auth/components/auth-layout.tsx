@@ -5,10 +5,12 @@
 // and must not drift apart, and a second copy of the panel would be the kind of
 // duplication that goes stale silently.
 
+import Image from "next/image";
+
 // The attendance grid is the page's signature: a faint ledger of period cells,
 // a few marked "present", rendered entirely in brand + status tokens so it
 // re-skins with --brand-hue. It's what this ERP actually runs — the college's
-// day, one section at a time — so it stands in for the brand without a logo.
+// day, one section at a time. The college crest sits in the lockup above it.
 // Deterministic pattern (no randomness) keeps SSR and client markup identical.
 const ROWS = 7;
 const COLS = 6;
@@ -68,9 +70,14 @@ function BrandPanel() {
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,color-mix(in_oklch,var(--panel-ink)_12%,transparent),transparent_55%)]" />
 
       <div className="relative flex items-center gap-3">
-        <span className="grid size-9 place-items-center rounded-md bg-primary-foreground/15 font-heading text-sm font-semibold ring-1 ring-primary-foreground/25">
-          JE
-        </span>
+        <Image
+          src="/erplogo-mark.png"
+          alt=""
+          width={36}
+          height={36}
+          className="size-9 shrink-0 object-contain"
+          priority
+        />
         <div className="leading-tight">
           <p className="font-heading text-sm font-semibold">Jeppiaar Engineering College</p>
           <p className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-primary-foreground/70">
@@ -110,9 +117,14 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
         <div className="login-rise flex w-full max-w-sm flex-col gap-10">
           {/* Compact brand lockup for the narrow-screen form-only view. */}
           <div className="flex items-center gap-2.5 lg:hidden">
-            <span className="grid size-8 place-items-center rounded-md bg-primary font-heading text-xs font-semibold text-primary-foreground">
-              JE
-            </span>
+            <Image
+              src="/erplogo-mark.png"
+              alt=""
+              width={32}
+              height={32}
+              className="size-8 shrink-0 object-contain"
+              priority
+            />
             <span className="font-heading text-sm font-semibold text-foreground">JEC ERP</span>
           </div>
 

@@ -5,6 +5,7 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -339,9 +340,18 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <Sidebar collapsible="icon">
         <SidebarHeader>
           <div className="flex items-center gap-2.5 px-1 py-1.5">
-            <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary font-heading text-xs font-semibold text-primary-foreground">
-              JE
-            </span>
+            {/* The college crest. No brand fill behind it — the mark is gold on
+                transparent and carries its own colour, so a --primary tile would
+                fight it. size-8 is load-bearing: it keeps the lockup aligned with
+                the nav icons when the rail collapses to icon-only. */}
+            <Image
+              src="/erplogo-mark.png"
+              alt=""
+              width={32}
+              height={32}
+              className="size-8 shrink-0 object-contain"
+              priority
+            />
             <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
               <span className="font-heading text-sm font-semibold text-sidebar-foreground">
                 JEC ERP

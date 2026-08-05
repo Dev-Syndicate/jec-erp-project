@@ -10,8 +10,10 @@ import { Lock, Save, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/marks/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import {
   ASSESSMENTS,
   type Assessment,
@@ -26,21 +28,6 @@ import {
   useMarksSheet,
   useSaveMarks,
 } from "@/features/marks/hooks/use-marks";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -321,11 +308,12 @@ function MarkGrid({ sheet }: { sheet: MarksSheet }) {
           <div className="relative w-56">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              size="lg"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search…"
               aria-label="Search students"
-              className="h-10! pl-9"
+              className="pl-9"
             />
           </div>
         </div>

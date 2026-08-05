@@ -233,7 +233,10 @@ function ModeToggle({ mode, onChange }: { mode: SignInMode; onChange: (m: SignIn
             onClick={() => onChange(t.id)}
             className={`rounded-md px-3 py-1 font-mono text-[0.7rem] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
               active
-                ? "bg-background text-foreground shadow-sm"
+                ? // bg-card, not bg-background: the track sits on the page, and
+                  // the canvas is now off-white — an active pill filled with the
+                  // canvas colour would vanish into it.
+                  "bg-card text-foreground shadow-sm"
                 : "text-muted-foreground hover:text-foreground"
             }`}
           >

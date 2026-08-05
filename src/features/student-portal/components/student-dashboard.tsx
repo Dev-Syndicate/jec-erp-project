@@ -9,9 +9,14 @@
 
 import Link from "next/link";
 import { CalendarPlus, ChevronRight } from "lucide-react";
+import { Bar, BarChart, Cell, Pie, PieChart, ReferenceLine, XAxis, YAxis } from "recharts";
 
+import { AXIS_PROPS, ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
 import { useStudentOverview } from "@/features/student-portal/hooks/use-portal";
 import type {
+  OverallAttendance,
   PortalSlot,
   StudentOverview,
   SubjectAttendance,
@@ -47,26 +52,46 @@ function barTone(pct: number | null): string {
   return "bg-destructive";
 }
 
+/**
+ * The same three bands as barTone, as a CSS colour rather than a class — SVG
+ * fills cannot take a Tailwind class, and Recharts needs a value it can put on
+ * a `fill` attribute.
+ *
+ * ⚠️ The 75 / 65 boundaries here MUST track pctTone and barTone above. They are
+ * a college eligibility rule, not a palette choice: a student reading 74% must
+ * see the same "short" signal in the number, the meter and the chart. Deliberately
+ * NOT unified with attendance-report.tsx's pctTone, which bands against a
+ * user-CHOSEN threshold — merging them would silently change which students look
+ * at risk on a compliance screen.
+ */
+function toneVar(pct: number | null): string {
+  if (pct === null) return "var(--muted-foreground)";
+  if (pct >= THRESHOLD) return "var(--status-present)";
+  if (pct >= 65) return "var(--status-od)";
+  return "var(--status-absent)";
+}
+
 export function StudentDashboard() {
   const { data, isPending, isError, error } = useStudentOverview();
 
   if (isPending) {
+    // A skeleton rather than a spinner here, because this screen's shape is
+    // known and stable — hero, then today's strip. Matching the real layout
+    // means the content lands in place instead of pushing the page around.
     return (
-      <main className="mx-auto w-full max-w-5xl px-6 py-10">
-        <div className="h-40 animate-pulse rounded-2xl bg-muted/50" />
-      </main>
+      <PageShell width="narrow">
+        <div className="h-40 animate-pulse rounded-2xl bg-muted/60" />
+        <div className="h-28 animate-pulse rounded-2xl bg-muted/40" />
+      </PageShell>
     );
   }
   if (isError) {
     return (
-      <main className="mx-auto w-full max-w-5xl px-6 py-10">
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-        >
+      <PageShell width="narrow">
+        <FormError>
           {error instanceof Error ? error.message : "Couldn't load your dashboard."}
-        </p>
-      </main>
+        </FormError>
+      </PageShell>
     );
   }
 
@@ -74,10 +99,10 @@ export function StudentDashboard() {
   const firstName = o.profile.displayName.split(" ")[0];
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-8 md:py-10">
+    <PageShell width="narrow" className="gap-8">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-col gap-1.5">
-          <span className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-primary">
+          <span className="eyebrow text-primary">
             {o.profile.registerNumber}
             {o.profile.classLabel ? ` · ${o.profile.programLabel} · ${o.profile.classLabel}` : ""}
             {o.semesterLabel ? ` · ${o.semesterLabel}` : ""}
@@ -115,7 +140,7 @@ export function StudentDashboard() {
           <WeeklyTimetable slots={o.timetable} />
         </>
       )}
-    </main>
+    </PageShell>
   );
 }
 
@@ -150,16 +175,23 @@ function AttendanceHero({
         <span className={`text-sm font-medium ${pctTone(pct)}`}>{verdict.label}</span>
       </div>
 
-      <div className="flex items-end gap-3">
-        <span className={`font-heading text-6xl font-semibold leading-none ${pctTone(pct)}`}>
-          {hasData ? pct : "—"}
-          {hasData && <span className="text-3xl">%</span>}
-        </span>
-        {hasData && (
-          <span className="pb-1 text-xs text-muted-foreground">
-            {overall!.attended} / {overall!.total} days
+      <div className="flex items-center justify-between gap-4">
+        <div className="flex items-end gap-3">
+          <span className={`font-heading text-6xl font-semibold leading-none ${pctTone(pct)}`}>
+            {hasData ? pct : "—"}
+            {hasData && <span className="text-3xl">%</span>}
           </span>
-        )}
+          {hasData && (
+            <span className="pb-1 text-xs text-muted-foreground">
+              {overall!.attended} / {overall!.total} days
+            </span>
+          )}
+        </div>
+
+        {/* The percentage says how much; the donut says what of. A student on
+            72% wants to know whether the gap is absences or approved OD, and
+            those are different conversations with their class teacher. */}
+        {hasData && <AttendanceDonut overall={overall!} />}
       </div>
 
       {/* Meter with the 75% threshold notch. */}
@@ -178,6 +210,61 @@ function AttendanceHero({
         <p className="mt-2 text-xs text-muted-foreground">{verdict.sub}</p>
       </div>
     </section>
+  );
+}
+
+// The four statuses as a ring. Colours are the FIXED --status-* tokens, not the
+// brand ramp: present/absent/OD/excused encode meaning, so they stay green, red,
+// amber and violet whatever --brand-hue becomes.
+//
+// Zero-count slices are filtered out — Recharts would otherwise emit an
+// invisible path that the tooltip can still land on, giving "OD: 0" on hover
+// over nothing.
+const DONUT_SLICES = [
+  { key: "present", label: "Present", color: "var(--status-present)" },
+  { key: "absent", label: "Absent", color: "var(--status-absent)" },
+  { key: "od", label: "On duty", color: "var(--status-od)" },
+  { key: "excused", label: "Excused", color: "var(--status-excused)" },
+] as const;
+
+function AttendanceDonut({ overall }: { overall: NonNullable<OverallAttendance> }) {
+  const data = DONUT_SLICES.map((s) => ({
+    name: s.label,
+    value: overall[s.key],
+    color: s.color,
+  })).filter((d) => d.value > 0);
+
+  if (data.length === 0) return null;
+
+  return (
+    <ChartContainer
+      height={104}
+      className="hidden w-28 shrink-0 sm:block"
+      // The list below the hero carries the same numbers in text, so this is a
+      // summary rather than the only route to the data.
+      label={`Attendance breakdown: ${data.map((d) => `${d.name} ${d.value}`).join(", ")} days`}
+    >
+      <PieChart>
+        <Pie
+          data={data}
+          dataKey="value"
+          nameKey="name"
+          innerRadius="62%"
+          outerRadius="100%"
+          paddingAngle={2}
+          stroke="none"
+          isAnimationActive={false}
+        >
+          {data.map((d) => (
+            <Cell key={d.name} fill={d.color} />
+          ))}
+        </Pie>
+        {/* Params are left to be inferred from Recharts' Formatter type — it
+            widens value to `ValueType | undefined`, so annotating them `number`
+            narrows below what the library can actually pass. */}
+        <ChartTooltip formatter={(v, n) => [`${v} days`, n]} />
+      </PieChart>
+    </ChartContainer>
   );
 }
 
@@ -246,11 +333,69 @@ function SectionHeader({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
+// Subject attendance against the eligibility line. This is the chart that earns
+// its place on the page: the list below gives exact figures, but "which of my
+// subjects is below 75%" is a comparison, and a row of bars against a single
+// dashed rule answers it in one glance where eight percentages do not.
+function SubjectAttendanceChart({ subjects }: { subjects: SubjectAttendance[] }) {
+  const data = subjects
+    .filter((s) => s.pct !== null)
+    .map((s) => ({ code: s.code, pct: s.pct as number, name: s.name }));
+
+  // One or two subjects is a list, not a comparison — the chart would be noise.
+  if (data.length < 3) return null;
+
+  return (
+    <ChartContainer
+      height={Math.max(140, data.length * 28)}
+      label={`Attendance percentage by subject, against the ${THRESHOLD}% eligibility line`}
+      className="rounded-xl bg-card p-4 ring-1 ring-foreground/10"
+    >
+      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 4 }}>
+        <XAxis type="number" domain={[0, 100]} unit="%" {...AXIS_PROPS} />
+        <YAxis
+          type="category"
+          dataKey="code"
+          width={64}
+          {...AXIS_PROPS}
+          tick={{ ...AXIS_PROPS.tick, fontFamily: "var(--font-mono)" }}
+        />
+        <ReferenceLine
+          x={THRESHOLD}
+          stroke="var(--foreground)"
+          strokeOpacity={0.45}
+          strokeDasharray="4 4"
+          label={{
+            value: `${THRESHOLD}%`,
+            position: "top",
+            fill: "var(--muted-foreground)",
+            fontSize: 10,
+          }}
+        />
+        <Bar dataKey="pct" radius={[0, 4, 4, 0]} barSize={12} isAnimationActive={false}>
+          {data.map((d) => (
+            // Per-bar colour, so a subject below the line reads as short at a
+            // glance rather than needing the axis to be read.
+            <Cell key={d.code} fill={toneVar(d.pct)} />
+          ))}
+        </Bar>
+        <ChartTooltip
+          formatter={(v) => [`${v}%`, "Attendance"]}
+          // The axis shows the subject CODE (it has to fit in 64px); the tooltip
+          // is where there is room for the full name.
+          labelFormatter={(code) => data.find((d) => d.code === code)?.name ?? String(code)}
+        />
+      </BarChart>
+    </ChartContainer>
+  );
+}
+
 function SubjectAttendanceList({ subjects }: { subjects: SubjectAttendance[] }) {
   if (subjects.length === 0) return null;
   return (
     <section className="flex flex-col gap-3">
       <SectionHeader title="Attendance by subject" hint="Present / total periods" />
+      <SubjectAttendanceChart subjects={subjects} />
       <div className="grid gap-2 sm:grid-cols-2">
         {subjects.map((s) => (
           <div

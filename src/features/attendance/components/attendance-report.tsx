@@ -13,25 +13,12 @@ import { useState } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/attendance/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { AttendanceReport, StudentReport, SubjectMeta } from "@/features/attendance/types";
 import { useAttendanceReport, useClassOptions } from "@/features/attendance/hooks/use-attendance";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 // Fixed (non-brand) tone for a percentage vs the threshold — attendance % encodes
 // meaning. Null (nothing marked) reads muted.
@@ -114,12 +101,13 @@ export function AttendanceReport() {
           <span className="text-xs font-medium text-muted-foreground">Defaulter below</span>
           <div className="flex items-center gap-1.5">
             <Input
+              size="lg"
               type="number"
               min={0}
               max={100}
               value={threshold}
               onChange={(e) => setThreshold(Math.max(0, Math.min(100, Number(e.target.value) || 0)))}
-              className="h-10! w-20"
+              className="w-20"
               aria-label="Defaulter threshold percent"
             />
             <span className="text-sm text-muted-foreground">%</span>

@@ -3,6 +3,8 @@
 // Read-only reference; a working Saturday borrows one of these weekday grids.
 "use client";
 
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
 import {
   WEEKDAYS,
@@ -10,21 +12,6 @@ import {
   type Weekday,
 } from "@/features/attendance/types";
 import { useMyTimetable } from "@/features/attendance/hooks/use-attendance";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 const WEEKDAY_LABEL: Record<Weekday, string> = {
   MON: "Monday",

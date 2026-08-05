@@ -41,6 +41,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { Attachment } from "@/features/faculty/types";
 import {
@@ -50,11 +51,6 @@ import {
   useDepartmentOptions,
   useFaculty,
 } from "@/features/faculty/hooks/use-faculty";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 
 export function AttachmentManager() {
   const { data: attachments, isPending, isError, error } = useAttachments();
@@ -231,7 +227,7 @@ function AttachDialog({ onClose }: { onClose: () => void }) {
               onValueChange={(v) => setFacultyProfileId((v as string) ?? "")}
               disabled={staff.length === 0}
             >
-              <SelectTrigger id="attachment-faculty" className="h-10! w-full">
+              <SelectTrigger size="lg" id="attachment-faculty" className="w-full">
                 <SelectValue placeholder={faculty.isPending ? "Loading…" : "Select a lecturer"}>
                   {(v) =>
                     facultyOptions.find((o) => o.value === v)?.label ?? "Select a lecturer"
@@ -255,7 +251,7 @@ function AttachDialog({ onClose }: { onClose: () => void }) {
               onValueChange={(v) => setDepartmentId((v as string) ?? "")}
               disabled={facultyProfileId === ""}
             >
-              <SelectTrigger id="attachment-department" className="h-10! w-full">
+              <SelectTrigger size="lg" id="attachment-department" className="w-full">
                 <SelectValue
                   placeholder={
                     facultyProfileId === "" ? "Choose a lecturer first" : "Select a department"
@@ -282,11 +278,11 @@ function AttachDialog({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col gap-2">
             <Label htmlFor="attachment-reason">Reason (optional)</Label>
             <Input
+              size="lg"
               id="attachment-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Teaching first-year Maths"
-              className="h-10!"
             />
           </div>
 

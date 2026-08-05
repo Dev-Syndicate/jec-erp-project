@@ -15,8 +15,10 @@ import { CalendarCheck2, Check, Lock, Search, UserRoundCheck } from "lucide-reac
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/attendance/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import { STATUS_META } from "@/features/attendance/components/status-meta";
 import {
   STATUSES,
@@ -31,10 +33,6 @@ import {
   useRoster,
   useSaveAttendance,
 } from "@/features/attendance/hooks/use-attendance";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
 
 const WEEKDAY_LABEL: Record<Weekday, string> = {
   MON: "Monday",
@@ -56,17 +54,6 @@ function todayStr(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
 }
 
 export function AttendanceManager() {

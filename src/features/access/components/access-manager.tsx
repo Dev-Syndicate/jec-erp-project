@@ -19,8 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/access/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { Permission, Role, Scope } from "@/features/access/types";
 import {
   useCreateRole,
@@ -30,27 +32,12 @@ import {
   useUpdateRole,
 } from "@/features/access/hooks/use-access";
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
 const SCOPE_OPTIONS = [
   { value: "PROGRAM", label: "Program — own program only" },
   { value: "INSTITUTION", label: "Institution — all programs" },
 ];
 const scopeLabel = (s: Scope) => (s === "INSTITUTION" ? "Institution" : "Program");
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 export function AccessManager() {
   const roles = useRoles();
@@ -263,10 +250,10 @@ function RoleEditorDialog({
             <div className="flex flex-col gap-2">
               <Label htmlFor="r-name">Name</Label>
               <Input
+                size="lg"
                 id="r-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-10!"
                 disabled={isSystem}
                 autoFocus={!isEdit}
                 required
@@ -286,7 +273,7 @@ function RoleEditorDialog({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="r-desc">Description (optional)</Label>
-            <Input id="r-desc" value={description} onChange={(e) => setDescription(e.target.value)} className="h-10!" />
+            <Input size="lg" id="r-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
 
           <div className="flex flex-col gap-2">

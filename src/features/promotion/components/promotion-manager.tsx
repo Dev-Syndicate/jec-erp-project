@@ -9,8 +9,10 @@ import { useState } from "react";
 import { Check, GraduationCap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/promotion/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { PromotionContext, PromotionResult } from "@/features/promotion/types";
 import {
   useClassOptions,
@@ -20,21 +22,6 @@ import {
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 const roman = (n: number) => ROMAN[n] ?? String(n);
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 function Note({ children }: { children: React.ReactNode }) {
   return (

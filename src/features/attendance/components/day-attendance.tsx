@@ -9,8 +9,10 @@ import { useState } from "react";
 import { CalendarCheck2, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/attendance/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import { STATUS_META } from "@/features/attendance/components/status-meta";
 import { STATUSES, type AttendanceStatus, type DayView } from "@/features/attendance/types";
 import {
@@ -18,21 +20,6 @@ import {
   useDayAttendance,
   useSaveDayAttendance,
 } from "@/features/attendance/hooks/use-attendance";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (

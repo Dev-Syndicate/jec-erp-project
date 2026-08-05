@@ -19,8 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import type { ImportOutcome, ImportRowError } from "@/features/students/types";
-import { FormSelect } from "@/features/students/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import { ClassCascade } from "@/features/students/components/class-cascade";
 import {
   useClassOptions,
@@ -28,22 +30,6 @@ import {
   useImportPreview,
   useProgramOptions,
 } from "@/features/students/hooks/use-students";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 // Escape a CSV cell (wrap + double any quotes) so names/emails can't break it.
 const csvCell = (v: string) => `"${v.replace(/"/g, '""')}"`;
@@ -180,11 +166,12 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
                   </Button>
                 </div>
                 <Input
+                  size="lg"
                   id="import-file"
                   type="file"
                   accept=".csv,.xlsx,.xls"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  className="h-10! pt-2"
+                  className="pt-2"
                 />
                 {file && (
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">

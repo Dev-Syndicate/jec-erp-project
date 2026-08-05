@@ -33,6 +33,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { ProgramOption, Subject } from "@/features/subjects/types";
 import {
@@ -42,11 +43,6 @@ import {
   useSubjects,
   useUpdateSubject,
 } from "@/features/subjects/hooks/use-subjects";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 
 const kindLabel = (k: "ODD" | "EVEN") => (k === "ODD" ? "Odd" : "Even");
 
@@ -103,7 +99,7 @@ function FormSelect({
   const label = (v: unknown) => options.find((o) => o.value === v)?.label ?? placeholder;
   return (
     <Select value={value} onValueChange={(v) => onChange((v as string) ?? "")} disabled={disabled}>
-      <SelectTrigger id={id} className="h-10! w-full">
+      <SelectTrigger size="lg" id={id} className="w-full">
         <SelectValue placeholder={placeholder}>{label}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -396,7 +392,7 @@ function SubjectFormDialog({
           <div className="flex flex-col gap-2">
             <Label htmlFor="subj-program">Program</Label>
             {isEdit ? (
-              <Input value={subject.programLabel} disabled className="h-10!" />
+              <Input size="lg" value={subject.programLabel} disabled />
             ) : (
               <FormSelect
                 id="subj-program"
@@ -424,11 +420,11 @@ function SubjectFormDialog({
           <div className="grid grid-cols-[1fr_2fr] gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="subj-code">Code</Label>
-              <Input id="subj-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="CS3401" className="h-10!" required />
+              <Input size="lg" id="subj-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="CS3401" required />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="subj-name">Name</Label>
-              <Input id="subj-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Algorithms" className="h-10!" required />
+              <Input size="lg" id="subj-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Algorithms" required />
             </div>
           </div>
           {mutationError && (

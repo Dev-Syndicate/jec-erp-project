@@ -20,13 +20,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { errorMessage } from "@/lib/errors";
 import type { StaffCredentialResult } from "@/features/faculty/types";
 import { useStaffCredentials } from "@/features/faculty/hooks/use-faculty";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 
 const csvCell = (v: string) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 

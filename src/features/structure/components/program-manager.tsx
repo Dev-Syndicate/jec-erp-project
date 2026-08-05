@@ -5,7 +5,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Power, Trash2 } from "lucide-react";
+import { Layers, Plus, Power, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -32,7 +32,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { FormError } from "@/components/form-error";
+import { LoadingState } from "@/components/loading-state";
+import { ActiveBadge } from "@/components/status-badge";
+import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/app/(app)/page-header";
+import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import type { Program } from "@/features/structure/types";
 import {
   useCreateProgram,
@@ -45,25 +51,6 @@ import { useBranches } from "@/features/structure/hooks/use-branches";
 import { useDepartments } from "@/features/structure/hooks/use-departments";
 import { DepartmentSelect } from "@/components/department-select";
 
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
-
-// Fixed (non-brand) status pill — active vs deactivated.
-function StatusPill({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider ${
-        active ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
-      }`}
-    >
-      <span className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-muted-foreground"}`} />
-      {active ? "Active" : "Inactive"}
-    </span>
-  );
-}
-
 export function ProgramManager() {
   const { data: programs, isPending, isError, error } = usePrograms();
 
@@ -71,30 +58,40 @@ export function ProgramManager() {
   const [deleting, setDeleting] = useState<Program | null>(null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <Button onClick={() => setCreating(true)} data-icon="inline-start">
+            <Plus />
+            New program
+          </Button>
+        }
+      >
         <PageHeader
           eyebrow="Structure · Programs"
           title="Programs"
           description="A program is a degree paired with a branch (e.g. B.E × CSE) — the scoping key every class, student and subject belongs to."
         />
-        <Button onClick={() => setCreating(true)} data-icon="inline-start">
-          <Plus />
-          New program
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading programs…</p>
+        <LoadingState label="Loading programs…" />
       ) : isError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
+        <FormError>{errorMessage(error)}</FormError>
       ) : programs.length === 0 ? (
-        <EmptyState onAdd={() => setCreating(true)} />
+        <EmptyState
+          icon={Layers}
+          title="No programs yet"
+          description="A program pairs a degree with a branch and names the department that runs it. Add degrees, branches and departments first."
+          action={
+            <Button variant="outline" onClick={() => setCreating(true)} data-icon="inline-start">
+              <Plus />
+              Add the first program
+            </Button>
+          }
+        />
       ) : (
-        <div className="rounded-xl ring-1 ring-foreground/10">
-          <Table>
+        <Table containerClassName={TABLE_FRAME}>
             <TableHeader>
               <TableRow>
                 <TableHead>Program</TableHead>
@@ -125,7 +122,7 @@ export function ProgramManager() {
                     {p.classCount}
                   </TableCell>
                   <TableCell>
-                    <StatusPill active={p.isActive} />
+                    <ActiveBadge active={p.isActive} />
                   </TableCell>
                   <TableCell>
                     <RowActions program={p} onDelete={() => setDeleting(p)} />
@@ -133,27 +130,14 @@ export function ProgramManager() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        </div>
+        </Table>
       )}
 
       {creating && <ProgramFormDialog onClose={() => setCreating(false)} />}
       {deleting !== null && (
         <DeleteDialog program={deleting} onClose={() => setDeleting(null)} />
       )}
-    </div>
-  );
-}
-
-function EmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-      <p className="text-sm text-muted-foreground">No programs yet.</p>
-      <Button variant="outline" onClick={onAdd} data-icon="inline-start">
-        <Plus />
-        Add the first program
-      </Button>
-    </div>
+    </PageShell>
   );
 }
 
@@ -242,7 +226,7 @@ function ProgramFormDialog({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col gap-2">
             <Label htmlFor="program-degree">Degree</Label>
             <Select value={degreeId} onValueChange={(v) => setDegreeId((v as string) ?? "")}>
-              <SelectTrigger id="program-degree" className="h-10! w-full">
+              <SelectTrigger size="lg" id="program-degree" className="w-full">
                 <SelectValue placeholder="Select a degree">{degreeLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>
@@ -257,7 +241,7 @@ function ProgramFormDialog({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col gap-2">
             <Label htmlFor="program-branch">Branch</Label>
             <Select value={branchId} onValueChange={(v) => setBranchId((v as string) ?? "")}>
-              <SelectTrigger id="program-branch" className="h-10! w-full">
+              <SelectTrigger size="lg" id="program-branch" className="w-full">
                 <SelectValue placeholder="Select a branch">{branchLabel}</SelectValue>
               </SelectTrigger>
               <SelectContent>

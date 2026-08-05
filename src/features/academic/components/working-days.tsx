@@ -14,16 +14,13 @@ import { CalendarPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { errorMessage } from "@/lib/errors";
 import { WEEKDAY_OPTIONS, type Weekday, type WorkingDay } from "@/features/academic/types";
 import {
   useDeclareWorkingDay,
   useDeleteWorkingDay,
   useWorkingDays,
 } from "@/features/academic/hooks/use-academic";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
 
 const WEEKDAY_LABEL: Record<Weekday, string> = {
   MON: "Monday",
@@ -124,7 +121,7 @@ export function WorkingDays() {
                   onClick={() => setFollowsDay(d.value)}
                   className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                     active
-                      ? "bg-background font-medium text-foreground shadow-sm"
+                      ? "bg-card font-medium text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -137,11 +134,12 @@ export function WorkingDays() {
         <div className="flex flex-col gap-2">
           <Label htmlFor="wd-note">Note (optional)</Label>
           <Input
+            size="lg"
             id="wd-note"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. Pongal compensation"
-            className="h-10! w-64"
+            className="w-64"
           />
         </div>
         <Button type="submit" data-icon="inline-start" disabled={!valid || declare.isPending}>

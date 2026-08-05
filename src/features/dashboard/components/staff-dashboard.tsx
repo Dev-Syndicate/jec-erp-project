@@ -14,6 +14,10 @@ import {
   ArrowRight,
 } from "lucide-react";
 
+import { StatCard, StatCardGrid } from "@/components/ui/stat-card";
+import { FormError } from "@/components/form-error";
+import { LoadingState } from "@/components/loading-state";
+import { PageShell } from "@/app/(app)/page-shell";
 import { useStaffOverview } from "@/features/dashboard/hooks/use-dashboard";
 import type { StaffOverview, TodayClass } from "@/features/dashboard/types";
 
@@ -35,13 +39,16 @@ export function StaffDashboard({ firstName }: { firstName?: string }) {
   const { data, isPending, isError } = useStaffOverview(date);
 
   return (
-    <main className="mx-auto flex w-full max-w-5xl flex-col gap-8 px-6 py-10">
+    <PageShell width="narrow" className="gap-8">
+      {/* Hand-rolled rather than <PageHeader> because the eyebrow here is live
+          data (today's date + the active semester) and the title greets the
+          user — neither is the fixed "Section · Page" that PageHeader models. */}
       <header className="flex flex-col gap-1.5">
-        <span className="font-mono text-[0.7rem] uppercase tracking-[0.18em] text-primary">
+        <span className="eyebrow text-primary">
           {DATE_FMT.format(new Date())}
           {data?.semesterLabel ? ` · ${data.semesterLabel}` : ""}
         </span>
-        <h1 className="font-heading text-2xl font-semibold text-foreground">
+        <h1 className="font-heading text-2xl font-semibold tracking-tight text-foreground">
           {firstName ? `Good to see you, ${firstName}` : "Welcome"}
         </h1>
         <p className="text-sm text-muted-foreground">
@@ -50,13 +57,13 @@ export function StaffDashboard({ firstName }: { firstName?: string }) {
       </header>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your overview…</p>
+        <LoadingState label="Loading your overview…" />
       ) : isError || !data ? (
-        <p className="text-sm text-muted-foreground">Couldn&apos;t load your overview.</p>
+        <FormError>Couldn&apos;t load your overview.</FormError>
       ) : (
         <Content data={data} />
       )}
-    </main>
+    </PageShell>
   );
 }
 
@@ -77,7 +84,7 @@ function Content({ data }: { data: StaffOverview }) {
           ) : data.todayClasses.length === 0 ? (
             <Empty>No classes scheduled for you today.</Empty>
           ) : (
-            <div className="flex flex-col divide-y divide-foreground/10 rounded-xl ring-1 ring-foreground/10">
+            <div className="flex flex-col divide-y divide-foreground/10 overflow-hidden rounded-xl bg-card ring-1 ring-foreground/10">
               {data.todayClasses.map((c) => (
                 <TodayRow key={`${c.classId}-${c.period}`} c={c} />
               ))}
@@ -101,22 +108,37 @@ function Content({ data }: { data: StaffOverview }) {
   );
 }
 
+// The admin snapshot. Each tile links to the screen that manages what it counts
+// — every one of these routes is Super-Admin/HOD, the same audience `stats`
+// itself is non-null for, so no tile can lead somewhere the viewer would 403.
+//
+// No trend arrows: the endpoint returns three scalars with no history, and a
+// delta indicator with nothing behind it is decoration that reads as data.
 function Snapshot({ stats }: { stats: NonNullable<StaffOverview["stats"]> }) {
   return (
-    <section className="grid gap-4 sm:grid-cols-3">
-      <Stat label="Students" value={stats.students} />
-      <Stat label="Faculty" value={stats.faculty} />
-      <Stat label="Classes" value={stats.classes} />
-    </section>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex flex-col gap-1 rounded-xl border border-border bg-card p-5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="font-heading text-3xl font-semibold text-foreground">{value}</span>
-    </div>
+    <StatCardGrid className="lg:grid-cols-3">
+      <StatCard
+        label="Students"
+        value={stats.students}
+        icon={GraduationCap}
+        href="/students"
+        hint="Enrolled this academic year"
+      />
+      <StatCard
+        label="Faculty"
+        value={stats.faculty}
+        icon={UsersRound}
+        href="/faculty"
+        hint="Active staff accounts"
+      />
+      <StatCard
+        label="Classes"
+        value={stats.classes}
+        icon={Building2}
+        href="/structure/classes"
+        hint="Groups taking attendance"
+      />
+    </StatCardGrid>
   );
 }
 

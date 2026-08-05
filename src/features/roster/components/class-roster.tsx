@@ -19,8 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/roster/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { Gender, StudentDetail } from "@/features/roster/types";
 import {
   useAdvisedClasses,
@@ -29,9 +31,6 @@ import {
   useUpdateStudent,
 } from "@/features/roster/hooks/use-roster";
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
 const isoToDateInput = (iso: string) => (iso ? iso.slice(0, 10) : "");
 
 const GENDER_OPTIONS = [
@@ -39,17 +38,6 @@ const GENDER_OPTIONS = [
   { value: "FEMALE", label: "Female" },
   { value: "OTHER", label: "Other" },
 ];
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -191,11 +179,12 @@ function Loaded({
         <div className="relative w-full max-w-sm">
           <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
+            size="lg"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search name or register no.…"
             aria-label="Search students"
-            className="h-10! pl-9"
+            className="pl-9"
           />
         </div>
       </div>
@@ -326,19 +315,19 @@ function StudentDialog({
 
           <div className="flex flex-col gap-2">
             <Label htmlFor="s-name">Full name</Label>
-            <Input id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="s-roll">Roll number</Label>
-            <Input id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
+            <Input size="lg" id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="s-phone">Phone</Label>
-            <Input id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="s-dob">Date of birth</Label>
-            <Input id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" />
+            <Input size="lg" id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="s-gender">Gender</Label>

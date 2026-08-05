@@ -11,7 +11,7 @@
 import { useState } from "react";
 
 import { Label } from "@/components/ui/label";
-import { FormSelect } from "@/features/students/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { ClassOption } from "@/features/students/types";
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];

@@ -6,7 +6,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus, Pencil, KeyRound, Copy, Check, Search, Upload } from "lucide-react";
+import { GraduationCap, Plus, Pencil, KeyRound, Upload } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +27,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { errorMessage } from "@/lib/errors";
+import { CopyButton } from "@/components/copy-button";
+import { FormError } from "@/components/form-error";
+import { LoadingState } from "@/components/loading-state";
+import { SearchInput } from "@/components/search-input";
+import { AccountBadge } from "@/components/status-badge";
+import { TablePagination } from "@/components/table-pagination";
 import { PageHeader } from "@/app/(app)/page-header";
+import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import { DepartmentSelect } from "@/components/department-select";
 import type {
   Faculty,
@@ -35,7 +45,7 @@ import type {
   MaritalStatus,
   Role,
 } from "@/features/faculty/types";
-import { FormSelect } from "@/features/faculty/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import { ImportFacultyDialog } from "@/features/faculty/components/import-faculty-dialog";
 import { StaffCredentialsDialog } from "@/features/faculty/components/credentials-dialog";
 import {
@@ -47,10 +57,6 @@ import {
   useUpdateFaculty,
 } from "@/features/faculty/hooks/use-faculty";
 
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 const isoToDateInput = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
 const PAGE_SIZE = 50;
 const sameSet = (a: string[], b: string[]) =>
@@ -72,26 +78,15 @@ const STATUS_OPTIONS = [
 ];
 
 function StatusPill({ faculty }: { faculty: Faculty }) {
-  // Login disabled reads as muted; active faculty still on their temp password
-  // get a distinct "invited" hint.
-  if (faculty.status !== "ACTIVE") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
-        Inactive
-      </span>
-    );
-  }
-  if (faculty.mustChangePassword) {
-    return (
-      <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-amber-600">
-        Invited
-      </span>
-    );
-  }
+  // A faculty member has ONE status (their user account), unlike a student who
+  // has both a record lifecycle and a login state — so both flags read from the
+  // same field here.
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-emerald-600">
-      Active
-    </span>
+    <AccountBadge
+      recordActive={faculty.status === "ACTIVE"}
+      loginActive={faculty.status === "ACTIVE"}
+      mustChangePassword={faculty.mustChangePassword}
+    />
   );
 }
 
@@ -119,17 +114,6 @@ function RolePill({
     >
       {label}
     </button>
-  );
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
   );
 }
 
@@ -171,7 +155,6 @@ function RoleChecklist({
 
 // The one-time temp-password reveal, shared by create + regenerate.
 function TempPasswordPanel({ name, password }: { name: string; password: string }) {
-  const [copied, setCopied] = useState(false);
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">
@@ -180,23 +163,7 @@ function TempPasswordPanel({ name, password }: { name: string; password: string 
       </p>
       <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
         <code className="flex-1 px-1 font-mono text-sm text-foreground">{password}</code>
-        <Button
-          variant="outline"
-          size="sm"
-          data-icon="inline-start"
-          onClick={() => {
-            navigator.clipboard?.writeText(password).then(
-              () => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              },
-              () => {},
-            );
-          }}
-        >
-          {copied ? <Check /> : <Copy />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+        <CopyButton value={password} />
       </div>
     </div>
   );
@@ -342,57 +309,60 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
   const pageItems = filtered.slice(startIdx, startIdx + PAGE_SIZE);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setCredentials(true)} data-icon="inline-start">
+              <KeyRound />
+              Credentials
+            </Button>
+            <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
+              <Upload />
+              Import
+            </Button>
+            <Button onClick={() => setCreating(true)} data-icon="inline-start">
+              <Plus />
+              Add faculty
+            </Button>
+          </>
+        }
+      >
         <PageHeader
           eyebrow="People · Faculty"
           title="Faculty"
           description="Provision faculty accounts. Faculty sign in with their email."
         />
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setCredentials(true)} data-icon="inline-start">
-            <KeyRound />
-            Credentials
-          </Button>
-          <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
-            <Upload />
-            Import
-          </Button>
-          <Button onClick={() => setCreating(true)} data-icon="inline-start">
-            <Plus />
-            Add faculty
-          </Button>
-        </div>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading faculty…</p>
+        <LoadingState label="Loading faculty…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : faculty.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-          <p className="text-sm text-muted-foreground">No faculty yet.</p>
-          <Button variant="outline" onClick={() => setCreating(true)} data-icon="inline-start">
-            <Plus />
-            Add the first faculty member
-          </Button>
-        </div>
+        <EmptyState
+          icon={GraduationCap}
+          title="No faculty yet"
+          description="Provision staff accounts one at a time, or import a spreadsheet. Faculty sign in with their email."
+          action={
+            <Button variant="outline" onClick={() => setCreating(true)} data-icon="inline-start">
+              <Plus />
+              Add the first faculty member
+            </Button>
+          }
+        />
       ) : (
         <div className="flex flex-col gap-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="relative w-full max-w-sm">
-              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                value={query}
-                onChange={(e) => {
-                  setQuery(e.target.value);
-                  setPage(1);
-                }}
-                placeholder="Search by name, staff ID, email, department…"
-                aria-label="Search faculty"
-                className="h-10! pl-9"
-              />
-            </div>
+            <SearchInput
+              value={query}
+              onChange={(v) => {
+                setQuery(v);
+                setPage(1);
+              }}
+              placeholder="Search by name, staff ID, email, department…"
+              label="Search faculty"
+            />
             {showRoleFilter && (
               <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Filter by role">
                 <RolePill
@@ -509,122 +479,98 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
             )}
 
             {activeFilterCount > 0 && (
-              <Button variant="ghost" className="h-10!" onClick={clearFilters}>
+              <Button size="lg" variant="ghost" onClick={clearFilters}>
                 Clear{activeFilterCount > 1 ? ` (${activeFilterCount})` : ""}
               </Button>
             )}
           </div>
 
           {filtered.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border py-16 text-center">
-              <p className="text-sm text-muted-foreground">
-                No faculty match the current filters.
-              </p>
-            </div>
+            <EmptyState size="sm" title="No faculty match the current filters." />
           ) : (
-            <div className="rounded-xl ring-1 ring-foreground/10">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Staff ID</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Department</TableHead>
-                    <TableHead>Designation</TableHead>
-                    <TableHead>Roles</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-0 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {pageItems.map((f) => (
-                <TableRow key={f.id}>
-                  <TableCell className="font-mono text-xs">{f.staffId}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{f.displayName}</span>
-                      <span className="text-xs text-muted-foreground">{f.email}</span>
-                    </div>
-                  </TableCell>
-                  {/* Who employs them. The code alone is enough at a glance
-                      ("CSE", "S&H"); the full name is the select's job. */}
-                  <TableCell className="text-muted-foreground">{f.departmentCode}</TableCell>
-                  <TableCell className="text-muted-foreground">{f.designation}</TableCell>
-                  <TableCell>
-                    {f.roles.length ? (
-                      <div className="flex flex-wrap gap-1">
-                        {f.roles.map((r) => (
-                          <span
-                            key={r}
-                            className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[0.65rem] font-medium text-muted-foreground"
-                          >
-                            {r}
-                          </span>
-                        ))}
+            <Table containerClassName={TABLE_FRAME}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Staff ID</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Department</TableHead>
+                  <TableHead>Designation</TableHead>
+                  <TableHead>Roles</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-0 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {pageItems.map((f) => (
+                  <TableRow key={f.id}>
+                    <TableCell className="font-mono text-xs">{f.staffId}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{f.displayName}</span>
+                        <span className="text-xs text-muted-foreground">{f.email}</span>
                       </div>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <StatusPill faculty={f} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      {f.mustChangePassword && f.status === "ACTIVE" && (
+                    </TableCell>
+                    {/* Who employs them. The code alone is enough at a glance
+                        ("CSE", "S&H"); the full name is the select's job. */}
+                    <TableCell className="text-muted-foreground">{f.departmentCode}</TableCell>
+                    <TableCell className="text-muted-foreground">{f.designation}</TableCell>
+                    <TableCell>
+                      {f.roles.length ? (
+                        <div className="flex flex-wrap gap-1">
+                          {f.roles.map((r) => (
+                            <Badge key={r} variant="muted" size="sm">
+                              {r}
+                            </Badge>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill faculty={f} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        {f.mustChangePassword && f.status === "ACTIVE" && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setResetting(f)}
+                            aria-label="Reissue temp password"
+                            title="Reissue temp password"
+                          >
+                            <KeyRound />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => setResetting(f)}
-                          aria-label="Reissue temp password"
-                          title="Reissue temp password"
+                          onClick={() => setEditing(f)}
+                          aria-label="Edit faculty"
                         >
-                          <KeyRound />
+                          <Pencil />
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setEditing(f)}
-                        aria-label="Edit faculty"
-                      >
-                        <Pencil />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
 
           {filtered.length > PAGE_SIZE && (
-            <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-              <span>
-                Showing {startIdx + 1}–{startIdx + pageItems.length} of {filtered.length}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={currentPage <= 1}
-                >
-                  Previous
-                </Button>
-                <span className="font-mono text-xs">
-                  Page {currentPage} of {pageCount}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
-                  disabled={currentPage >= pageCount}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <TablePagination
+              // Client-side slice here (unlike students, which pages on the
+              // server), so `filtered.length` is the real total.
+              page={currentPage}
+              pageCount={pageCount}
+              total={filtered.length}
+              rangeStart={startIdx + 1}
+              rangeEnd={startIdx + pageItems.length}
+              onPageChange={(p) => setPage(Math.min(pageCount, Math.max(1, p)))}
+              noun="faculty"
+            />
           )}
         </div>
       )}
@@ -634,7 +580,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
       {credentials && <StaffCredentialsDialog onClose={() => setCredentials(false)} />}
       {editing && <EditFacultyDialog faculty={editing} onClose={() => setEditing(null)} />}
       {resetting && <RegenerateDialog faculty={resetting} onClose={() => setResetting(null)} />}
-    </div>
+    </PageShell>
   );
 }
 
@@ -723,11 +669,11 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
             <form id="faculty-form" onSubmit={submit} className="grid grid-cols-2 gap-4">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-name">Full name</Label>
-                <Input id="f-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" autoFocus required />
+                <Input size="lg" id="f-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus required />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-email">Email</Label>
-                <Input id="f-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="h-10!" required />
+                <Input size="lg" id="f-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" required />
               </div>
               {/* Department first: employment is the anchor, and it decides
                   whether the program field below exists at all. */}
@@ -742,7 +688,7 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-staff">Staff ID</Label>
-                <Input id="f-staff" value={staffId} onChange={(e) => setStaffId(e.target.value)} className="h-10!" required />
+                <Input size="lg" id="f-staff" value={staffId} onChange={(e) => setStaffId(e.target.value)} required />
               </div>
               <div className="col-span-2 flex flex-col gap-2">
                 <Label>Roles</Label>
@@ -755,19 +701,19 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-designation">Designation</Label>
-                <Input id="f-designation" value={designation} onChange={(e) => setDesignation(e.target.value)} className="h-10!" required />
+                <Input size="lg" id="f-designation" value={designation} onChange={(e) => setDesignation(e.target.value)} required />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-phone">Phone</Label>
-                <Input id="f-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
+                <Input size="lg" id="f-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-emergency">Emergency phone (optional)</Label>
-                <Input id="f-emergency" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className="h-10!" />
+                <Input size="lg" id="f-emergency" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-dob">Date of birth (optional)</Label>
-                <Input id="f-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" />
+                <Input size="lg" id="f-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="f-gender">Gender (optional)</Label>
@@ -930,7 +876,7 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
         <form id="edit-faculty-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="flex flex-col gap-2">
             <Label htmlFor="ef-name">Full name</Label>
-            <Input id="ef-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="ef-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
           </div>
           {/* Department before program: it's who employs them, and it decides
               whether the program field beside it exists at all. */}
@@ -947,11 +893,11 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
               raises a warning — a staff ID change is administrative. */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="ef-staff">Staff ID</Label>
-            <Input id="ef-staff" value={staffId} onChange={(e) => setStaffId(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="ef-staff" value={staffId} onChange={(e) => setStaffId(e.target.value)} required />
           </div>
           <div className="flex flex-col gap-2 sm:col-span-2">
             <Label htmlFor="ef-email">Email</Label>
-            <Input id="ef-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="ef-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           {emailChanged && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 sm:col-span-3 dark:text-amber-200">
@@ -961,19 +907,19 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
           )}
           <div className="flex flex-col gap-2">
             <Label htmlFor="ef-designation">Designation</Label>
-            <Input id="ef-designation" value={designation} onChange={(e) => setDesignation(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="ef-designation" value={designation} onChange={(e) => setDesignation(e.target.value)} required />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ef-phone">Phone</Label>
-            <Input id="ef-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="ef-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ef-emergency">Emergency phone</Label>
-            <Input id="ef-emergency" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} className="h-10!" />
+            <Input size="lg" id="ef-emergency" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ef-dob">Date of birth</Label>
-            <Input id="ef-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" />
+            <Input size="lg" id="ef-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="ef-gender">Gender</Label>

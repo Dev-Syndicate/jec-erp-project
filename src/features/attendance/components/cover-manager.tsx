@@ -17,8 +17,10 @@ import { RotateCcw, UserRoundCheck, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/attendance/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { CoverPeriod, CoverView, Weekday } from "@/features/attendance/types";
 import {
   useAssignCover,
@@ -27,10 +29,6 @@ import {
   useRemoveCover,
 } from "@/features/attendance/hooks/use-attendance";
 import { useFacultyOptions } from "@/features/attendance/hooks/use-faculty-options";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
 
 const WEEKDAY_LABEL: Record<Weekday, string> = {
   MON: "Monday",
@@ -45,17 +43,6 @@ function todayStr(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -311,10 +298,10 @@ function AssignForm({
         <Field label="Reason (optional)">
           <div className="w-64">
             <Input
+              size="lg"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. on leave"
-              className="h-10!"
             />
           </div>
         </Field>

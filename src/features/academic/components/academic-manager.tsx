@@ -19,6 +19,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { AcademicYear, Semester, SemesterKind } from "@/features/academic/types";
 import {
@@ -32,11 +34,6 @@ import {
   useUpdateAcademicYear,
   useUpdateSemester,
 } from "@/features/academic/hooks/use-academic";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 
 const kindLabel = (k: SemesterKind) => (k === "ODD" ? "Odd" : "Even");
 
@@ -353,25 +350,14 @@ function DateField({
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
       <Input
+        size="lg"
         id={id}
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10!"
         required
       />
     </div>
-  );
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
   );
 }
 
@@ -410,11 +396,11 @@ function YearFormDialog({ year, onClose }: { year: AcademicYear | null; onClose:
           <div className="flex flex-col gap-2">
             <Label htmlFor="year-name">Name</Label>
             <Input
+              size="lg"
               id="year-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="2025-2026"
-              className="h-10!"
               autoFocus
               required
             />

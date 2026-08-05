@@ -6,7 +6,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Upload, Pencil, KeyRound, Copy, Check, Search } from "lucide-react";
+import { Plus, Upload, Pencil, KeyRound, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,9 +27,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { errorMessage } from "@/lib/errors";
+import { CopyButton } from "@/components/copy-button";
+import { FormError } from "@/components/form-error";
+import { LoadingState } from "@/components/loading-state";
+import { SearchInput } from "@/components/search-input";
+import { AccountBadge } from "@/components/status-badge";
+import { TablePagination } from "@/components/table-pagination";
 import { PageHeader } from "@/app/(app)/page-header";
+import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import type { Gender, Student, StudentFilters, StudentStatus } from "@/features/students/types";
-import { FormSelect } from "@/features/students/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import { ClassCascade } from "@/features/students/components/class-cascade";
 import { ImportStudentsDialog } from "@/features/students/components/import-students-dialog";
 import { CredentialsDialog } from "@/features/students/components/credentials-dialog";
@@ -43,10 +52,6 @@ import {
   useUpdateStudent,
 } from "@/features/students/hooks/use-students";
 
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 const isoToDateInput = (iso: string) => (iso ? iso.slice(0, 10) : "");
 const PAGE_SIZE = 50;
 
@@ -74,43 +79,21 @@ const STATUS_OPTIONS = [
 ];
 
 function StatusPill({ student }: { student: Student }) {
-  // Login disabled (non-ACTIVE lifecycle) reads as muted; active students that
-  // are still on their temp password get a distinct "invited" hint.
-  if (student.status !== "ACTIVE" || student.userStatus !== "ACTIVE") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
-        {student.status === "ACTIVE" ? "Inactive" : student.status.toLowerCase()}
-      </span>
-    );
-  }
-  if (student.mustChangePassword) {
-    return (
-      <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-amber-600">
-        Invited
-      </span>
-    );
-  }
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-emerald-600">
-      Active
-    </span>
-  );
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
+    <AccountBadge
+      recordActive={student.status === "ACTIVE"}
+      loginActive={student.userStatus === "ACTIVE"}
+      mustChangePassword={student.mustChangePassword}
+      // When the STUDENT record is the reason (graduated, dropped, transferred),
+      // name it — "Inactive" would hide which of those happened. When only the
+      // login is off, the generic word is the honest one.
+      inactiveLabel={student.status === "ACTIVE" ? undefined : student.status.toLowerCase()}
+    />
   );
 }
 
 // The one-time temp-password reveal, shared by create + regenerate.
 function TempPasswordPanel({ name, password }: { name: string; password: string }) {
-  const [copied, setCopied] = useState(false);
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">
@@ -119,23 +102,7 @@ function TempPasswordPanel({ name, password }: { name: string; password: string 
       </p>
       <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
         <code className="flex-1 px-1 font-mono text-sm text-foreground">{password}</code>
-        <Button
-          variant="outline"
-          size="sm"
-          data-icon="inline-start"
-          onClick={() => {
-            navigator.clipboard?.writeText(password).then(
-              () => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              },
-              () => {},
-            );
-          }}
-        >
-          {copied ? <Check /> : <Copy />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+        <CopyButton value={password} />
       </div>
     </div>
   );
@@ -192,56 +159,59 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
   const startIdx = (currentPage - 1) * PAGE_SIZE;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setCredentials(true)} data-icon="inline-start">
+              <KeyRound />
+              Credentials
+            </Button>
+            <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
+              <Upload />
+              Import
+            </Button>
+            <Button onClick={() => setCreating(true)} data-icon="inline-start">
+              <Plus />
+              Add student
+            </Button>
+          </>
+        }
+      >
         <PageHeader
           eyebrow="People · Students"
           title="Students"
           description="Provision student accounts and enroll them into a class for the active academic year. Students sign in with their register number."
         />
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setCredentials(true)} data-icon="inline-start">
-            <KeyRound />
-            Credentials
-          </Button>
-          <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
-            <Upload />
-            Import
-          </Button>
-          <Button onClick={() => setCreating(true)} data-icon="inline-start">
-            <Plus />
-            Add student
-          </Button>
-        </div>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading students…</p>
+        <LoadingState label="Loading students…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : total === 0 && !searching && !filtering ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-          <p className="text-sm text-muted-foreground">No students yet.</p>
-          <Button variant="outline" onClick={() => setCreating(true)} data-icon="inline-start">
-            <Plus />
-            Add the first student
-          </Button>
-        </div>
+        <EmptyState
+          icon={Users}
+          title="No students yet"
+          description="Provision accounts one at a time, or import a spreadsheet to onboard a whole class."
+          action={
+            <Button variant="outline" onClick={() => setCreating(true)} data-icon="inline-start">
+              <Plus />
+              Add the first student
+            </Button>
+          }
+        />
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="relative max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search by name, register no. or email…"
-              aria-label="Search students"
-              className="h-10! pl-9"
-            />
-          </div>
+          <SearchInput
+            value={query}
+            onChange={(v) => {
+              setQuery(v);
+              setPage(1);
+            }}
+            placeholder="Search by name, register no. or email…"
+            label="Search students"
+          />
 
           <StudentFilterBar
             filters={filters}
@@ -255,112 +225,101 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
           />
 
           {students.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border py-16 text-center">
-              <p className="text-sm text-muted-foreground">
-                {searching
+            <EmptyState
+              size="sm"
+              title={
+                searching
                   ? `No students match “${debouncedQuery}”${filtering ? " with these filters" : ""}.`
                   : filtering
                     ? "No students match these filters."
-                    : "No students on this page."}
-              </p>
-            </div>
+                    : "No students on this page."
+              }
+            />
           ) : (
-            <div
-              className={`rounded-xl ring-1 ring-foreground/10 ${isPlaceholderData ? "opacity-60" : ""}`}
+            <Table
+              // `opacity-60` while TanStack serves placeholder data: the previous
+              // page stays on screen during the fetch, and dimming it is what
+              // tells the user the rows are stale rather than simply slow.
+              containerClassName={`${TABLE_FRAME} ${isPlaceholderData ? "opacity-60" : ""}`}
             >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Register no.</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Program</TableHead>
-                    <TableHead>Class (this year)</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-0 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {students.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{s.displayName}</span>
-                      <span className="text-xs text-muted-foreground">{s.email}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{s.programLabel ?? "—"}</TableCell>
-                  <TableCell>
-                    {s.currentEnrollment ? (
-                      <span className="font-mono text-xs">
-                        {s.currentEnrollment.year}-{s.currentEnrollment.section}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Not enrolled</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <StatusPill student={s} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      {s.mustChangePassword && s.userStatus === "ACTIVE" && (
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Register no.</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Program</TableHead>
+                  <TableHead>Class (this year)</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-0 text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {students.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{s.displayName}</span>
+                        <span className="text-xs text-muted-foreground">{s.email}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{s.programLabel ?? "—"}</TableCell>
+                    <TableCell>
+                      {s.currentEnrollment ? (
+                        <span className="font-mono text-xs">
+                          {s.currentEnrollment.year}-{s.currentEnrollment.section}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Not enrolled</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill student={s} />
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center justify-end gap-1">
+                        {s.mustChangePassword && s.userStatus === "ACTIVE" && (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => setResetting(s)}
+                            aria-label="Reissue temp password"
+                            title="Reissue temp password"
+                          >
+                            <KeyRound />
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          onClick={() => setResetting(s)}
-                          aria-label="Reissue temp password"
-                          title="Reissue temp password"
+                          onClick={() => setEditing(s)}
+                          aria-label="Edit student"
                         >
-                          <KeyRound />
+                          <Pencil />
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setEditing(s)}
-                        aria-label="Edit student"
-                      >
-                        <Pencil />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
 
           {total > PAGE_SIZE && (
-            <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-              <span>
-                Showing {startIdx + 1}–{startIdx + students.length} of {total}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  // Step back from the EFFECTIVE page, so a request that
-                  // overshot the end still walks back one page at a time.
-                  onClick={() => setPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage <= 1 || isPlaceholderData}
-                >
-                  Previous
-                </Button>
-                <span className="font-mono text-xs">
-                  Page {currentPage} of {pageCount}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
-                  disabled={currentPage >= pageCount || isPlaceholderData}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <TablePagination
+              // All numbers, no state. `currentPage` is the EFFECTIVE page —
+              // derived at render as Math.min(page, pageCount), because a
+              // server-paginated request past the end returns nothing rather
+              // than clamping. Handing the component the raw `page` would
+              // reintroduce exactly the blank-page bug that derivation fixes.
+              page={currentPage}
+              pageCount={pageCount}
+              total={total}
+              rangeStart={startIdx + 1}
+              rangeEnd={startIdx + students.length}
+              onPageChange={(p) => setPage(Math.min(pageCount, Math.max(1, p)))}
+              disabled={isPlaceholderData}
+              noun="students"
+            />
           )}
         </div>
       )}
@@ -370,7 +329,7 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
       {credentials && <CredentialsDialog onClose={() => setCredentials(false)} />}
       {editing && <EditStudentDialog student={editing} onClose={() => setEditing(null)} />}
       {resetting && <RegenerateDialog student={resetting} onClose={() => setResetting(null)} />}
-    </div>
+    </PageShell>
   );
 }
 
@@ -446,27 +405,27 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
             <form id="student-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
               <div className="flex flex-col gap-2">
                 <Label htmlFor="s-name">Full name</Label>
-                <Input id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" autoFocus required />
+                <Input size="lg" id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus required />
               </div>
               <div className="flex flex-col gap-2 sm:col-span-2">
                 <Label htmlFor="s-email">Email</Label>
-                <Input id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="h-10!" required />
+                <Input size="lg" id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" required />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="s-reg">Register number</Label>
-                <Input id="s-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} className="h-10!" required />
+                <Input size="lg" id="s-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} required />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="s-roll">Roll number (optional)</Label>
-                <Input id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
+                <Input size="lg" id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="s-dob">Date of birth</Label>
-                <Input id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" required />
+                <Input size="lg" id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="s-phone">Phone</Label>
-                <Input id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
+                <Input size="lg" id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
               </div>
               <div className="flex flex-col gap-2">
                 <Label htmlFor="s-gender">Gender (optional)</Label>
@@ -593,17 +552,17 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
         <form id="edit-student-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <div className="flex flex-col gap-2 sm:col-span-3">
             <Label htmlFor="e-name">Full name</Label>
-            <Input id="e-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="e-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
           </div>
           {/* Sign-in details. Grouped together and flagged so an admin editing a
               phone number doesn't change a login handle without noticing. */}
           <div className="flex flex-col gap-2">
             <Label htmlFor="e-reg">Register number</Label>
-            <Input id="e-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="e-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} required />
           </div>
           <div className="flex flex-col gap-2 sm:col-span-2">
             <Label htmlFor="e-email">Email</Label>
-            <Input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
           </div>
           {identityChanged && (
             <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 sm:col-span-3 dark:text-amber-200">
@@ -617,15 +576,15 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
           )}
           <div className="flex flex-col gap-2">
             <Label htmlFor="e-roll">Roll number</Label>
-            <Input id="e-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
+            <Input size="lg" id="e-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="e-phone">Phone</Label>
-            <Input id="e-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="e-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="e-dob">Date of birth</Label>
-            <Input id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" required />
+            <Input size="lg" id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required />
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="e-gender">Gender</Label>

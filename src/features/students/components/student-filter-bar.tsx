@@ -17,7 +17,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { FormSelect } from "@/features/students/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { ProgramOption, StudentFilters } from "@/features/students/types";
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
@@ -173,7 +173,7 @@ export function StudentFilterBar({
       </div>
 
       {activeCount > 0 && (
-        <Button variant="ghost" className="h-10!" onClick={() => onChange({})}>
+        <Button size="lg" variant="ghost" onClick={() => onChange({})}>
           Clear{activeCount > 1 ? ` (${activeCount})` : ""}
         </Button>
       )}

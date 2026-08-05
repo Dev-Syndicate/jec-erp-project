@@ -19,8 +19,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/leave/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import {
   LEAVE_TYPES,
   STATUS_META,
@@ -28,21 +30,6 @@ import {
   type LeaveType,
 } from "@/features/leave/types";
 import { useActOnLeave, useApplyForLeave, useLeaveRequests } from "@/features/leave/hooks/use-leave";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 function StatusPill({ status }: { status: LeaveRequest["status"] }) {
   const meta = STATUS_META[status];
@@ -376,7 +363,7 @@ function ApplyDialog({ onClose }: { onClose: () => void }) {
                 onClick={() => setMultiDay(false)}
                 className={`rounded-md px-3 py-1 text-sm transition-colors ${
                   !multiDay
-                    ? "bg-background font-medium text-foreground shadow-sm"
+                    ? "bg-card font-medium text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -387,7 +374,7 @@ function ApplyDialog({ onClose }: { onClose: () => void }) {
                 onClick={() => setMultiDay(true)}
                 className={`rounded-md px-3 py-1 text-sm transition-colors ${
                   multiDay
-                    ? "bg-background font-medium text-foreground shadow-sm"
+                    ? "bg-card font-medium text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -399,11 +386,11 @@ function ApplyDialog({ onClose }: { onClose: () => void }) {
             <div className="flex flex-col gap-2">
               <Label htmlFor="from-date">{multiDay ? "From" : "Date"}</Label>
               <Input
+                size="lg"
                 id="from-date"
                 type="date"
                 value={fromDate}
                 onChange={(e) => setFromDate(e.target.value)}
-                className="h-10!"
                 required
               />
             </div>
@@ -411,12 +398,12 @@ function ApplyDialog({ onClose }: { onClose: () => void }) {
               <div className="flex flex-col gap-2">
                 <Label htmlFor="to-date">To</Label>
                 <Input
+                  size="lg"
                   id="to-date"
                   type="date"
                   value={toDate}
                   min={fromDate || undefined}
                   onChange={(e) => setToDate(e.target.value)}
-                  className="h-10!"
                   required
                 />
               </div>

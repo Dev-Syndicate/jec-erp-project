@@ -69,7 +69,10 @@ function BrandPanel() {
       {/* Depth wash — brand-hue tint, no hardcoded color. */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(120%_120%_at_100%_0%,color-mix(in_oklch,var(--panel-ink)_12%,transparent),transparent_55%)]" />
 
-      <div className="relative flex items-center gap-3">
+      {/* gap-5, not the gap-3 the old square "JE" tile used: the crest is round
+          and its artwork stops short of the box on every side, so matching the
+          tile's gap left the wordmark reading as though it were touching. */}
+      <div className="relative flex items-center gap-5">
         <Image
           src="/erplogo-mark.png"
           alt=""
@@ -86,7 +89,7 @@ function BrandPanel() {
         </div>
       </div>
 
-      <div className="relative flex flex-col gap-8">
+      <div className="relative flex flex-col gap-8 py-10">
         <div className="max-w-sm">
           <AttendanceGrid />
         </div>
@@ -116,7 +119,7 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       <section className="flex items-center justify-center px-6 py-12 sm:px-10">
         <div className="login-rise flex w-full max-w-sm flex-col gap-10">
           {/* Compact brand lockup for the narrow-screen form-only view. */}
-          <div className="flex items-center gap-2.5 lg:hidden">
+          <div className="flex items-center gap-3 lg:hidden">
             <Image
               src="/erplogo-mark.png"
               alt=""

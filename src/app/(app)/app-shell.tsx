@@ -339,7 +339,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     <SidebarProvider>
       <Sidebar collapsible="icon">
         <SidebarHeader>
-          <div className="flex items-center gap-2.5 px-1 py-1.5">
+          <div className="flex items-center gap-3 px-1 py-1.5">
             {/* The college crest. No brand fill behind it — the mark is gold on
                 transparent and carries its own colour, so a --primary tile would
                 fight it. size-8 is load-bearing: it keeps the lockup aligned with

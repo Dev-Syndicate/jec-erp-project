@@ -16,6 +16,7 @@ import {
   fetchDepartmentOptions,
   fetchFaculty,
   fetchRoles,
+  fetchStaffCredentials,
   previewFacultyImport,
   regeneratePassword,
   updateFaculty,
@@ -71,6 +72,16 @@ export function useUpdateFaculty() {
 export function useRegeneratePassword() {
   // No list change — the caller reveals the returned password.
   return useMutation({ mutationFn: (id: string) => regeneratePassword(id) });
+}
+
+// Bulk login slips. Invalidates the list: every account it touches has its
+// password reset, which re-arms mustChangePassword and so the "Invited" badge.
+export function useStaffCredentials() {
+  const invalidate = useInvalidateFaculty();
+  return useMutation({
+    mutationFn: (departmentId?: string) => fetchStaffCredentials(departmentId),
+    onSuccess: invalidate,
+  });
 }
 
 // --- Bulk import ----------------------------------------------------------

@@ -37,6 +37,7 @@ import type {
 } from "@/features/faculty/types";
 import { FormSelect } from "@/features/faculty/components/form-select";
 import { ImportFacultyDialog } from "@/features/faculty/components/import-faculty-dialog";
+import { StaffCredentialsDialog } from "@/features/faculty/components/credentials-dialog";
 import {
   useCreateFaculty,
   useDepartmentOptions,
@@ -214,6 +215,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
   const { data: faculty, isPending, isError, error } = useFaculty();
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [credentials, setCredentials] = useState(false);
   const [editing, setEditing] = useState<Faculty | null>(null);
   const [resetting, setResetting] = useState<Faculty | null>(null);
   const [query, setQuery] = useState("");
@@ -348,6 +350,10 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
           description="Provision faculty accounts. Faculty sign in with their email."
         />
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setCredentials(true)} data-icon="inline-start">
+            <KeyRound />
+            Credentials
+          </Button>
           <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
             <Upload />
             Import
@@ -625,6 +631,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
 
       {creating && <CreateFacultyDialog onClose={() => setCreating(false)} />}
       {importing && <ImportFacultyDialog onClose={() => setImporting(false)} />}
+      {credentials && <StaffCredentialsDialog onClose={() => setCredentials(false)} />}
       {editing && <EditFacultyDialog faculty={editing} onClose={() => setEditing(null)} />}
       {resetting && <RegenerateDialog faculty={resetting} onClose={() => setResetting(null)} />}
     </div>

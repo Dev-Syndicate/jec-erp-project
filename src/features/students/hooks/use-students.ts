@@ -11,6 +11,7 @@ import {
   commitImport,
   createStudent,
   fetchClassOptions,
+  fetchCredentials,
   fetchProgramOptions,
   fetchStudents,
   previewImport,
@@ -71,6 +72,18 @@ export function useUpdateStudent() {
 export function useRegeneratePassword() {
   // No list change — the caller reveals the returned password.
   return useMutation({ mutationFn: (id: string) => regeneratePassword(id) });
+}
+
+// Bulk login slips. This DOES change the list: every student it touches has
+// their password reset, which re-arms mustChangePassword and so the "Invited"
+// badge. Without invalidating, a student who had already logged in and been
+// reset would keep showing as active until the cache expired.
+export function useCredentials() {
+  const invalidate = useInvalidateStudents();
+  return useMutation({
+    mutationFn: (classIds?: string[]) => fetchCredentials(classIds),
+    onSuccess: invalidate,
+  });
 }
 
 // Preview parses only — no list change.

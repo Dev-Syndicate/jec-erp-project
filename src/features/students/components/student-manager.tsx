@@ -32,6 +32,7 @@ import type { Gender, Student, StudentFilters, StudentStatus } from "@/features/
 import { FormSelect } from "@/features/students/components/form-select";
 import { ClassCascade } from "@/features/students/components/class-cascade";
 import { ImportStudentsDialog } from "@/features/students/components/import-students-dialog";
+import { CredentialsDialog } from "@/features/students/components/credentials-dialog";
 import { StudentFilterBar } from "@/features/students/components/student-filter-bar";
 import {
   useClassOptions,
@@ -153,6 +154,7 @@ function TempPasswordPanel({ name, password }: { name: string; password: string 
 export function StudentManager({ isInstitutionScoped = false }: { isInstitutionScoped?: boolean }) {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [credentials, setCredentials] = useState(false);
   const [editing, setEditing] = useState<Student | null>(null);
   const [resetting, setResetting] = useState<Student | null>(null);
   const [query, setQuery] = useState("");
@@ -198,6 +200,10 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
           description="Provision student accounts and enroll them into a class for the active academic year. Students sign in with their register number."
         />
         <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={() => setCredentials(true)} data-icon="inline-start">
+            <KeyRound />
+            Credentials
+          </Button>
           <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
             <Upload />
             Import
@@ -361,6 +367,7 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
 
       {creating && <CreateStudentDialog onClose={() => setCreating(false)} />}
       {importing && <ImportStudentsDialog onClose={() => setImporting(false)} />}
+      {credentials && <CredentialsDialog onClose={() => setCredentials(false)} />}
       {editing && <EditStudentDialog student={editing} onClose={() => setEditing(null)} />}
       {resetting && <RegenerateDialog student={resetting} onClose={() => setResetting(null)} />}
     </div>

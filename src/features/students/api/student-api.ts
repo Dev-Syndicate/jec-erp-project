@@ -8,6 +8,7 @@
 import { apiFetch } from "@/lib/api-client";
 import type {
   ClassOption,
+  CredentialResult,
   ImportPreview,
   ImportResult,
   ProgramOption,
@@ -60,6 +61,16 @@ export function updateStudent(id: string, patch: StudentPatch): Promise<Student>
 export function regeneratePassword(id: string): Promise<{ tempPassword: string }> {
   return apiFetch<{ tempPassword: string }>(`/api/students/${id}/regenerate-password`, {
     method: "POST",
+  });
+}
+
+// Bulk login slips. RESETS the temp password of every "Invited" student in the
+// named classes (omit classIds for every class you may act in) and returns them
+// grouped by class, once. Anything printed earlier stops working.
+export function fetchCredentials(classIds?: string[]): Promise<CredentialResult> {
+  return apiFetch<CredentialResult>("/api/students/credentials", {
+    method: "POST",
+    body: JSON.stringify(classIds?.length ? { classIds } : {}),
   });
 }
 

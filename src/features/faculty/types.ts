@@ -37,6 +37,24 @@ export type Faculty = {
   updatedAt: string;
 };
 
+// --- Bulk credentials -----------------------------------------------------
+// Login slips for staff who have not logged in yet ("Invited"). The server
+// RESETS each password and returns it once — the originals can't be read back
+// (Firebase keeps only hashes). One flat list, unlike students: staff get their
+// slips as a department, not a class.
+export type StaffCredentialResult = {
+  staff: Array<{
+    staffId: string;
+    name: string;
+    email: string;
+    department: string;
+    designation: string;
+    tempPassword: string;
+  }>;
+  total: number;
+  failed: Array<{ staffId: string; reason: string }>;
+};
+
 // --- Bulk import ----------------------------------------------------------
 // Mirrors the student importer's shape (src/features/students/types.ts) so the
 // two flows stay recognisable as the same thing. staffId is the identifier here

@@ -17,6 +17,7 @@ import type {
   ImportResult,
   ProvisionResult,
   Role,
+  StaffCredentialResult,
 } from "@/features/faculty/types";
 
 // --- Faculty --------------------------------------------------------------
@@ -48,6 +49,16 @@ export function regeneratePassword(id: string): Promise<{ tempPassword: string }
 // creates). Returned as-is; the shape already matches the client Role type.
 export function fetchRoles(): Promise<Role[]> {
   return apiFetch<Role[]>("/api/roles");
+}
+
+// Bulk login slips. RESETS the temp password of every "Invited" staff account in
+// scope (a HOD's own department; everything for Super Admin) and returns them
+// once. Anything printed earlier stops working.
+export function fetchStaffCredentials(departmentId?: string): Promise<StaffCredentialResult> {
+  return apiFetch<StaffCredentialResult>("/api/faculty/credentials", {
+    method: "POST",
+    body: JSON.stringify(departmentId ? { departmentId } : {}),
+  });
 }
 
 // --- Bulk import ----------------------------------------------------------

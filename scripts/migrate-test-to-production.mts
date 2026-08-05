@@ -25,8 +25,8 @@
 //     second run cannot double-provision or clobber live accounts.
 //   - Firebase-first per person, with the Neon write in a transaction; a failure
 //     deletes the just-created identity so a retry cannot collide on the email.
-const { config } = await import("dotenv");
-
+// No dotenv here on purpose: both env files are read explicitly below, so
+// neither can leak into process.env and be picked up by the wrong client.
 const { readFileSync, writeFileSync } = await import("node:fs");
 const { randomBytes } = await import("node:crypto");
 const { PrismaNeon } = await import("@prisma/adapter-neon");
@@ -98,9 +98,9 @@ const csvCell = (v: string) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
 async function main() {
   // --- refuse to run against a populated production ------------------------
-  const existingTables = await dst.$queryRaw<Array<{ n: bigint }>>`
-    SELECT COUNT(*)::bigint AS n FROM information_schema.tables WHERE table_schema='public'`;
-  if (existingTables[0].n === 0n) {
+  const existingTables = await dst.$queryRaw<Array<{ n: number }>>`
+    SELECT COUNT(*)::int AS n FROM information_schema.tables WHERE table_schema='public'`;
+  if (Number(existingTables[0].n) === 0) {
     throw new Error(
       "Production has no tables. Run this first:\n" +
       "  pnpm exec dotenv -e .env.production.local -- prisma db push\n" +
@@ -183,7 +183,14 @@ async function main() {
   // seeded production does not collide on the unique name.
   for (const r of data.roles) await dst.role.upsert({ where: { id: r.id }, update: {}, create: r });
   for (const r of data.permissions) await dst.permission.upsert({ where: { id: r.id }, update: {}, create: r });
-  for (const r of data.rolePermissions) await dst.rolePermission.upsert({ where: { id: r.id }, update: {}, create: r });
+  // RolePermission is keyed on the (role, permission) pair, not an id.
+  for (const r of data.rolePermissions) {
+    await dst.rolePermission.upsert({
+      where: { roleId_permissionId: { roleId: r.roleId, permissionId: r.permissionId } },
+      update: {},
+      create: r,
+    });
+  }
   console.log(`  ${data.roles.length} roles, ${data.permissions.length} permissions, ${data.rolePermissions.length} grants`);
 
   // Classes need departments + programs, which now exist.

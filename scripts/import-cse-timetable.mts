@@ -164,6 +164,27 @@ type Planned = {
   facultyDept: string;
   isLab: boolean;
 };
+
+// Cells REMOVED from the imported grid — the only departures from the sheet.
+//
+// Y4-B Friday P8: the sheet double-books Ms. M. Arshiya Mobeen there — Y4-B
+// OME354 and Y2-A CS25C08, two rooms at once. That is an error in the source,
+// not the parse: both class sheets independently name her. Left EMPTY rather
+// than reassigned, because every plausible replacement is itself busy that hour
+// (Ruthra, the obvious candidate, is supervising Y4-A's internship then) and
+// inventing an assignment the college never made would be worse than a visible
+// hole. They reschedule it and we re-import.
+//
+// Recorded here rather than hand-deleted from the DB so a re-import reproduces
+// the decision instead of silently restoring the clash.
+const REMOVALS: Array<{
+  year: number; section: string; day: Day; period: number; why: string;
+}> = [
+  {
+    year: 4, section: "B", day: "FRI", period: 8,
+    why: "sheet double-books Arshiya Mobeen (also Y2-A CS25C08 at this hour)",
+  },
+];
 type Skipped = { sheet: string; day: Day; label: number; text: string; why: string };
 
 async function main() {
@@ -181,7 +202,11 @@ async function main() {
   });
   const subjects = await db.subject.findMany({ select: { id: true, code: true, programId: true } });
   const staffRows = await db.facultyProfile.findMany({
-    select: { userId: true, department: { select: { code: true } }, user: { select: { displayName: true } } },
+    select: {
+      userId: true, staffId: true,
+      department: { select: { code: true } },
+      user: { select: { displayName: true } },
+    },
   });
   const staff: StaffRow[] = staffRows.map((s) => ({
     userId: s.userId,
@@ -272,6 +297,116 @@ async function main() {
         });
       });
     }
+  }
+
+  // --- the Summer internship supervision grid -------------------------------
+  // A separate sheet, laid out by SUPERVISOR rather than by hour: one row per
+  // member of staff, two blocks of Mon-Fri (Final Year A, then Final Year B),
+  // and the cell holds the PERIOD LABEL they take. So it is the transpose of a
+  // class timetable and has to be read on its own terms.
+  //
+  // These are the CS3711 hours the class sheets leave blank — their course table
+  // names no faculty for the internship because it is supervised per student.
+  const internSheet = wb.Sheets["Project Internship"];
+  if (internSheet) {
+    const g = XLSX.utils.sheet_to_json<unknown[]>(internSheet, { header: 1, blankrows: false, raw: false, defval: "" });
+    const hdrIdx = g.findIndex((r) => (r as unknown[]).some((c) => /^monday$/i.test(clean(c))));
+
+    if (hdrIdx === -1) {
+      console.log("  ! internship sheet: no weekday header found, skipped\n");
+    } else {
+      const hdr = (g[hdrIdx] as unknown[]).map(clean);
+      // Ten day columns in sheet order: the first five are Final Year A, the
+      // next five Final Year B.
+      const dayCols: Array<{ idx: number; day: Day }> = [];
+      hdr.forEach((c, i) => {
+        const m = /^(monday|tuesday|wednesday|thursday|friday)$/i.exec(c);
+        if (m) dayCols.push({ idx: i, day: m[1].slice(0, 3).toUpperCase() as Day });
+      });
+
+      // Final Year sheets take lunch at label 6, so labels 1-5 are periods 1-5
+      // and labels 7,8,9 are periods 6,7,8.
+      const labelToPeriod = (l: number) => (l <= 5 ? l : l - 1);
+
+      for (const r of g.slice(hdrIdx + 1)) {
+        const cells = (r as unknown[]).map(clean);
+        const rawName = cells[1];
+        if (!rawName || /coordinator|hod|principal/i.test(rawName)) continue;
+
+        const { hit, note } = resolveStaff(rawName, staff);
+        if (!hit) { unresolved.set(rawName, `${note} (internship sheet)`); continue; }
+
+        dayCols.forEach((dc, n) => {
+          const v = cells[dc.idx];
+          if (!v) return;
+          const label = Number(v);
+          if (!Number.isInteger(label) || label < 1 || label > 9) return;
+
+          const section = n < 5 ? "A" : "B";
+          const klass = classes.find((c) => c.year === 4 && c.section === section);
+          if (!klass) return;
+          const subject = subjects.find((s) => s.code.toUpperCase() === "CS3711" && s.programId === klass.programId);
+          if (!subject) return;
+
+          const period = labelToPeriod(label);
+          // Never overwrite a taught hour: if the class sheet already put a
+          // subject here, the supervision grid disagrees with it and that is
+          // worth reporting rather than silently resolving.
+          const taken = planned.find((p) => p.classId === klass.id && p.day === dc.day && p.period === period);
+          if (taken) {
+            skipped.push({
+              sheet: "Project Internship", day: dc.day, label,
+              text: `CS3711 ${hit.displayName}`,
+              why: `Y4-${section} ${dc.day} P${period} already holds ${taken.subjectCode}`,
+            });
+            return;
+          }
+
+          planned.push({
+            sheet: "Project Internship", classId: klass.id,
+            classLabel: `${klass.program.degree.code}·${klass.program.branch.code} Y4-${section}`,
+            day: dc.day, period, subjectId: subject.id, subjectCode: subject.code,
+            facultyUserId: hit.userId, facultyName: hit.displayName, facultyDept: hit.deptCode,
+            isLab: false,
+          });
+        });
+      }
+    }
+  }
+
+  // --- removals --------------------------------------------------------------
+  for (const o of REMOVALS) {
+    const klass = classes.find((c) => c.year === o.year && c.section === o.section);
+    if (!klass) continue;
+    const idx = planned.findIndex((p) => p.classId === klass.id && p.day === o.day && p.period === o.period);
+    if (idx === -1) {
+      console.log(`REMOVAL   Y${o.year}-${o.section} ${o.day} P${o.period}: already empty\n`);
+      continue;
+    }
+    const gone = planned[idx];
+    planned.splice(idx, 1);
+    console.log(`REMOVAL   Y${o.year}-${o.section} ${o.day} P${o.period}: dropped ${gone.subjectCode}/${gone.facultyName}`);
+    console.log(`          ${o.why}`);
+    console.log(`          left EMPTY — for the college to reschedule\n`);
+  }
+
+  // --- clash detection -------------------------------------------------------
+  // The DB's unique key is (class, day, period) — it cannot see one teacher
+  // being placed in two classes at the same hour, so check for it here.
+  const byTeacherHour = new Map<string, Planned[]>();
+  for (const p of planned) {
+    const k = `${p.facultyUserId}|${p.day}|${p.period}`;
+    byTeacherHour.set(k, [...(byTeacherHour.get(k) ?? []), p]);
+  }
+  const clashes = [...byTeacherHour.values()].filter((v) => v.length > 1);
+  if (clashes.length) {
+    console.log("!! TEACHER DOUBLE-BOOKED — one person, two classes, same hour:");
+    for (const c of clashes) {
+      console.log(`   ${c[0].facultyName}  ${c[0].day} P${c[0].period}:  ${c.map((x) => `${x.classLabel} ${x.subjectCode}`).join("  ×  ")}`);
+    }
+    console.log();
+  } else {
+    console.log("No teacher is double-booked.\n");
   }
 
   // --- report --------------------------------------------------------------

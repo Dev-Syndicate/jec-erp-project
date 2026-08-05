@@ -107,6 +107,21 @@ type ResetInput =
   | { kind: "email"; email: string }
   | { kind: "register"; registerNumber: string };
 
+// Where the reset link lands once the password has been changed.
+//
+// Without this Firebase sends people to <project>.firebaseapp.com — a domain
+// they have never seen, in a password-reset email. That is the shape of a
+// phishing link, and it is one of the reasons Gmail files these as spam.
+// Returning them to our own /login keeps the whole flow on one domain.
+//
+// Derived from the browser rather than hardcoded so previews and localhost work
+// unchanged; the constant is only the server-render fallback. NOTE: every host
+// used here must be listed under Firebase Auth → Settings → Authorised domains,
+// or Firebase rejects the call.
+const PRODUCTION_ORIGIN = "https://jec-erp.vercel.app";
+const resetContinueUrl = () =>
+  `${typeof window === "undefined" ? PRODUCTION_ORIGIN : window.location.origin}/login`;
+
 export function useSendPasswordReset() {
   return useMutation({
     mutationFn: async (input: ResetInput) => {
@@ -116,7 +131,31 @@ export function useSendPasswordReset() {
           : input.email;
       if (!email) return; // unknown register number — stay generic, don't leak
       try {
-        await sendPasswordResetEmail(auth, email);
+        try {
+          await sendPasswordResetEmail(auth, email, {
+            url: resetContinueUrl(),
+            // Firebase handles the reset form itself and then continues to `url`.
+            // True would require our own /reset page to consume the oobCode,
+            // which does not exist yet.
+            handleCodeInApp: false,
+          });
+        } catch (e) {
+          // Firebase rejects a continue URL whose host is not allowlisted under
+          // Auth → Settings → Authorised domains. Falling back to the plain send
+          // keeps the flow WORKING (Firebase's own hosted page) instead of
+          // failing outright — a worse outcome than the unbranded landing page
+          // this was meant to replace. Deploying to a new domain would otherwise
+          // silently break account recovery for everyone.
+          const code =
+            e && typeof e === "object" && "code" in e && typeof e.code === "string" ? e.code : "";
+          if (code !== "auth/unauthorized-continue-uri" && code !== "auth/invalid-continue-uri") throw e;
+          console.warn(
+            `[auth] ${window.location.origin} is not an authorised Firebase domain — ` +
+              `password-reset links will land on Firebase's hosted page. Add it under ` +
+              `Auth → Settings → Authorised domains.`,
+          );
+          await sendPasswordResetEmail(auth, email);
+        }
       } catch (e) {
         const code =
           e && typeof e === "object" && "code" in e && typeof e.code === "string" ? e.code : "";

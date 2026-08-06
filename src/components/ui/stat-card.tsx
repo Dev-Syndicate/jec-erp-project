@@ -1,5 +1,6 @@
 import * as React from "react"
 import Link from "next/link"
+import { ArrowDownRight, ArrowUpRight, Minus } from "lucide-react"
 
 import { cn } from "@/lib/utils"
 
@@ -84,4 +85,53 @@ function StatCardGrid({ className, ...props }: React.ComponentProps<"div">) {
   )
 }
 
-export { StatCard, StatCardGrid }
+/**
+ * The change chip that sits under a KPI value ("↗ +3 pts vs last week").
+ *
+ * Pass it as a StatCard `hint`. It is a separate component rather than a
+ * StatCard prop on purpose: a delta is only honest when there is a comparable
+ * earlier measurement behind it, so the CALLER has to hold that number to
+ * render one. A `delta` prop would invite passing 0 when there's no history,
+ * and "no change" is a very different claim from "nothing to compare against".
+ *
+ * The arrow is the point: direction is carried by the glyph and by the sign,
+ * not by red-vs-green alone, so it survives a colourblind reader and a
+ * greyscale print.
+ */
+function StatDelta({
+  value,
+  unit = "%",
+  label,
+  /** Set when a rise is bad (at-risk counts, absences) so the tone follows meaning. */
+  invert = false,
+  className,
+}: {
+  /** The change itself, already computed. Signed. */
+  value: number
+  unit?: string
+  /** What it's measured against — "vs last week". */
+  label?: string
+  invert?: boolean
+  className?: string
+}) {
+  const dir = value > 0 ? "up" : value < 0 ? "down" : "flat"
+  const good = value === 0 ? "flat" : (value > 0) !== invert ? "good" : "bad"
+  const Arrow = dir === "up" ? ArrowUpRight : dir === "down" ? ArrowDownRight : Minus
+
+  return (
+    <span className={cn("inline-flex items-center gap-1 text-xs", className)}>
+      <span
+        data-tone={good}
+        className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 font-medium tabular-nums data-[tone=bad]:bg-destructive-surface data-[tone=bad]:text-destructive data-[tone=flat]:bg-muted data-[tone=flat]:text-muted-foreground data-[tone=good]:bg-success-surface data-[tone=good]:text-success"
+      >
+        <Arrow className="size-3" aria-hidden />
+        {value > 0 ? "+" : ""}
+        {value}
+        {unit}
+      </span>
+      {label ? <span className="text-muted-foreground">{label}</span> : null}
+    </span>
+  )
+}
+
+export { StatCard, StatCardGrid, StatDelta }

@@ -172,16 +172,27 @@
   --chart-5: oklch(0.64 0.13 calc(var(--brand-hue) + 240));
 
   --radius: 0.625rem;
-  /* The rail is now the BRIGHT plane (was 0.985, the same value the canvas has
-     taken over). White against an off-white page gives the shell real
-     figure/ground from the surface alone — no shadow, no heavier border. */
-  --sidebar: oklch(1 0 0);
+  /* The shell FRAME — the plane the rail and the top bar share, and what the
+     page panel floats on. A soft wash of the brand hue rather than white, so
+     the neutral #fafafa panel reads as the foreground the moment it lands on it.
+     Derived from --brand-hue like everything else, so re-skinning the site still
+     carries the shell with it.
+
+     ⚠️ --sidebar and --sidebar-accent have to move TOGETHER. The accent is the
+     active/hover pill in the rail; it used to be 0.96/0.02, which is the wash
+     this frame now wears, so tinting the frame alone would have made the current
+     page's highlight vanish into it. The accent is deepened to keep a clear step
+     (ΔL 0.04) above the frame. The active item's primary-coloured left rule is a
+     second, independent cue — but it is a 2px bar, not a substitute for the
+     pill. */
+  --sidebar: oklch(0.975 0.012 var(--brand-hue));
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.58 var(--brand-chroma) var(--brand-hue));
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.96 0.02 var(--brand-hue));
+  --sidebar-accent: oklch(0.935 0.035 var(--brand-hue));
   --sidebar-accent-foreground: oklch(0.28 0.06 var(--brand-hue));
-  --sidebar-border: oklch(0.912 0 0);
+  /* Tinted to match: a neutral grey divider reads as a smudge on a tinted plane. */
+  --sidebar-border: oklch(0.9 0.014 var(--brand-hue));
   --sidebar-ring: oklch(0.58 var(--brand-chroma) var(--brand-hue));
 
   /* ─── Attendance status ───────────────────────────────────────────────

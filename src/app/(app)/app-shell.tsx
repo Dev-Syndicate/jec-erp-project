@@ -58,7 +58,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               Scoped to `md` because below that the panel is full-bleed with no
               rounding, where a ring would just draw a stray line down the screen
               edge. */}
-          <SidebarInset className="min-w-0 md:ring-1 md:ring-foreground/10">
+          {/* `mt-1!` tightens the gap under the header from 8px to 2px. The bang
+              is required, not decorative: the primitive sets the panel's inset
+              with the `m-2` SHORTHAND, and a longhand `mt-1` in a different
+              variant stack does not reliably out-order it — measured, it lost and
+              the margin stayed 8px. */}
+          <SidebarInset className="min-w-0 md:mt-1! md:ring-1 md:ring-foreground/10">
             <div className="flex flex-1 flex-col">{children}</div>
           </SidebarInset>
         </div>

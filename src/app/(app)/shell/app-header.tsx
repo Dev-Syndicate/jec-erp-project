@@ -35,9 +35,13 @@ export function AppHeader({ pathname }: { pathname: string }) {
     // No bottom border: the band and the rail beneath it are the same plane, so a
     // rule across the full width just cut the frame in half. Separation comes
     // from the page panel's own ring, which is the only edge that means anything
-    // here. `bg-card/95 backdrop-blur-sm` stays — it is what keeps the bar
-    // legible once rows scroll underneath it.
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 bg-card/95 px-3 backdrop-blur-sm sm:px-4">
+    // here.
+    //
+    // `bg-sidebar/95`, not `bg-card` — the bar IS the frame's top edge, so it has
+    // to wear the frame's colour or the tint stops halfway up the screen. The 95%
+    // + blur stays: without a border it is the only thing keeping the bar legible
+    // once rows scroll underneath it.
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 bg-sidebar/95 px-3 backdrop-blur-sm sm:px-4">
       {/* The lockup lives here rather than in the rail so the bar reads as one
           continuous strip. `/dashboard` is the one route with no role gate at
           all, so this is safe for every signed-in user.

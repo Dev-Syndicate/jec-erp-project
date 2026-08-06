@@ -41,13 +41,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <TooltipProvider>
-      <SidebarProvider>
-        <AppSidebar flags={navFlags} profile={profile} pathname={pathname} />
+      {/* `flex-col` turns the provider's own wrapper into a column so the header
+          can be a full-width band ABOVE the rail + panel row, rather than a strip
+          that starts where the rail ends. That is the one structural change here;
+          the row below it is the same two children in the same order. */}
+      <SidebarProvider className="flex-col">
+        <AppHeader pathname={pathname} />
 
-        <SidebarInset className="min-w-0">
-          <AppHeader pathname={pathname} />
-          <div className="flex flex-1 flex-col">{children}</div>
-        </SidebarInset>
+        <div className="flex w-full flex-1">
+          <AppSidebar flags={navFlags} profile={profile} pathname={pathname} />
+
+          {/* The ring is the house convention for defining a surface (see the
+              elevation note in globals.css) and it is what gives the panel's
+              rounded edge a crisp line — the frame is white and the panel is
+              #fafafa, so the built-in shadow alone barely registers between them.
+              Scoped to `md` because below that the panel is full-bleed with no
+              rounding, where a ring would just draw a stray line down the screen
+              edge. */}
+          <SidebarInset className="min-w-0 md:ring-1 md:ring-foreground/10">
+            <div className="flex flex-1 flex-col">{children}</div>
+          </SidebarInset>
+        </div>
 
         <CommandPalette flags={navFlags} />
       </SidebarProvider>

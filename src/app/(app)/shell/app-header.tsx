@@ -28,8 +28,43 @@ export function AppHeader({ pathname }: { pathname: string }) {
   const crumbs = buildBreadcrumbs(pathname);
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-card/95 px-3 backdrop-blur-sm sm:px-4">
-      <SidebarTrigger className="-ml-1" />
+    // A full-width band across the top of the shell: brand on the left, over the
+    // rail's column, then the trail and search continuing across the page panel.
+    // z-30 puts it above the rail's fixed container (z-10), which now starts
+    // below this bar.
+    // No bottom border: the band and the rail beneath it are the same plane, so a
+    // rule across the full width just cut the frame in half. Separation comes
+    // from the page panel's own ring, which is the only edge that means anything
+    // here. `bg-card/95 backdrop-blur-sm` stays — it is what keeps the bar
+    // legible once rows scroll underneath it.
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 bg-card/95 px-3 backdrop-blur-sm sm:px-4">
+      {/* The lockup lives here rather than in the rail so the bar reads as one
+          continuous strip. `/dashboard` is the one route with no role gate at
+          all, so this is safe for every signed-in user.
+          Width-matched to the rail on md+ so the divider under it lines up with
+          the rail's edge; on a phone it collapses to just the mark. */}
+      <Link
+        href="/dashboard"
+        className="-mx-1 flex shrink-0 items-center gap-2.5 rounded-lg px-1 py-1.5 transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring md:w-[calc(var(--sidebar-width)-1.25rem)]"
+      >
+        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary font-heading text-xs font-semibold text-primary-foreground">
+          JE
+        </span>
+        <span className="hidden min-w-0 flex-col leading-tight sm:flex">
+          <span className="font-heading text-sm font-semibold text-sidebar-foreground">
+            JEC ERP
+          </span>
+          {/* `eyebrow` sets 0.18em tracking, which pushes this 28-character name
+              past the rail-matched width and clips it to "…ENGINEERING COL…".
+              Tightened just enough to fit; `truncate` stays as the safety net for
+              a narrower rail. */}
+          <span className="eyebrow truncate text-[0.6rem] tracking-[0.08em] text-muted-foreground">
+            Jeppiaar Engineering College
+          </span>
+        </span>
+      </Link>
+
+      <SidebarTrigger />
 
       <Breadcrumb className="min-w-0 flex-1">
         <BreadcrumbList>

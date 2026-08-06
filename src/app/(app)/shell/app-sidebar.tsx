@@ -15,7 +15,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
-  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -48,28 +47,38 @@ export function AppSidebar({
   pathname: string;
 }) {
   return (
-    <Sidebar collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border">
-        {/* The lockup navigates home. `/dashboard` is the one route with no
-            role gate at all, so this is safe for every signed-in user. */}
-        <Link
-          href="/dashboard"
-          className="flex items-center gap-2.5 rounded-lg px-1 py-1.5 transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring group-data-[collapsible=icon]:px-0"
-        >
-          <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary font-heading text-xs font-semibold text-primary-foreground">
-            JE
-          </span>
-          <span className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-            <span className="font-heading text-sm font-semibold text-sidebar-foreground">
-              JEC ERP
-            </span>
-            <span className="eyebrow text-[0.6rem] text-muted-foreground">
-              Jeppiaar Engineering College
-            </span>
-          </span>
-        </Link>
-      </SidebarHeader>
-
+    // `variant="inset"` is what makes the rail the OUTER frame and floats the
+    // page in a rounded panel beside it. It is a structural switch on the
+    // primitive, not a restyle: it moves three classes that already exist in
+    // ui/sidebar.tsx — the wrapper takes bg-sidebar, the rail gains a 8px
+    // gutter, and SidebarInset gains m-2/rounded-xl/shadow-sm. Nothing about
+    // which items render, or their colours, changes.
+    //
+    // The three planes land in the right order for free, because the tokens were
+    // already set up that way: frame = --sidebar (white), page = --background
+    // (#fafafa), cards on the page = --card (white). The rail deliberately
+    // blends into the frame — the rounded panel, not a border, is what separates
+    // navigation from content.
+    // The rail starts BELOW the full-width header rather than at the top of the
+    // viewport, which is what lets the header read as one continuous band.
+    //
+    // The offset has to be written here because the primitive hard-codes
+    // `fixed inset-y-0 … h-svh` on its container. `h-[calc(…)]` beats `h-svh`
+    // through twMerge on its own (same group, last wins), but `top-14` and
+    // `inset-y-0` are DIFFERENT groups, so twMerge keeps both and the winner
+    // would come down to stylesheet order — hence the explicit `!`. This is the
+    // rare case the bang is actually for; see the note in ui/input.tsx about the
+    // ~60 places it was cargo-culted.
+    //
+    // Desktop only, by construction: Sidebar returns the mobile Sheet before it
+    // ever reads `className`, so the drawer keeps its own full-height geometry.
+    <Sidebar
+      collapsible="icon"
+      variant="inset"
+      className="top-14! h-[calc(100svh-3.5rem)]"
+    >
+      {/* No SidebarHeader: the brand lockup moved into AppHeader so the top band
+          is unbroken. The rail now opens straight into its first group. */}
       <SidebarContent className="gap-1 py-2">
         {visibleGroups(flags).map((group) => (
           <SidebarGroup key={group.label} className="py-1">

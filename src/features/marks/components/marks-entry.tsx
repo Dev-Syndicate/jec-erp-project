@@ -12,6 +12,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import {
@@ -149,7 +151,7 @@ export function MarksEntry() {
   const sheet = useMarksSheet(classId, subjectId, assessment, !!classId && !!subjectId);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Academic · Internal marks"
         title="Internal marks"
@@ -157,7 +159,7 @@ export function MarksEntry() {
       />
 
       {assignments.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your subjects…</p>
+        <LoadingState label="Loading your subjects…" />
       ) : assignments.isError ? (
         <FormError>{errorMessage(assignments.error)}</FormError>
       ) : !assignments.data?.semester ? (
@@ -193,7 +195,7 @@ export function MarksEntry() {
           {!effKey ? (
             <p className="text-sm text-muted-foreground">Pick a subject to enter marks.</p>
           ) : sheet.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading students…</p>
+            <LoadingState label="Loading students…" />
           ) : sheet.isError ? (
             <FormError>{errorMessage(sheet.error)}</FormError>
           ) : sheet.data ? (
@@ -201,7 +203,7 @@ export function MarksEntry() {
           ) : null}
         </>
       )}
-    </div>
+    </PageShell>
   );
 }
 

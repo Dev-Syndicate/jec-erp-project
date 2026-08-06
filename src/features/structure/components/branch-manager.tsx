@@ -28,6 +28,9 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormError } from "@/components/form-error";
+// Aliased: each manager keeps a local `RowActions` that owns its mutation hook
+// and decides which items apply; this is the menu those items render into.
+import { RowActions as RowActionsMenu } from "@/components/row-actions";
 import { LoadingState } from "@/components/loading-state";
 import { ActiveBadge } from "@/components/status-badge";
 import { errorMessage } from "@/lib/errors";
@@ -142,35 +145,24 @@ function RowActions({
   onDelete: () => void;
 }) {
   const update = useUpdateBranch();
+  // Hidden rather than disabled when programs depend on it: the API returns 409,
+  // and not offering the item explains that before the user tries.
   const canDelete = branch.programCount === 0;
 
   return (
-    <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label="Edit branch">
-        <Pencil />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={update.isPending}
-        onClick={() => update.mutate({ id: branch.id, input: { isActive: !branch.isActive } })}
-        aria-label={branch.isActive ? "Deactivate branch" : "Reactivate branch"}
-        title={branch.isActive ? "Deactivate" : "Reactivate"}
-      >
-        <Power className={branch.isActive ? "" : "text-muted-foreground"} />
-      </Button>
-      {canDelete && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onDelete}
-          aria-label="Delete branch"
-          title="Delete"
-        >
-          <Trash2 className="text-destructive" />
-        </Button>
-      )}
-    </div>
+    <RowActionsMenu
+      label={`Actions for ${branch.code}`}
+      actions={[
+        { label: "Edit", icon: Pencil, onSelect: onEdit },
+        {
+          label: branch.isActive ? "Deactivate" : "Reactivate",
+          icon: Power,
+          disabled: update.isPending,
+          onSelect: () => update.mutate({ id: branch.id, input: { isActive: !branch.isActive } }),
+        },
+        canDelete && { label: "Delete", icon: Trash2, destructive: true, onSelect: onDelete },
+      ]}
+    />
   );
 }
 
@@ -236,12 +228,7 @@ function BranchFormDialog({ branch, onClose }: { branch: Branch | null; onClose:
             />
           </div>
           {mutationError && (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              {errorMessage(mutationError)}
-            </p>
+            <FormError>{errorMessage(mutationError)}</FormError>
           )}
         </form>
 
@@ -271,12 +258,7 @@ function DeleteDialog({ branch, onClose }: { branch: Branch; onClose: () => void
           </DialogDescription>
         </DialogHeader>
         {del.isError && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage(del.error)}
-          </p>
+          <FormError>{errorMessage(del.error)}</FormError>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={del.isPending}>

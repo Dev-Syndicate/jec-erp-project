@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/dialog";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import { DAYS, PERIODS, type DayOfWeek, type TimetableSlot } from "@/features/timetable/types";
@@ -67,7 +69,7 @@ export function TimetableManager() {
     view.data?.slots.find((s) => s.dayOfWeek === day && s.period === period);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Curriculum · Timetable"
         title="Timetable"
@@ -116,7 +118,7 @@ export function TimetableManager() {
             : "Pick a class to view or edit its timetable."}
         </p>
       ) : view.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading timetable…</p>
+        <LoadingState label="Loading timetable…" />
       ) : view.isError ? (
         <FormError>{view.error instanceof Error ? view.error.message : "Failed to load timetable."}</FormError>
       ) : view.data ? (
@@ -207,7 +209,7 @@ export function TimetableManager() {
           onClose={() => setEditing(null)}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -282,7 +284,7 @@ function SlotDialog({
 
         <div className="flex flex-col gap-4">
           {subjects.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading subjects…</p>
+            <LoadingState label="Loading subjects…" />
           ) : subjectOptions.length === 0 ? (
             // No curriculum subjects for this class's semester — nothing to schedule.
             <div className="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">

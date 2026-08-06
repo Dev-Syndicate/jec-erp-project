@@ -9,8 +9,11 @@ import { useState } from "react";
 import { CalendarCheck2, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import { STATUS_META } from "@/features/attendance/components/status-meta";
@@ -61,7 +64,7 @@ export function DayAttendance() {
   const view = useDayAttendance(effClassId || null, date, enabled);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Attendance · Day record"
         title="Day attendance"
@@ -104,17 +107,17 @@ export function DayAttendance() {
           </Field>
         )}
         <Field label="Date">
-          <input
+          <Input
+            size="lg"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </Field>
       </div>
 
       {classes.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your classes…</p>
+        <LoadingState label="Loading your classes…" />
       ) : effClassId === "" ? (
         <p className="text-sm text-muted-foreground">
           {activeClasses.length === 0
@@ -124,13 +127,13 @@ export function DayAttendance() {
               : "Pick a program, then a class, to review the day attendance."}
         </p>
       ) : view.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading day attendance…</p>
+        <LoadingState label="Loading day attendance…" />
       ) : view.isError ? (
         <FormError>{errorMessage(view.error)}</FormError>
       ) : view.data ? (
         <Loaded key={`${effClassId}-${date}`} view={view.data} />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 

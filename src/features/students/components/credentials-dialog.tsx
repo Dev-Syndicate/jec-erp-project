@@ -25,6 +25,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import type { CredentialResult } from "@/features/students/types";
 import { useCredentials } from "@/features/students/hooks/use-students";
 
@@ -105,13 +106,8 @@ export function CredentialsDialog({ onClose }: { onClose: () => void }) {
               </p>
             )}
             {result.failed.length > 0 && (
-              <p
-                role="alert"
-                className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-              >
-                {result.failed.length} could not be reset:{" "}
-                {result.failed.map((f) => f.registerNumber).join(", ")}
-              </p>
+              <FormError>{result.failed.length} could not be reset:{" "}
+                {result.failed.map((f) => f.registerNumber).join(", ")}</FormError>
             )}
           </div>
 
@@ -156,12 +152,7 @@ export function CredentialsDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         {run.isError && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage(run.error)}
-          </p>
+          <FormError>{errorMessage(run.error)}</FormError>
         )}
 
         <DialogFooter>

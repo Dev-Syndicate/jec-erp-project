@@ -21,6 +21,8 @@ import {
 } from "@/components/ui/dialog";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import type { Permission, Role, Scope } from "@/features/access/types";
@@ -51,7 +53,7 @@ export function AccessManager() {
   );
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <div className="flex items-start justify-between gap-4">
         <PageHeader
           eyebrow="Access · Roles & permissions"
@@ -73,7 +75,7 @@ export function AccessManager() {
       </p>
 
       {roles.isPending || permissions.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading roles…</p>
+        <LoadingState label="Loading roles…" />
       ) : roles.isError ? (
         <FormError>{errorMessage(roles.error)}</FormError>
       ) : (
@@ -98,7 +100,7 @@ export function AccessManager() {
         />
       )}
       {deleting && <DeleteRoleDialog role={deleting} onClose={() => setDeleting(null)} />}
-    </div>
+    </PageShell>
   );
 }
 

@@ -19,8 +19,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { AcademicYear, Semester, SemesterKind } from "@/features/academic/types";
 import {
@@ -50,10 +53,10 @@ const isoToDateInput = (iso: string) => (iso ? iso.slice(0, 10) : "");
 // A prominent, fixed (non-brand) pill marking the active year/semester.
 function ActivePill({ children = "Active" }: { children?: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-emerald-600">
-      <CheckCircle2 className="size-3" />
+    <Badge variant="success" size="code">
+      <CheckCircle2 />
       {children}
-    </span>
+    </Badge>
   );
 }
 
@@ -74,7 +77,7 @@ export function AcademicManager() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <div className="flex items-start justify-between gap-4">
         <PageHeader
           eyebrow="Academic · Time"
@@ -88,11 +91,9 @@ export function AcademicManager() {
       </div>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading academic years…</p>
+        <LoadingState label="Loading academic years…" />
       ) : isError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
+        <FormError>{errorMessage(error)}</FormError>
       ) : (
         <>
           <ActivePeriodBanner years={years} />
@@ -143,7 +144,7 @@ export function AcademicManager() {
       {deleteTarget !== null && (
         <DeleteDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
       )}
-    </div>
+    </PageShell>
   );
 }
 

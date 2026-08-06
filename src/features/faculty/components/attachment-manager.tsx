@@ -42,6 +42,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { errorMessage } from "@/lib/errors";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { Attachment } from "@/features/faculty/types";
 import {
@@ -58,7 +61,7 @@ export function AttachmentManager() {
   const [removing, setRemoving] = useState<Attachment | null>(null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <div className="flex items-start justify-between gap-4">
         <PageHeader
           eyebrow="Faculty · Attachments"
@@ -72,11 +75,9 @@ export function AttachmentManager() {
       </div>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading attachments…</p>
+        <LoadingState label="Loading attachments…" />
       ) : isError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
+        <FormError>{errorMessage(error)}</FormError>
       ) : attachments.length === 0 ? (
         <EmptyState onAdd={() => setAdding(true)} />
       ) : (
@@ -146,7 +147,7 @@ export function AttachmentManager() {
       {removing !== null && (
         <RemoveDialog attachment={removing} onClose={() => setRemoving(null)} />
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -287,12 +288,7 @@ function AttachDialog({ onClose }: { onClose: () => void }) {
           </div>
 
           {create.isError && (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              {errorMessage(create.error)}
-            </p>
+            <FormError>{errorMessage(create.error)}</FormError>
           )}
         </form>
 
@@ -349,12 +345,7 @@ function RemoveDialog({ attachment, onClose }: { attachment: Attachment; onClose
           </DialogDescription>
         </DialogHeader>
         {del.isError && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage(del.error)}
-          </p>
+          <FormError>{errorMessage(del.error)}</FormError>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={del.isPending}>

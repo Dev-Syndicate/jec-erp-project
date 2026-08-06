@@ -34,6 +34,9 @@ import {
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FormError } from "@/components/form-error";
+// Aliased: each manager keeps a local `RowActions` that owns its mutation hook
+// and decides which items apply; this is the menu those items render into.
+import { RowActions as RowActionsMenu } from "@/components/row-actions";
 import { LoadingState } from "@/components/loading-state";
 import { ActiveBadge } from "@/components/status-badge";
 import { errorMessage } from "@/lib/errors";
@@ -148,30 +151,22 @@ function RowActions({ program, onDelete }: { program: Program; onDelete: () => v
   const update = useUpdateProgram();
   const canDelete = program.classCount === 0;
 
+  // No Edit item: a program IS its Degree × Branch pairing, so there is nothing
+  // editable — changing either half makes it a different program. Delete and
+  // recreate is the intended path, which is why only two items appear here.
   return (
-    <div className="flex items-center justify-end gap-1">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={update.isPending}
-        onClick={() => update.mutate({ id: program.id, isActive: !program.isActive })}
-        aria-label={program.isActive ? "Deactivate program" : "Reactivate program"}
-        title={program.isActive ? "Deactivate" : "Reactivate"}
-      >
-        <Power className={program.isActive ? "" : "text-muted-foreground"} />
-      </Button>
-      {canDelete && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onDelete}
-          aria-label="Delete program"
-          title="Delete"
-        >
-          <Trash2 className="text-destructive" />
-        </Button>
-      )}
-    </div>
+    <RowActionsMenu
+      label={`Actions for ${program.degreeCode} · ${program.branchCode}`}
+      actions={[
+        {
+          label: program.isActive ? "Deactivate" : "Reactivate",
+          icon: Power,
+          disabled: update.isPending,
+          onSelect: () => update.mutate({ id: program.id, isActive: !program.isActive }),
+        },
+        canDelete && { label: "Delete", icon: Trash2, destructive: true, onSelect: onDelete },
+      ]}
+    />
   );
 }
 
@@ -267,12 +262,7 @@ function ProgramFormDialog({ onClose }: { onClose: () => void }) {
             </p>
           </div>
           {create.error && (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              {errorMessage(create.error)}
-            </p>
+            <FormError>{errorMessage(create.error)}</FormError>
           )}
         </form>
 
@@ -304,12 +294,7 @@ function DeleteDialog({ program, onClose }: { program: Program; onClose: () => v
           </DialogDescription>
         </DialogHeader>
         {del.isError && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage(del.error)}
-          </p>
+          <FormError>{errorMessage(del.error)}</FormError>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={del.isPending}>

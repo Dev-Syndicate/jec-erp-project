@@ -19,8 +19,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Textarea } from "@/components/ui/textarea";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
+import { PageShell, TABLE_FRAME } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import {
@@ -86,7 +97,7 @@ export function LeaveManager() {
   );
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           eyebrow="Academic · Leave & OD"
@@ -106,7 +117,7 @@ export function LeaveManager() {
       </div>
 
       {list.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingState label="Loading…" />
       ) : list.isError ? (
         <FormError>{errorMessage(list.error)}</FormError>
       ) : requests.length === 0 ? (
@@ -148,7 +159,7 @@ export function LeaveManager() {
       )}
 
       {applying && <ApplyDialog onClose={() => setApplying(false)} />}
-    </div>
+    </PageShell>
   );
 }
 
@@ -159,47 +170,53 @@ function LeaveTable({ rows, showStudent }: { rows: LeaveRequest[]; showStudent: 
   const anyActionable = rows.some((r) => r.actionable);
 
   return (
-    <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
-      <table className="w-full min-w-160 border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-foreground/10 bg-muted/30 text-left text-muted-foreground">
-            {showStudent && <th className="px-3 py-2 font-medium">Student</th>}
-            <th className="px-3 py-2 font-medium">Type</th>
-            <th className="px-3 py-2 font-medium">Dates</th>
-            <th className="px-3 py-2 font-medium">Reason</th>
-            <th className="px-3 py-2 font-medium">Status</th>
-            {anyActionable && <th className="w-0 px-3 py-2 text-right font-medium">Action</th>}
-          </tr>
-        </thead>
-        <tbody>
+    <div className="flex flex-col gap-3">
+      <Table containerClassName={TABLE_FRAME} className="min-w-160">
+        <TableHeader>
+          <TableRow>
+            {showStudent && <TableHead>Student</TableHead>}
+            <TableHead>Type</TableHead>
+            <TableHead>Dates</TableHead>
+            <TableHead>Reason</TableHead>
+            <TableHead>Status</TableHead>
+            {anyActionable && <TableHead className="w-0 text-right">Action</TableHead>}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
           {rows.map((r) => (
-            <tr key={r.id} className="border-b border-foreground/10 align-top last:border-b-0">
+            <TableRow key={r.id} className="align-top">
               {showStudent && (
-                <td className="px-3 py-2">
+                <TableCell>
                   <div className="font-medium">{r.student.displayName}</div>
                   <div className="font-mono text-xs text-muted-foreground">{r.student.registerNumber}</div>
-                </td>
+                </TableCell>
               )}
-              <td className="px-3 py-2">
+              <TableCell>
                 <TypePill type={r.type} />
-              </td>
-              <td className="px-3 py-2 whitespace-nowrap">
+              </TableCell>
+              <TableCell>
                 {fmt(r.fromDate)}
                 {r.fromDate !== r.toDate && <> – {fmt(r.toDate)}</>}
-              </td>
-              <td className="max-w-xs px-3 py-2">
+              </TableCell>
+              {/* whitespace-normal overrides TableCell's nowrap: a reason is
+                  prose and has to wrap, unlike every other cell here. */}
+              <TableCell className="max-w-xs whitespace-normal">
                 <span className="text-muted-foreground">{r.reason}</span>
                 {r.status === "REJECTED" && r.rejectionReason && (
                   <div className="mt-1 text-xs text-destructive">Rejected: {r.rejectionReason}</div>
                 )}
-              </td>
-              <td className="px-3 py-2">
+              </TableCell>
+              <TableCell>
                 <StatusPill status={r.status} />
-              </td>
+              </TableCell>
               {anyActionable && (
-                <td className="px-3 py-2">
+                <TableCell>
                   {r.actionable && (
                     <div className="flex items-center justify-end gap-1">
+                      {/* Kept as two explicit buttons rather than a ⋯ menu:
+                          approving is the whole job of this screen, and burying
+                          the primary action of a queue behind a menu would cost
+                          a click on every row an approver works through. */}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -224,18 +241,14 @@ function LeaveTable({ rows, showStudent }: { rows: LeaveRequest[]; showStudent: 
                       </Button>
                     </div>
                   )}
-                </td>
+                </TableCell>
               )}
-            </tr>
+            </TableRow>
           ))}
-        </tbody>
-      </table>
+        </TableBody>
+      </Table>
 
-      {act.isError && (
-        <div className="p-3">
-          <FormError>{errorMessage(act.error)}</FormError>
-        </div>
-      )}
+      {act.isError && <FormError>{errorMessage(act.error)}</FormError>}
 
       {rejecting && (
         <RejectDialog
@@ -278,12 +291,11 @@ function RejectDialog({
         </DialogHeader>
         <div className="flex flex-col gap-2">
           <Label htmlFor="reject-reason">Reason</Label>
-          <textarea
+          <Textarea
             id="reject-reason"
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={3}
-            className="min-h-20 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
             placeholder="Why is this being rejected?"
           />
         </div>
@@ -411,13 +423,12 @@ function ApplyDialog({ onClose }: { onClose: () => void }) {
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="reason">Reason</Label>
-            <textarea
+            <Textarea
               id="reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               rows={3}
               maxLength={500}
-              className="min-h-20 rounded-md border border-border bg-background px-3 py-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
               placeholder="e.g. Inter-college sports meet at ..."
               required
             />

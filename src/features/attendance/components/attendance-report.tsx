@@ -10,12 +10,19 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, ClipboardList } from "lucide-react";
+import { Bar, BarChart, Cell, ReferenceLine, XAxis, YAxis } from "recharts";
 
 import { Input } from "@/components/ui/input";
+import { AXIS_PROPS, ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import { EmptyState } from "@/components/ui/empty-state";
+import { StatCard, StatCardGrid } from "@/components/ui/stat-card";
+import { Table, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { errorMessage } from "@/lib/errors";
+import { LoadingState } from "@/components/loading-state";
 import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
+import { PageShell, TABLE_FRAME } from "@/app/(app)/page-shell";
 import { FormSelect } from "@/components/form-select";
 import type { AttendanceReport, StudentReport, SubjectMeta } from "@/features/attendance/types";
 import { useAttendanceReport, useClassOptions } from "@/features/attendance/hooks/use-attendance";
@@ -53,7 +60,7 @@ export function AttendanceReport() {
   const report = useAttendanceReport(effClassId || null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Attendance · Report"
         title="Attendance report"
@@ -115,26 +122,154 @@ export function AttendanceReport() {
         </div>
       </div>
 
+      {/* Six outcomes, and they are NOT all "loading". Two of them ask the user
+          for input ("pick a class"), which is why none of this is a skeleton:
+          a skeleton would promise content that will never arrive on its own. */}
       {classes.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading…</p>
+        <LoadingState label="Loading…" />
       ) : activeClasses.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          You don’t have any classes to report on.
-        </p>
+        <EmptyState
+          size="sm"
+          title="You don’t have any classes to report on."
+        />
       ) : effClassId === "" ? (
-        <p className="text-sm text-muted-foreground">
-          {singleProgram
-            ? "Pick a class to see its attendance."
-            : "Pick a program, then a class, to see its attendance."}
-        </p>
+        <EmptyState
+          icon={ClipboardList}
+          title={singleProgram ? "Pick a class" : "Pick a program, then a class"}
+          description="Choose above to see overall and per-subject attendance for the active semester."
+        />
       ) : report.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading report…</p>
+        <LoadingState label="Loading report…" />
       ) : report.isError ? (
         <FormError>{errorMessage(report.error)}</FormError>
       ) : report.data ? (
         <Loaded report={report.data} threshold={threshold} />
       ) : null}
-    </div>
+    </PageShell>
+  );
+}
+
+// How the class is SPREAD, which the average alone hides: 78% mean can be a
+// tight cluster or half the room at 95 and half at 60, and those need different
+// responses. Buckets are fixed rather than derived from the threshold so the
+// shape stays comparable as the user drags the threshold around; the COLOUR is
+// what reacts, turning red for any bucket that sits below the line.
+const BUCKETS = [
+  { label: "<60", lo: 0, hi: 60 },
+  { label: "60–70", lo: 60, hi: 70 },
+  { label: "70–75", lo: 70, hi: 75 },
+  { label: "75–85", lo: 75, hi: 85 },
+  { label: "85–95", lo: 85, hi: 95 },
+  { label: "95+", lo: 95, hi: 101 },
+];
+
+function DistributionChart({
+  students,
+  threshold,
+}: {
+  students: StudentReport[];
+  threshold: number;
+}) {
+  const data = BUCKETS.map((b) => ({
+    label: b.label,
+    students: students.filter((s) => {
+      const p = s.overall.pct ?? 0;
+      return p >= b.lo && p < b.hi;
+    }).length,
+    // A bucket counts as failing when its TOP is at or below the line — i.e.
+    // everyone in it is short, not merely some.
+    short: b.hi <= threshold,
+  }));
+
+  return (
+    <section className="flex flex-col gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+      <h3 className="text-sm font-medium text-foreground">Attendance spread</h3>
+      <ChartContainer
+        height={180}
+        label={`Number of students in each attendance band, against a ${threshold}% threshold`}
+      >
+        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+          <XAxis dataKey="label" {...AXIS_PROPS} />
+          <YAxis allowDecimals={false} {...AXIS_PROPS} />
+          <Bar dataKey="students" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+            {data.map((d) => (
+              <Cell
+                key={d.label}
+                fill={d.short ? "var(--status-absent)" : "var(--chart-1)"}
+              />
+            ))}
+          </Bar>
+          <ChartTooltip formatter={(v) => [`${v} students`, "In band"]} />
+        </BarChart>
+      </ChartContainer>
+    </section>
+  );
+}
+
+// WHICH SUBJECT is bleeding attendance — invisible in the table without
+// expanding sixty rows one at a time. Summed across students per subject index,
+// which is the shape `students[].subjects[i]` already arrives in.
+function SubjectAverageChart({
+  report,
+  threshold,
+}: {
+  report: AttendanceReport;
+  threshold: number;
+}) {
+  const data = report.subjectsMeta.map((meta, i) => {
+    let attended = 0;
+    let total = 0;
+    for (const s of report.students) {
+      const cell = s.subjects[i];
+      if (!cell) continue;
+      attended += cell.attended;
+      total += cell.total;
+    }
+    return {
+      code: meta.code,
+      name: meta.name,
+      pct: total > 0 ? Math.round((attended / total) * 100) : 0,
+      total,
+    };
+  }).filter((d) => d.total > 0);
+
+  if (data.length === 0) return null;
+
+  return (
+    <section className="flex flex-col gap-3 rounded-xl bg-card p-4 ring-1 ring-foreground/10">
+      <h3 className="text-sm font-medium text-foreground">Average by subject</h3>
+      <ChartContainer
+        height={180}
+        label={`Class average attendance for each subject, against a ${threshold}% threshold`}
+      >
+        <BarChart data={data} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
+          <XAxis
+            dataKey="code"
+            {...AXIS_PROPS}
+            tick={{ ...AXIS_PROPS.tick, fontFamily: "var(--font-mono)" }}
+          />
+          <YAxis domain={[0, 100]} unit="%" {...AXIS_PROPS} />
+          <ReferenceLine
+            y={threshold}
+            stroke="var(--foreground)"
+            strokeOpacity={0.45}
+            strokeDasharray="4 4"
+          />
+          <Bar dataKey="pct" radius={[4, 4, 0, 0]} isAnimationActive={false}>
+            {data.map((d) => (
+              <Cell
+                key={d.code}
+                fill={d.pct < threshold ? "var(--status-absent)" : "var(--chart-1)"}
+              />
+            ))}
+          </Bar>
+          <ChartTooltip
+            formatter={(v) => [`${v}%`, "Class average"]}
+            labelFormatter={(code) => data.find((d) => d.code === code)?.name ?? String(code)}
+          />
+        </BarChart>
+      </ChartContainer>
+    </section>
   );
 }
 
@@ -164,34 +299,49 @@ function Loaded({ report, threshold }: { report: AttendanceReport; threshold: nu
       </div>
 
       {noData ? (
-        <div className="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">
-          No attendance has been marked for this class in the active semester yet.
-        </div>
+        <EmptyState
+          size="sm"
+          title="No attendance has been marked for this class in the active semester yet."
+        />
       ) : (
-        <div className="flex flex-wrap gap-2 text-sm">
-          <span className="rounded-md bg-muted px-2.5 py-1 font-medium text-muted-foreground">
-            Class average <span className="text-foreground">{fmtPct(avg)}</span>
-          </span>
-          <span className="rounded-md bg-red-500/10 px-2.5 py-1 font-medium text-red-600">
-            {defaulters} below {threshold}%
-          </span>
-          <span className="rounded-md bg-muted px-2.5 py-1 font-medium text-muted-foreground">
-            {report.students.length} students · {report.subjectsMeta.length} subjects
-          </span>
-        </div>
+        <>
+          <StatCardGrid className="lg:grid-cols-3">
+            <StatCard
+              label="Class average"
+              value={fmtPct(avg)}
+              tone={avg !== null && avg < threshold ? "destructive" : "success"}
+              hint="Present and OD count as attended"
+            />
+            <StatCard
+              label={`Below ${threshold}%`}
+              value={defaulters}
+              tone={defaulters > 0 ? "destructive" : "success"}
+              hint={`of ${withData.length} students with marks`}
+            />
+            <StatCard
+              label="Scope"
+              value={report.students.length}
+              hint={`students · ${report.subjectsMeta.length} subjects`}
+            />
+          </StatCardGrid>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <DistributionChart students={withData} threshold={threshold} />
+            <SubjectAverageChart report={report} threshold={threshold} />
+          </div>
+        </>
       )}
 
-      <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
-        <table className="w-full min-w-140 border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-foreground/10 bg-muted/30 text-left text-muted-foreground">
-              <th className="w-8 px-3 py-2" />
-              <th className="px-3 py-2 font-medium">Register no.</th>
-              <th className="px-3 py-2 font-medium">Name</th>
-              <th className="px-3 py-2 text-right font-medium">Attended</th>
-              <th className="px-3 py-2 text-right font-medium">Overall</th>
-            </tr>
-          </thead>
+      <Table containerClassName={TABLE_FRAME} className="min-w-140">
+        <TableHeader>
+          <TableRow>
+            <TableHead className="w-8" />
+            <TableHead>Register no.</TableHead>
+            <TableHead>Name</TableHead>
+            <TableHead className="text-right">Attended</TableHead>
+            <TableHead className="text-right">Overall</TableHead>
+          </TableRow>
+        </TableHeader>
           <tbody>
             {report.students.map((s) => (
               <StudentRow
@@ -203,9 +353,8 @@ function Loaded({ report, threshold }: { report: AttendanceReport; threshold: nu
                 onToggle={() => toggle(s.studentId)}
               />
             ))}
-          </tbody>
-        </table>
-      </div>
+        </tbody>
+      </Table>
     </div>
   );
 }

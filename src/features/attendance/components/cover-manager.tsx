@@ -17,8 +17,11 @@ import { RotateCcw, UserRoundCheck, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import type { CoverPeriod, CoverView, Weekday } from "@/features/attendance/types";
@@ -74,7 +77,7 @@ export function CoverManager() {
   const view = useCover(classId || null, date, enabled);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Attendance · Cover"
         title="Arrange cover"
@@ -115,29 +118,29 @@ export function CoverManager() {
           </div>
         </Field>
         <Field label="Date">
-          <input
+          <Input
+            size="lg"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </Field>
       </div>
 
       {classes.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading classes…</p>
+        <LoadingState label="Loading classes…" />
       ) : classId === "" ? (
         <p className="text-sm text-muted-foreground">
           Pick a class and a date to see that day&rsquo;s periods.
         </p>
       ) : view.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading the day&rsquo;s periods…</p>
+        <LoadingState label="Loading the day&rsquo;s periods…" />
       ) : view.isError ? (
         <FormError>{errorMessage(view.error)}</FormError>
       ) : view.data ? (
         <Loaded view={view.data} />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
@@ -155,9 +158,9 @@ function Loaded({ view }: { view: CoverView }) {
       <p className="text-sm text-muted-foreground">
         {view.date} · <span className="font-medium text-foreground">{WEEKDAY_LABEL[view.weekday]}</span>
         {view.followsDay && (
-          <span className="ml-2 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700">
+          <Badge variant="warning" className="ml-2">
             Working Saturday — runs {WEEKDAY_LABEL[view.followsDay]}&rsquo;s timetable
-          </span>
+          </Badge>
         )}
       </p>
 

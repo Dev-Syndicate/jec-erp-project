@@ -19,8 +19,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { errorMessage } from "@/lib/errors";
+import { TABLE_FRAME } from "@/app/(app)/page-shell";
 import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import type { Gender, StudentDetail } from "@/features/roster/types";
@@ -94,7 +105,7 @@ export function ClassRoster() {
   const view = useClassRoster(effClassId || null, !!effClassId);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="People · My class"
         title="My class students"
@@ -123,7 +134,7 @@ export function ClassRoster() {
       )}
 
       {classes.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your classes…</p>
+        <LoadingState label="Loading your classes…" />
       ) : activeClasses.length === 0 ? (
         <p className="text-sm text-muted-foreground">
           You&apos;re not the class teacher for any class.
@@ -131,13 +142,13 @@ export function ClassRoster() {
       ) : effClassId === "" ? (
         <p className="text-sm text-muted-foreground">Pick a class to see its students.</p>
       ) : view.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading students…</p>
+        <LoadingState label="Loading students…" />
       ) : view.isError ? (
         <FormError>{errorMessage(view.error)}</FormError>
       ) : view.data ? (
         <Loaded classId={view.data.classId} classLabel={view.data.classLabel} academicYear={view.data.academicYear} students={view.data.students} />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
@@ -194,28 +205,32 @@ function Loaded({
           <p className="text-sm text-muted-foreground">No students match the search.</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
-          <table className="w-full min-w-160 border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-foreground/10 bg-muted/30 text-left text-muted-foreground">
-                <th className="w-10 px-3 py-2 font-medium">#</th>
-                <th className="px-3 py-2 font-medium">Register no.</th>
-                <th className="px-3 py-2 font-medium">Roll no.</th>
-                <th className="px-3 py-2 font-medium">Name</th>
-                <th className="px-3 py-2 font-medium">Phone</th>
-                <th className="w-0 px-3 py-2 text-right font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Table containerClassName={TABLE_FRAME} className="min-w-160">
+            <TableHeader>
+              <TableRow>
+                {/* Position in the filtered list, not a stored number — a roster
+                    is read down the page, so "the 14th row" is what someone
+                    calling out names is actually looking for. */}
+                <TableHead className="w-10">#</TableHead>
+                <TableHead>Register no.</TableHead>
+                <TableHead>Roll no.</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead className="w-0 text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map((s, i) => (
-                <tr key={s.id} className="border-b border-foreground/10 last:border-b-0">
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{s.registerNumber}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{s.rollNumber ?? "—"}</td>
-                  <td className="px-3 py-2">{s.displayName}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{s.phone}</td>
-                  <td className="px-3 py-2">
+                <TableRow key={s.id}>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{s.rollNumber ?? "—"}</TableCell>
+                  <TableCell>{s.displayName}</TableCell>
+                  <TableCell className="text-muted-foreground">{s.phone}</TableCell>
+                  <TableCell>
                     <div className="flex items-center justify-end">
+                      {/* A labelled button, not a ⋯ menu: this row has exactly
+                          one action and it is the point of the screen. */}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -227,12 +242,11 @@ function Loaded({
                         View / edit
                       </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
       )}
 
       {editing && (

@@ -5,6 +5,8 @@
 
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import {
   WEEKDAYS,
@@ -30,7 +32,7 @@ export function MyTimetable() {
   const byCell = new Map(slots.map((s) => [`${s.dayOfWeek}-${s.period}`, s]));
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Attendance · Schedule"
         title="My timetable"
@@ -38,7 +40,7 @@ export function MyTimetable() {
       />
 
       {tt.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your timetable…</p>
+        <LoadingState label="Loading your timetable…" />
       ) : tt.isError ? (
         <FormError>{errorMessage(tt.error)}</FormError>
       ) : slots.length === 0 ? (
@@ -87,7 +89,7 @@ export function MyTimetable() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }
 

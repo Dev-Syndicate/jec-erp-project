@@ -10,6 +10,7 @@ import { Lock, Save, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
@@ -97,7 +98,7 @@ function AssignmentPicker({
           one made the row grow as you selected, shoving Assessment sideways on
           every click; a fixed row just fills in left to right. */}
       <Field label="Year">
-        <div className="w-32">
+        <div className="w-full sm:w-32">
           <FormSelect
             value={effYear}
             onChange={pickYear}
@@ -108,7 +109,7 @@ function AssignmentPicker({
         </div>
       </Field>
       <Field label="Section">
-        <div className="w-36">
+        <div className="w-full sm:w-36">
           <FormSelect
             value={effSection}
             onChange={pickSection}
@@ -163,13 +164,9 @@ export function MarksEntry() {
       ) : assignments.isError ? (
         <FormError>{errorMessage(assignments.error)}</FormError>
       ) : !assignments.data?.semester ? (
-        <p className="text-sm text-muted-foreground">
-          No semester is active. Activate one before entering marks.
-        </p>
+        <EmptyState size="sm" title="No semester is active. Activate one before entering marks." />
       ) : options.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          You&apos;re not assigned to any subject this semester.
-        </p>
+        <EmptyState size="sm" title="You&apos;re not assigned to any subject this semester." />
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-4">
@@ -181,7 +178,7 @@ export function MarksEntry() {
               />
             )}
             <Field label="Assessment">
-              <div className="w-44">
+              <div className="w-full sm:w-44">
                 <FormSelect
                   value={assessment}
                   onChange={(v) => setAssessment(v as Assessment)}
@@ -193,7 +190,7 @@ export function MarksEntry() {
           </div>
 
           {!effKey ? (
-            <p className="text-sm text-muted-foreground">Pick a subject to enter marks.</p>
+            <EmptyState size="sm" title="Pick a subject to enter marks." />
           ) : sheet.isPending ? (
             <LoadingState label="Loading students…" />
           ) : sheet.isError ? (

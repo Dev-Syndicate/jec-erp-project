@@ -18,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
@@ -79,7 +80,7 @@ export function TimetableManager() {
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Program</span>
-          <div className="w-56">
+          <div className="w-full sm:w-56">
             <FormSelect
               value={programId}
               onChange={(v) => {
@@ -93,7 +94,7 @@ export function TimetableManager() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Class</span>
-          <div className="w-40">
+          <div className="w-full sm:w-40">
             <FormSelect
               value={classId}
               onChange={setClassId}
@@ -112,11 +113,9 @@ export function TimetableManager() {
       </div>
 
       {classId === "" ? (
-        <p className="text-sm text-muted-foreground">
-          {programId === ""
+        <EmptyState size="sm" title={programId === ""
             ? "Pick a program, then a class, to view or edit its timetable."
-            : "Pick a class to view or edit its timetable."}
-        </p>
+            : "Pick a class to view or edit its timetable."} />
       ) : view.isPending ? (
         <LoadingState label="Loading timetable…" />
       ) : view.isError ? (

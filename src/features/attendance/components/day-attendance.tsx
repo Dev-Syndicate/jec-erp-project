@@ -10,6 +10,7 @@ import { CalendarCheck2, Check } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
@@ -74,7 +75,7 @@ export function DayAttendance() {
       <div className="flex flex-wrap items-end gap-4">
         {!singleProgram && (
           <Field label="Program">
-            <div className="w-56">
+            <div className="w-full sm:w-56">
               <FormSelect
                 value={programId}
                 onChange={(v) => {
@@ -89,7 +90,7 @@ export function DayAttendance() {
         )}
         {!singleClass && (
           <Field label="Class">
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <FormSelect
                 value={classId}
                 onChange={setClassId}
@@ -119,13 +120,11 @@ export function DayAttendance() {
       {classes.isPending ? (
         <LoadingState label="Loading your classes…" />
       ) : effClassId === "" ? (
-        <p className="text-sm text-muted-foreground">
-          {activeClasses.length === 0
+        <EmptyState size="sm" title={activeClasses.length === 0
             ? "You're not the class teacher for any class, so there's no day attendance to correct."
             : singleProgram
               ? "Pick a class to review the day attendance."
-              : "Pick a program, then a class, to review the day attendance."}
-        </p>
+              : "Pick a program, then a class, to review the day attendance."} />
       ) : view.isPending ? (
         <LoadingState label="Loading day attendance…" />
       ) : view.isError ? (

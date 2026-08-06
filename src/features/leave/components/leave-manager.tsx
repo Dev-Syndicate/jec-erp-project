@@ -28,10 +28,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
+import { EmptyState } from "@/components/ui/empty-state";
 import { errorMessage } from "@/lib/errors";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { FormError } from "@/components/form-error";
-import { PageShell, TABLE_FRAME } from "@/app/(app)/page-shell";
-import { LoadingState } from "@/components/loading-state";
+import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import {
@@ -98,7 +99,18 @@ export function LeaveManager() {
 
   return (
     <PageShell>
-      <div className="flex flex-wrap items-start justify-between gap-3">
+      <PageShellHeader
+        actions={
+          <>
+            {isStudent && (
+              <Button data-icon="inline-start" onClick={() => setApplying(true)}>
+                <CalendarPlus />
+                Apply
+              </Button>
+            )}
+          </>
+        }
+      >
         <PageHeader
           eyebrow="Academic · Leave & OD"
           title={isStudent ? "My leave & OD" : "Leave & OD approvals"}
@@ -108,22 +120,14 @@ export function LeaveManager() {
               : "Review your students' OD and leave requests. Class teacher approves first, then the HOD."
           }
         />
-        {isStudent && (
-          <Button data-icon="inline-start" onClick={() => setApplying(true)}>
-            <CalendarPlus />
-            Apply
-          </Button>
-        )}
-      </div>
+      </PageShellHeader>
 
       {list.isPending ? (
-        <LoadingState label="Loading…" />
+        <TableSkeleton rows={5} cols={6} label="Loading leave requests…" />
       ) : list.isError ? (
         <FormError>{errorMessage(list.error)}</FormError>
       ) : requests.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          {isStudent ? "You haven't applied for anything yet." : "No requests to review."}
-        </p>
+        <EmptyState size="sm" title={isStudent ? "You haven't applied for anything yet." : "No requests to review."} />
       ) : isStudent ? (
         <LeaveTable rows={requests} showStudent={false} />
       ) : (
@@ -133,7 +137,7 @@ export function LeaveManager() {
               Needs your action ({needsAction.length})
             </h2>
             {needsAction.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nothing waiting on you.</p>
+              <EmptyState size="sm" title="Nothing waiting on you." />
             ) : (
               <LeaveTable rows={needsAction} showStudent />
             )}

@@ -21,9 +21,9 @@ import {
 } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { errorMessage } from "@/lib/errors";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { FormError } from "@/components/form-error";
-import { PageShell } from "@/app/(app)/page-shell";
-import { LoadingState } from "@/components/loading-state";
+import { PageShell, PageShellHeader } from "@/app/(app)/page-shell";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { AcademicYear, Semester, SemesterKind } from "@/features/academic/types";
 import {
@@ -78,20 +78,25 @@ export function AcademicManager() {
 
   return (
     <PageShell>
-      <div className="flex items-start justify-between gap-4">
+      <PageShellHeader
+        actions={
+          <>
+            <Button onClick={() => setYearDialog("new")} data-icon="inline-start">
+              <Plus />
+              New year
+            </Button>
+          </>
+        }
+      >
         <PageHeader
           eyebrow="Academic · Time"
           title="Years & semesters"
           description="Set up academic years and their Odd/Even semesters. Exactly one year and one semester are active at a time — attendance, marks and timetables are recorded against the active semester."
         />
-        <Button onClick={() => setYearDialog("new")} data-icon="inline-start">
-          <Plus />
-          New year
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <LoadingState label="Loading academic years…" />
+        <CardSkeleton count={2} lines={4} label="Loading academic years…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : (
@@ -406,7 +411,7 @@ function YearFormDialog({ year, onClose }: { year: AcademicYear | null; onClose:
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <DateField id="year-start" label="Start date" value={startDate} onChange={setStartDate} />
             <DateField id="year-end" label="End date" value={endDate} onChange={setEndDate} />
           </div>
@@ -472,7 +477,7 @@ function SemesterFormDialog({
           </DialogDescription>
         </DialogHeader>
         <form id="semester-form" onSubmit={submit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <DateField id="sem-start" label="Start date" value={startDate} onChange={setStartDate} />
             <DateField id="sem-end" label="End date" value={endDate} onChange={setEndDate} />
           </div>

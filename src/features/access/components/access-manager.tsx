@@ -20,9 +20,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { errorMessage } from "@/lib/errors";
+import { CardSkeleton } from "@/components/ui/skeleton";
 import { FormError } from "@/components/form-error";
-import { PageShell } from "@/app/(app)/page-shell";
-import { LoadingState } from "@/components/loading-state";
+import { PageShell, PageShellHeader } from "@/app/(app)/page-shell";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import type { Permission, Role, Scope } from "@/features/access/types";
@@ -54,17 +54,22 @@ export function AccessManager() {
 
   return (
     <PageShell>
-      <div className="flex items-start justify-between gap-4">
+      <PageShellHeader
+        actions={
+          <>
+            <Button onClick={() => setEditing("new")} data-icon="inline-start">
+              <Plus />
+              Add role
+            </Button>
+          </>
+        }
+      >
         <PageHeader
           eyebrow="Access · Roles & permissions"
           title="Access control"
           description="Compose roles from the permission catalogue and assign them to people. Roles are configurable data — new ones appear in the account role pickers automatically."
         />
-        <Button onClick={() => setEditing("new")} data-icon="inline-start">
-          <Plus />
-          Add role
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {/* Enforcement is still the requireRole stopgap; permissions edited here go
           live when the CASL swap lands. Set expectations so this isn't mistaken
@@ -75,7 +80,7 @@ export function AccessManager() {
       </p>
 
       {roles.isPending || permissions.isPending ? (
-        <LoadingState label="Loading roles…" />
+        <CardSkeleton count={4} lines={2} label="Loading roles…" />
       ) : roles.isError ? (
         <FormError>{errorMessage(roles.error)}</FormError>
       ) : (
@@ -248,7 +253,7 @@ function RoleEditorDialog({
         </DialogHeader>
 
         <form id="role-form" onSubmit={save} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="r-name">Name</Label>
               <Input

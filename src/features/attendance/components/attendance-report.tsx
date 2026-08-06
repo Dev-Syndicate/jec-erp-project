@@ -71,7 +71,7 @@ export function AttendanceReport() {
         {!singleProgram && (
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Program</span>
-            <div className="w-56">
+            <div className="w-full sm:w-56">
               <FormSelect
                 value={programId}
                 onChange={(v) => {
@@ -87,7 +87,7 @@ export function AttendanceReport() {
         {!singleClass && (
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Class</span>
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <FormSelect
                 value={classId}
                 onChange={setClassId}

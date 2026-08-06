@@ -27,11 +27,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { FormError } from "@/components/form-error";
 // Aliased: each manager keeps a local `RowActions` that owns its mutation hook
 // and decides which items apply; this is the menu those items render into.
 import { RowActions as RowActionsMenu } from "@/components/row-actions";
-import { LoadingState } from "@/components/loading-state";
 import { ActiveBadge } from "@/components/status-badge";
 import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/app/(app)/page-header";
@@ -69,7 +69,7 @@ export function DegreeManager() {
       </PageShellHeader>
 
       {isPending ? (
-        <LoadingState label="Loading degrees…" />
+        <TableSkeleton rows={6} cols={6} label="Loading degrees…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : degrees.length === 0 ? (
@@ -224,7 +224,7 @@ function DegreeFormDialog({ degree, onClose }: { degree: Degree | null; onClose:
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="degree-code">Code</Label>
               <Input

@@ -15,6 +15,7 @@ import { CalendarCheck2, Check, Lock, Search, UserRoundCheck } from "lucide-reac
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
@@ -119,7 +120,7 @@ export function AttendanceManager() {
       <div className="flex flex-wrap items-end gap-4">
         {!singleProgram && (
           <Field label="Program">
-            <div className="w-56">
+            <div className="w-full sm:w-56">
               <FormSelect
                 value={programId}
                 onChange={(v) => {
@@ -136,7 +137,7 @@ export function AttendanceManager() {
 
         {!singleClass && (
           <Field label="Class">
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <FormSelect
                 value={classId}
                 onChange={(v) => {
@@ -185,17 +186,15 @@ export function AttendanceManager() {
 
       {/* Body */}
       {isSun ? (
-        <p className="text-sm text-muted-foreground">Sunday isn&apos;t a working day — nothing to mark.</p>
+        <EmptyState size="sm" title="Sunday isn&apos;t a working day — nothing to mark." />
       ) : classes.isPending ? (
         <LoadingState label="Loading your classes…" />
       ) : effClassId === "" ? (
-        <p className="text-sm text-muted-foreground">
-          {activeClasses.length === 0
+        <EmptyState size="sm" title={activeClasses.length === 0
             ? "You don't teach or advise any class this semester."
             : singleProgram
               ? "Pick a class to mark attendance."
-              : "Pick a program, then a class, to mark attendance."}
-        </p>
+              : "Pick a program, then a class, to mark attendance."} />
       ) : view.isPending ? (
         <LoadingState label="Loading roster…" />
       ) : view.isError ? (

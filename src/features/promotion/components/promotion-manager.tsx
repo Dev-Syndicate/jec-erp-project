@@ -21,9 +21,9 @@ import {
 } from "@/components/ui/table";
 import { TABLE_FRAME } from "@/app/(app)/page-shell";
 import { errorMessage } from "@/lib/errors";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
-import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import type { PromotionContext, PromotionResult } from "@/features/promotion/types";
@@ -68,7 +68,7 @@ export function PromotionManager() {
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Program</span>
-          <div className="w-56">
+          <div className="w-full sm:w-56">
             <FormSelect
               value={programId}
               onChange={(v) => {
@@ -82,7 +82,7 @@ export function PromotionManager() {
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Class</span>
-          <div className="w-40">
+          <div className="w-full sm:w-40">
             <FormSelect
               value={classId}
               onChange={setClassId}
@@ -103,7 +103,7 @@ export function PromotionManager() {
       {classId === "" ? (
         <p className="text-sm text-muted-foreground">Pick a program, then a class, to promote it.</p>
       ) : ctx.isPending ? (
-        <LoadingState label="Loading roster…" />
+        <TableSkeleton rows={8} cols={3} label="Loading roster…" />
       ) : ctx.isError ? (
         <FormError>{errorMessage(ctx.error)}</FormError>
       ) : ctx.data ? (
@@ -179,7 +179,7 @@ function PromotionPanel({ context }: { context: PromotionContext }) {
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Target academic year</span>
-            <div className="w-48">
+            <div className="w-full sm:w-48">
               <FormSelect
                 value={targetYearId}
                 onChange={setTargetYearId}
@@ -191,7 +191,7 @@ function PromotionPanel({ context }: { context: PromotionContext }) {
           </div>
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Target class</span>
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <FormSelect
                 value={targetClassId}
                 onChange={setTargetClassId}

@@ -31,10 +31,10 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { errorMessage } from "@/lib/errors";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { CopyButton } from "@/components/copy-button";
 import { FormError } from "@/components/form-error";
 import { FormField, FormSection, FormSectionDivider } from "@/components/form-field";
-import { LoadingState } from "@/components/loading-state";
 import { RowActions } from "@/components/row-actions";
 import { SearchInput } from "@/components/search-input";
 import { AccountBadge } from "@/components/status-badge";
@@ -339,7 +339,7 @@ export function FacultyManager({ isInstitutionScoped = false }: { isInstitutionS
       </PageShellHeader>
 
       {isPending ? (
-        <LoadingState label="Loading faculty…" />
+        <TableSkeleton rows={8} cols={7} label="Loading faculty…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : faculty.length === 0 ? (

@@ -27,12 +27,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { FormError } from "@/components/form-error";
 // Aliased: each manager keeps a local `RowActions` that owns its mutation hook
 // and decides which items apply; this is the menu those items render into.
 import { RowActions as RowActionsMenu } from "@/components/row-actions";
 import { FormSelect } from "@/components/form-select";
-import { LoadingState } from "@/components/loading-state";
 import { ActiveBadge } from "@/components/status-badge";
 import { PageShell, PageShellHeader, TableToolbar } from "@/app/(app)/page-shell";
 import { errorMessage } from "@/lib/errors";
@@ -133,7 +133,7 @@ export function SubjectManager() {
       </PageShellHeader>
 
       {isPending ? (
-        <LoadingState label="Loading subjects…" />
+        <TableSkeleton rows={6} cols={6} label="Loading subjects…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : allPrograms.length === 0 ? (
@@ -147,7 +147,7 @@ export function SubjectManager() {
           <TableToolbar className="justify-start gap-4">
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs text-muted-foreground">Degree</Label>
-              <div className="w-48">
+              <div className="w-full sm:w-48">
                 <FormSelect
                   value={activeDegreeId}
                   onChange={(v) => {
@@ -161,7 +161,7 @@ export function SubjectManager() {
             </div>
             <div className="flex flex-col gap-1.5">
               <Label className="text-xs text-muted-foreground">Branch</Label>
-              <div className="w-48">
+              <div className="w-full sm:w-48">
                 <FormSelect
                   value={activeBranchId}
                   onChange={setBranchFilter}

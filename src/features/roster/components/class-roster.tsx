@@ -6,11 +6,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Copy, KeyRound, Pencil, Search } from "lucide-react";
+import { KeyRound, Pencil, UsersRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -27,11 +26,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
 import { errorMessage } from "@/lib/errors";
+import { CopyButton } from "@/components/copy-button";
+import { SearchInput } from "@/components/search-input";
+import { DetailPanel } from "@/components/detail-panel";
+import { FormField, FormSection } from "@/components/form-field";
 import { TABLE_FRAME } from "@/app/(app)/page-shell";
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
 import { LoadingState } from "@/components/loading-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
 import type { Gender, StudentDetail } from "@/features/roster/types";
@@ -62,33 +67,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // The one-time temp-password reveal, shown after a reset. Mirrors the admin's
 // Students panel — the password is shown once; the teacher must deliver it now.
 function TempPasswordPanel({ name, password }: { name: string; password: string }) {
-  const [copied, setCopied] = useState(false);
   return (
-    <div className="col-span-2 flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
       <p className="text-sm text-muted-foreground">
         New temporary password for <span className="font-medium text-foreground">{name}</span>. It’s
         shown once — deliver it now; they’ll set their own on first login.
       </p>
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-background p-2">
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2">
         <code className="flex-1 px-1 font-mono text-sm text-foreground">{password}</code>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-icon="inline-start"
-          onClick={() => {
-            navigator.clipboard?.writeText(password).then(
-              () => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              },
-              () => {},
-            );
-          }}
-        >
-          {copied ? <Check /> : <Copy />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+        <CopyButton value={password} />
       </div>
     </div>
   );
@@ -115,7 +102,7 @@ export function ClassRoster() {
       {!singleClass && (
         <div className="flex flex-wrap items-end gap-4">
           <Field label="Class">
-            <div className="w-56">
+            <div className="w-full sm:w-56">
               <FormSelect
                 value={classId}
                 onChange={setClassId}
@@ -136,13 +123,15 @@ export function ClassRoster() {
       {classes.isPending ? (
         <LoadingState label="Loading your classes…" />
       ) : activeClasses.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          You&apos;re not the class teacher for any class.
-        </p>
+        <EmptyState
+          icon={UsersRound}
+          title="You're not the class teacher for any class"
+          description="This screen belongs to a class advisor. If that should be you, ask your HOD to set you as the class teacher."
+        />
       ) : effClassId === "" ? (
-        <p className="text-sm text-muted-foreground">Pick a class to see its students.</p>
+        <EmptyState size="sm" title="Pick a class to see its students." />
       ) : view.isPending ? (
-        <LoadingState label="Loading students…" />
+        <TableSkeleton rows={10} cols={6} label="Loading students…" />
       ) : view.isError ? (
         <FormError>{errorMessage(view.error)}</FormError>
       ) : view.data ? (
@@ -187,23 +176,16 @@ function Loaded({
           {" · "}
           {students.length} students
         </p>
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            size="lg"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name or register no.…"
-            aria-label="Search students"
-            className="pl-9"
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search name or register no.…"
+          label="Search students"
+        />
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-16 text-center">
-          <p className="text-sm text-muted-foreground">No students match the search.</p>
-        </div>
+        <EmptyState size="sm" title="No students match the search." />
       ) : (
         <Table containerClassName={TABLE_FRAME} className="min-w-160">
             <TableHeader>
@@ -252,15 +234,6 @@ function Loaded({
       {editing && (
         <StudentDialog classId={classId} student={editing} onClose={() => setEditing(null)} />
       )}
-    </div>
-  );
-}
-
-function ReadOnly({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="rounded-md bg-muted/40 px-3 py-2 text-sm">{value}</span>
     </div>
   );
 }
@@ -321,45 +294,54 @@ function StudentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form id="student-form" onSubmit={submit} className="grid grid-cols-2 gap-4">
-          <ReadOnly label="Register number" value={student.registerNumber} />
-          <ReadOnly label="Email" value={student.email} />
-          <ReadOnly label="Class" value={student.currentEnrollment?.classLabel ?? "—"} />
-          <ReadOnly label="Status" value={student.status} />
+        {/* The detail layout: identity panel beside the editable fields. This is
+            the closest thing the app has to a student detail view, so it reads
+            like one — what is FIXED about this student (their login handles,
+            their class) sits in the panel; what a class teacher may correct sits
+            in the form.
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-name">Full name</Label>
-            <Input size="lg" id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-roll">Roll number</Label>
-            <Input size="lg" id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-phone">Phone</Label>
-            <Input size="lg" id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-dob">Date of birth</Label>
-            <Input size="lg" id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-gender">Gender</Label>
-            <FormSelect id="s-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
-          </div>
+            The split is not cosmetic: /api/roster deliberately refuses register
+            number and email (they are sign-in handles, and only the students
+            screen may change them), so showing them as panel facts rather than
+            greyed-out inputs states that rule instead of implying a permission
+            problem. */}
+        <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
+          <DetailPanel
+            // Not sticky here: inside a dialog the panel is already in view.
+            className="order-1 lg:top-0"
+            name={student.displayName}
+            subtitle={student.currentEnrollment?.classLabel ?? "Not enrolled"}
+            meta={[
+              { label: "Register no.", value: student.registerNumber },
+              { label: "Email", value: student.email },
+              { label: "Status", value: student.status },
+            ]}
+          />
 
-          {update.isError && (
-            <div className="col-span-2">
-              <FormError>{errorMessage(update.error)}</FormError>
-            </div>
-          )}
-          {regen.isError && (
-            <div className="col-span-2">
-              <FormError>{errorMessage(regen.error)}</FormError>
-            </div>
-          )}
-          {tempPassword && <TempPasswordPanel name={student.displayName} password={tempPassword} />}
-        </form>
+          <form id="student-form" onSubmit={submit} className="order-2 flex flex-col gap-4">
+            <FormSection title="Editable details" columns={2}>
+              <FormField id="s-name" label="Full name" required>
+                <Input size="lg" id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+              </FormField>
+              <FormField id="s-roll" label="Roll number">
+                <Input size="lg" id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
+              </FormField>
+              <FormField id="s-phone" label="Phone" required>
+                <Input size="lg" id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+              </FormField>
+              <FormField id="s-dob" label="Date of birth">
+                <Input size="lg" id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+              </FormField>
+              <FormField id="s-gender" label="Gender">
+                <FormSelect id="s-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
+              </FormField>
+            </FormSection>
+
+            {update.isError && <FormError>{errorMessage(update.error)}</FormError>}
+            {regen.isError && <FormError>{errorMessage(regen.error)}</FormError>}
+            {tempPassword && <TempPasswordPanel name={student.displayName} password={tempPassword} />}
+          </form>
+        </div>
 
         <DialogFooter className="sm:justify-between">
           {canReset ? (

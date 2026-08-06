@@ -33,11 +33,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { FormError } from "@/components/form-error";
 // Aliased: each manager keeps a local `RowActions` that owns its mutation hook
 // and decides which items apply; this is the menu those items render into.
 import { RowActions as RowActionsMenu } from "@/components/row-actions";
-import { LoadingState } from "@/components/loading-state";
 import { ActiveBadge } from "@/components/status-badge";
 import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/app/(app)/page-header";
@@ -78,7 +78,7 @@ export function ProgramManager() {
       </PageShellHeader>
 
       {isPending ? (
-        <LoadingState label="Loading programs…" />
+        <TableSkeleton rows={6} cols={8} label="Loading programs…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : programs.length === 0 ? (

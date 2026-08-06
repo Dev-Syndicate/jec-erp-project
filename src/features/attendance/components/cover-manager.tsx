@@ -18,6 +18,7 @@ import { RotateCcw, UserRoundCheck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
@@ -87,7 +88,7 @@ export function CoverManager() {
       <div className="flex flex-wrap items-end gap-4">
         {!singleProgram && (
           <Field label="Program">
-            <div className="w-56">
+            <div className="w-full sm:w-56">
               <FormSelect
                 value={programId}
                 onChange={(v) => {
@@ -101,7 +102,7 @@ export function CoverManager() {
           </Field>
         )}
         <Field label="Class">
-          <div className="w-40">
+          <div className="w-full sm:w-40">
             <FormSelect
               value={classId}
               onChange={setClassId}
@@ -130,9 +131,7 @@ export function CoverManager() {
       {classes.isPending ? (
         <LoadingState label="Loading classes…" />
       ) : classId === "" ? (
-        <p className="text-sm text-muted-foreground">
-          Pick a class and a date to see that day&rsquo;s periods.
-        </p>
+        <EmptyState size="sm" title="Pick a class and a date to see that day&rsquo;s periods." />
       ) : view.isPending ? (
         <LoadingState label="Loading the day&rsquo;s periods…" />
       ) : view.isError ? (
@@ -282,7 +281,7 @@ function AssignForm({
     <div className="flex flex-col gap-3 border-t border-border bg-muted/20 px-4 py-3">
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Covering teacher">
-          <div className="w-64">
+          <div className="w-full sm:w-64">
             <FormSelect
               value={substituteId}
               onChange={setSubstituteId}
@@ -299,7 +298,7 @@ function AssignForm({
           </div>
         </Field>
         <Field label="Reason (optional)">
-          <div className="w-64">
+          <div className="w-full sm:w-64">
             <Input
               size="lg"
               value={reason}

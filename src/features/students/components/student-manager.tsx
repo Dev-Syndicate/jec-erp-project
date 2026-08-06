@@ -29,10 +29,10 @@ import {
 import { EmptyState } from "@/components/ui/empty-state";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { errorMessage } from "@/lib/errors";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { CopyButton } from "@/components/copy-button";
 import { FormError } from "@/components/form-error";
 import { FormField, FormSection, FormSectionDivider } from "@/components/form-field";
-import { LoadingState } from "@/components/loading-state";
 import { RowActions } from "@/components/row-actions";
 import { SearchInput } from "@/components/search-input";
 import { AccountBadge } from "@/components/status-badge";
@@ -188,7 +188,7 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
       </PageShellHeader>
 
       {isPending ? (
-        <LoadingState label="Loading students…" />
+        <TableSkeleton rows={10} cols={6} label="Loading students…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : total === 0 && !searching && !filtering ? (

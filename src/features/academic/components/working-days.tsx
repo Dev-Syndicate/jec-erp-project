@@ -150,7 +150,7 @@ export function WorkingDays() {
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. Pongal compensation"
-            className="w-64"
+            className="w-full sm:w-64"
           />
         </div>
         <Button type="submit" data-icon="inline-start" disabled={!valid || declare.isPending}>

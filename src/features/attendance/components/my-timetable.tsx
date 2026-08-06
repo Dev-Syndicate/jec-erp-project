@@ -3,6 +3,7 @@
 // Read-only reference; a working Saturday borrows one of these weekday grids.
 "use client";
 
+import { EmptyState } from "@/components/ui/empty-state";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
@@ -44,9 +45,7 @@ export function MyTimetable() {
       ) : tt.isError ? (
         <FormError>{errorMessage(tt.error)}</FormError>
       ) : slots.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          You have no scheduled periods this semester.
-        </p>
+        <EmptyState size="sm" title="You have no scheduled periods this semester." />
       ) : (
         <div className="flex flex-col gap-3">
           {tt.data?.semesterLabel && (

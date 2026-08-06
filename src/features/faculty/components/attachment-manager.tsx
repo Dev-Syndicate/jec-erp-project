@@ -42,8 +42,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { errorMessage } from "@/lib/errors";
-import { PageShell } from "@/app/(app)/page-shell";
-import { LoadingState } from "@/components/loading-state";
+import { PageShell, PageShellHeader } from "@/app/(app)/page-shell";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { Attachment } from "@/features/faculty/types";
@@ -62,20 +62,25 @@ export function AttachmentManager() {
 
   return (
     <PageShell>
-      <div className="flex items-start justify-between gap-4">
+      <PageShellHeader
+        actions={
+          <>
+            <Button onClick={() => setAdding(true)} data-icon="inline-start">
+              <Plus />
+              Attach a lecturer
+            </Button>
+          </>
+        }
+      >
         <PageHeader
           eyebrow="Faculty · Attachments"
           title="Cross-department teaching"
           description="Lend a lecturer to another department for this semester so they can be put on its timetable. Their home department doesn't change. Attachments lapse at the end of the semester and need renewing."
         />
-        <Button onClick={() => setAdding(true)} data-icon="inline-start">
-          <Plus />
-          Attach a lecturer
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <LoadingState label="Loading attachments…" />
+        <TableSkeleton rows={5} cols={6} label="Loading attachments…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : attachments.length === 0 ? (

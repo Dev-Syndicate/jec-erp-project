@@ -81,7 +81,7 @@ export function ResetPasswordForm() {
           title="This link isn’t a password reset"
           hint="It looks like a different kind of account email. Sign in, or ask the ERP administrator."
         />
-        <Button size="lg" className="h-11" render={<Link href="/login" />}>
+        <Button size="lg" className="h-11" nativeButton={false} render={<Link href="/login" />}>
           Back to sign in
         </Button>
       </div>
@@ -97,7 +97,7 @@ export function ResetPasswordForm() {
           title="Nothing to reset"
           hint="Open the link from your reset email, or request a new one."
         />
-        <Button size="lg" className="h-11" render={<Link href="/login" />}>
+        <Button size="lg" className="h-11" nativeButton={false} render={<Link href="/login" />}>
           Back to sign in
         </Button>
       </div>
@@ -127,7 +127,7 @@ export function ResetPasswordForm() {
           hint="Reset links work once, and expire after a while."
         />
         <FormError>{codeMessage(verify.error)}</FormError>
-        <Button size="lg" className="h-11" render={<Link href="/login" />}>
+        <Button size="lg" className="h-11" nativeButton={false} render={<Link href="/login" />}>
           Request a new link
         </Button>
       </div>
@@ -202,7 +202,7 @@ export function ResetPasswordForm() {
         >
           {confirm.isPending ? "Saving…" : "Save password"}
         </Button>
-        <Button type="button" variant="ghost" render={<Link href="/login" />}>
+        <Button type="button" variant="ghost" nativeButton={false} render={<Link href="/login" />}>
           Back to sign in
         </Button>
       </form>

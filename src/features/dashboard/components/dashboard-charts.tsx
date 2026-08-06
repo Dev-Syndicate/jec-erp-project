@@ -347,10 +347,18 @@ export function BandDistributionChart({
     >
       {/* `left: 0` for the same reason as the trend chart — a negative gutter
           clips a three-digit tick ("214" → "14"). */}
-      <BarChart data={bands} margin={{ top: 20, right: 4, bottom: 0, left: 0 }}>
+      {/* `barCategoryGap` is the fix for five thin bars marooned in whitespace:
+          Recharts' default leaves each category band mostly empty, and the
+          maxBarSize cap then stops the bar reclaiming it. Narrowing the gap and
+          raising the cap together lets the columns carry the card. */}
+      <BarChart
+        data={bands}
+        margin={{ top: 20, right: 4, bottom: 0, left: 0 }}
+        barCategoryGap="22%"
+      >
         <XAxis dataKey="label" {...AXIS_PROPS} interval={0} tick={{ ...AXIS_PROPS.tick, fontSize: 10 }} />
         <YAxis allowDecimals={false} width={40} {...AXIS_PROPS} />
-        <Bar dataKey="students" radius={[4, 4, 0, 0]} maxBarSize={44} isAnimationActive={false}>
+        <Bar dataKey="students" radius={[4, 4, 0, 0]} maxBarSize={72} isAnimationActive={false}>
           {bands.map((b) => (
             <Cell key={b.key} fill={bandVar(lower[b.key] ?? 0, threshold)} />
           ))}
@@ -365,5 +373,55 @@ export function BandDistributionChart({
         <ChartTooltip formatter={(v) => [`${v} students`, "In this band"]} />
       </BarChart>
     </ChartContainer>
+  );
+}
+
+// ── Cohort shape ─────────────────────────────────────────────────────────────
+
+/**
+ * How the roster splits across year groups.
+ *
+ * Bars are drawn relative to the LARGEST year, not to the total: the question is
+ * "which cohorts are big", and scaling to the total squashes four similar
+ * numbers into four near-identical stubs. The share is printed beside the count
+ * for the reader who wants the proportion instead.
+ *
+ * One hue, because this is pure magnitude — the years are an ordered scale, not
+ * four identities that need telling apart, so a categorical palette here would
+ * add colour without adding meaning.
+ */
+export function YearMixList({
+  yearMix,
+}: {
+  yearMix: Array<{ year: number; label: string; students: number }>;
+}) {
+  const total = yearMix.reduce((a, y) => a + y.students, 0);
+  if (total === 0) {
+    return <EmptyState size="sm" title="No students are enrolled for the active year yet." />;
+  }
+  const max = Math.max(...yearMix.map((y) => y.students));
+
+  return (
+    <ul className="flex flex-1 flex-col justify-center gap-4">
+      {yearMix.map((y) => (
+        <li key={y.year} className="flex items-center gap-3 text-sm">
+          <span className="w-12 shrink-0 font-mono text-xs text-muted-foreground">
+            Yr {y.label}
+          </span>
+          <span className="h-2 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
+            <span
+              className="block h-full rounded-full bg-chart-1"
+              style={{ width: max > 0 ? `${(y.students / max) * 100}%` : "0%" }}
+            />
+          </span>
+          <span className="w-8 shrink-0 text-right font-mono text-xs tabular-nums text-foreground">
+            {y.students}
+          </span>
+          <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+            {Math.round((y.students / total) * 100)}%
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }

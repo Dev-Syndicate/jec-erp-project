@@ -337,9 +337,75 @@
 .login-cell {
   animation: login-cell 0.6s ease-out both;
 }
+
+/* ─── Auth cover panel ─────────────────────────────────────────────────────
+   The bento mosaic beside the form. Three decorative motions, all ambient:
+   the ticker ribbon, the slow aurora drift behind the tiles, and the pulse on
+   the "live" dot. `auth-tile` is the staggered reveal, driven by an inline
+   animation-delay per tile so the mosaic assembles rather than appearing at
+   once. All four stop under prefers-reduced-motion — nothing here carries
+   meaning, so there is no state to preserve when they do.
+
+   The ribbon translates by exactly -50% and its content is rendered TWICE, so
+   the second copy is under the cursor at the moment the first scrolls out and
+   the loop has no visible seam.                                              */
+@keyframes auth-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes auth-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2%, -3%, 0) scale(1.08);
+  }
+}
+@keyframes auth-tile {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes auth-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  70% {
+    opacity: 0.75;
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+.auth-ticker {
+  animation: auth-ticker 38s linear infinite;
+}
+.auth-drift {
+  animation: auth-drift 20s ease-in-out infinite;
+}
+.auth-tile {
+  animation: auth-tile 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.auth-pulse {
+  animation: auth-pulse 2.4s ease-out infinite;
+}
 @media (prefers-reduced-motion: reduce) {
   .login-rise,
-  .login-cell {
+  .login-cell,
+  .auth-ticker,
+  .auth-drift,
+  .auth-tile,
+  .auth-pulse {
     animation: none;
   }
 }

@@ -36,6 +36,7 @@ import {
   AttendanceTrendChart,
   BandDistributionChart,
   ClassStandingsChart,
+  YearMixList,
 } from "@/features/dashboard/components/dashboard-charts";
 import { DashboardPanel } from "@/features/dashboard/components/dashboard-panel";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -355,12 +356,22 @@ function AdminAnalyticsView({ admin }: { admin: AdminAnalytics }) {
         </div>
       </div>
 
-      <DashboardPanel
-        title="Students by attendance band"
-        hint={`${num(h.atRiskOf)} students with day records this semester`}
-      >
-        <BandDistributionChart bands={admin.bands} threshold={threshold} />
-      </DashboardPanel>
+      {/* Same 2 + 1 split as the two rows above, so all three rows share one
+          column rule down the page. Full-width, the five band columns were
+          marooned in whitespace. */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <DashboardPanel
+          title="Students by attendance band"
+          hint={`${num(h.atRiskOf)} students with day records this semester`}
+          className="lg:col-span-2"
+        >
+          <BandDistributionChart bands={admin.bands} threshold={threshold} />
+        </DashboardPanel>
+
+        <DashboardPanel title="Students by year" hint={`${num(h.students)} on roll`}>
+          <YearMixList yearMix={admin.yearMix} />
+        </DashboardPanel>
+      </div>
     </div>
   );
 }

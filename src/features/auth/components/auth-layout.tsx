@@ -6,10 +6,10 @@
 // and must not drift apart, and a second copy of the panel would be the kind of
 // duplication that goes stale silently.
 //
-// The panel is a BENTO MOSAIC of what this ERP actually runs — the day
-// register, the period grid, the internal-marks columns, the roles that gate
-// them. Every tile is drawn with brand tokens rather than imagery, so the panel
-// re-skins with --brand-hue and ships no photography the college doesn't own.
+// The panel is a BENTO MOSAIC of what this ERP actually runs — the day register
+// and the period grid. Every tile is drawn with brand tokens rather than
+// imagery, so the panel re-skins with --brand-hue and ships no photography the
+// college doesn't own.
 // The one deliberately non-brand note is the gold accent, which answers the
 // gold in the college crest on the form side so the two halves read as one
 // page.
@@ -199,74 +199,6 @@ function TimetableTile() {
   );
 }
 
-// Internal marks: the IAT composition, 10 / 10 / 10 / 10 / 60 out of 100. The
-// bar heights are the real component weights — the one place a number would be
-// safe, so it may as well be the true one.
-//
-// Each bar is absolutely positioned inside its own `flex-1` track rather than
-// given a percentage height directly. A percentage height only resolves against
-// a parent with a DEFINITE height, and a column sized by its own content is not
-// definite — the bars collapsed to nothing. The track is stretched by the row,
-// so it has one, and the bar resolves against it.
-const COMPONENTS = [
-  { label: "CT1", weight: 10 },
-  { label: "CT2", weight: 10 },
-  { label: "A1", weight: 10 },
-  { label: "A2", weight: 10 },
-  { label: "IAT", weight: 60 },
-];
-const MAX_WEIGHT = Math.max(...COMPONENTS.map((c) => c.weight));
-
-function MarksTile() {
-  return (
-    <Tile delay={380} className="col-start-1 row-start-4 col-span-2 flex flex-col gap-3">
-      <TileLabel>Internal marks</TileLabel>
-      <div aria-hidden className="flex min-h-0 flex-1 gap-2">
-        {COMPONENTS.map((c) => (
-          <div key={c.label} className="flex flex-1 flex-col gap-1.5">
-            <div className="relative min-h-0 flex-1">
-              <div
-                className="absolute inset-x-0 bottom-0 rounded-t-[3px] bg-gradient-to-t from-primary-foreground/15 to-primary-foreground/50"
-                // The floor is legibility, not scale. A 10-mark component is a
-                // sixth of the 60-mark paper, which in a tile this short renders
-                // as a 4px sliver that reads as a rendering fault rather than as
-                // a small bar. minHeight lifts only the smallest columns; the
-                // 60-mark bar is far above it, so the proportion still reads.
-                style={{ height: `${(c.weight / MAX_WEIGHT) * 100}%`, minHeight: "0.6rem" }}
-              />
-            </div>
-            <span className="text-center font-mono text-[0.6rem] text-primary-foreground/40">
-              {c.label}
-            </span>
-          </div>
-        ))}
-      </div>
-    </Tile>
-  );
-}
-
-// The roles that gate everything above. Named, not counted — these are the
-// actual role names in the RBAC console.
-const ROLES = ["Super Admin", "HOD", "Advisor", "Faculty", "Student"];
-
-function RolesTile() {
-  return (
-    <Tile delay={460} className="col-start-3 row-start-4 col-span-2 flex flex-col gap-3">
-      <TileLabel>Roles &amp; scope</TileLabel>
-      <div className="flex flex-1 flex-wrap content-center gap-1.5">
-        {ROLES.map((r) => (
-          <span
-            key={r}
-            className="rounded-full bg-primary-foreground/10 px-2.5 py-1 text-[0.7rem] text-primary-foreground/75 ring-1 ring-inset ring-primary-foreground/15"
-          >
-            {r}
-          </span>
-        ))}
-      </div>
-    </Tile>
-  );
-}
-
 // The hero tile — the one that carries the message. Gold-edged so it reads as
 // the focal point and ties back to the crest.
 function HeroTile() {
@@ -422,12 +354,13 @@ function BrandPanel() {
           </div>
         </header>
 
-        <div className="grid min-h-0 flex-1 grid-cols-4 grid-rows-4 gap-3 xl:gap-4">
+        {/* Three rows, and the three tiles tile it exactly: hero 2×2 + register
+            2×3 + timetable 2×1 = 12 of 12 cells. Adding or removing a tile means
+            re-checking that sum, or the leftover shows as a hole. */}
+        <div className="grid min-h-0 flex-1 grid-cols-4 grid-rows-3 gap-3 xl:gap-4">
           <HeroTile />
           <RegisterTile />
           <TimetableTile />
-          <MarksTile />
-          <RolesTile />
         </div>
 
         <footer className="flex shrink-0 flex-col gap-4">

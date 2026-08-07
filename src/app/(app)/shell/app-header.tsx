@@ -9,6 +9,7 @@
 // Sticky, so the trail and the search stay reachable down a 500-row roster.
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { Search } from "lucide-react";
 
@@ -21,11 +22,15 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 import { Kbd } from "@/components/ui/kbd";
-import { SidebarTrigger } from "@/components/ui/sidebar";
+import { SidebarTrigger, useSidebar } from "@/components/ui/sidebar";
 import { buildBreadcrumbs } from "@/app/(app)/shell/nav-config";
+import { cn } from "@/lib/utils";
 
 export function AppHeader({ pathname }: { pathname: string }) {
   const crumbs = buildBreadcrumbs(pathname);
+  // Drives the brand slot's width so the trail lines up with the page panel's
+  // text in BOTH rail states — see the slot's comment below.
+  const { state } = useSidebar();
 
   return (
     // A full-width band across the top of the shell: brand on the left, over the
@@ -42,33 +47,68 @@ export function AppHeader({ pathname }: { pathname: string }) {
     // + blur stays: without a border it is the only thing keeping the bar legible
     // once rows scroll underneath it.
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 bg-sidebar/95 px-3 backdrop-blur-sm sm:px-4">
-      {/* The lockup lives here rather than in the rail so the bar reads as one
-          continuous strip. `/dashboard` is the one route with no role gate at
-          all, so this is safe for every signed-in user.
-          Width-matched to the rail on md+ so the divider under it lines up with
-          the rail's edge; on a phone it collapses to just the mark. */}
-      <Link
-        href="/dashboard"
-        className="-mx-1 flex shrink-0 items-center gap-2.5 rounded-lg px-1 py-1.5 transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring md:w-[calc(var(--sidebar-width)-1.25rem)]"
+      {/* The brand slot. Its only job is to be exactly as wide as the page panel's
+          left edge, so the breadcrumb after it starts in the same column as the
+          page's own title rather than floating in from the left.
+
+          The arithmetic, at sm+ where the header pads by 1rem and its gap is
+          0.5rem: trail x = 1rem + SLOT + 0.5rem, and the page text sits at
+          panelEdge + 1.5rem (PageShell's `sm:p-6`). Since 1rem + 0.5rem = 1.5rem,
+          the two agree exactly when SLOT == panelEdge.
+
+          panelEdge is not one number, because the rail is `collapsible="icon"`
+          and `variant="inset"`:
+            expanded  — the rail's gap element is --sidebar-width, inset ml-0
+                        → --sidebar-width
+            collapsed — gap is --sidebar-width-icon + spacing(4) (0.5rem+0.5rem of
+                        the inset variant's own padding), plus the inset's ml-2
+                        → --sidebar-width-icon + 1.5rem
+          Hence the state switch. A single fixed width would sit ~150px off the
+          moment anyone collapses the rail.
+
+          md: only — below that the rail is an off-canvas sheet, there is no panel
+          edge to meet, and the slot collapses back to its content width.
+          The transition matches the rail's own (200ms linear) so the trail travels
+          with the panel edge instead of snapping ahead of it. */}
+      <div
+        className={cn(
+          "flex shrink-0 items-center gap-2 md:transition-[width] md:duration-200 md:ease-linear",
+          state === "collapsed"
+            ? "md:w-[calc(var(--sidebar-width-icon)+1.5rem)]"
+            : "md:w-(--sidebar-width)",
+        )}
       >
-        <span className="grid size-8 shrink-0 place-items-center rounded-md bg-primary font-heading text-xs font-semibold text-primary-foreground">
-          JE
-        </span>
-        <span className="hidden min-w-0 flex-col leading-tight sm:flex">
-          <span className="font-heading text-sm font-semibold text-sidebar-foreground">
+        {/* The lockup lives here rather than in the rail so the bar reads as one
+            continuous strip. `/dashboard` is the one route with no role gate at
+            all, so this is safe for every signed-in user. */}
+        <Link
+          href="/dashboard"
+          className="-mx-1 flex shrink-0 items-center gap-2.5 rounded-lg px-1 py-1.5 transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          {/* Decorative (alt=""): the wordmark beside it already names this link, so
+              a described image would make a screen reader announce it twice. The
+              crest is 949x908 — object-contain keeps the ring circular in a square
+              box rather than letting the 4% overhang squash it. */}
+          <Image
+            src="/home_logo.png"
+            alt=""
+            width={949}
+            height={908}
+            priority
+            className="size-8 shrink-0 object-contain"
+          />
+          {/* sr-only below sm, not sr-only above: the wordmark is the link's
+              accessible name, so hiding it outright on a phone (which is what
+              `hidden sm:block` did when the crest was a text "JE" mark) would leave
+              the link nameless. This keeps the name in the tree at every width and
+              only changes whether it is painted. */}
+          <span className="sr-only font-heading text-lg font-semibold tracking-tight text-sidebar-foreground sm:not-sr-only">
             JEC ERP
           </span>
-          {/* `eyebrow` sets 0.18em tracking, which pushes this 28-character name
-              past the rail-matched width and clips it to "…ENGINEERING COL…".
-              Tightened just enough to fit; `truncate` stays as the safety net for
-              a narrower rail. */}
-          <span className="eyebrow truncate text-[0.6rem] tracking-[0.08em] text-muted-foreground">
-            Jeppiaar Engineering College
-          </span>
-        </span>
-      </Link>
+        </Link>
 
-      <SidebarTrigger />
+        <SidebarTrigger />
+      </div>
 
       <Breadcrumb className="min-w-0 flex-1">
         <BreadcrumbList>

@@ -76,8 +76,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           defaults, so this is the supported override, and it keeps the app's
           choice visible in the app's own file. --sidebar-width is a variable the
           rail, the inset and the header lockup all read, so they stay in step. */}
+      {/* --sidebar-width-icon is narrowed from the primitive's 3.5rem for the
+          same reason, and it is measured rather than taste. Collapsed, the icon
+          button is 36px and sits inside 8px of group padding plus 8px of rail
+          padding, so the rail only needs 36 + 16 + 16 = 68px of content. At
+          3.5rem the reserved column came to 72px, leaving 4px of slack that
+          showed up entirely on the RIGHT — the icons read as pushed toward the
+          rail's left edge. 3.25rem makes the two gutters equal at 16px. */}
       <SidebarProvider
-        style={{ "--sidebar-width": "14.5rem" } as React.CSSProperties}
+        style={
+          {
+            "--sidebar-width": "14.5rem",
+            "--sidebar-width-icon": "3.25rem",
+          } as React.CSSProperties
+        }
         className="flex-col md:h-svh md:overflow-hidden"
       >
         <AppHeader pathname={pathname} />
@@ -102,7 +114,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               header used to live INSIDE this panel and `overflow` would have
               broken its `sticky`; the header is now a sibling above, so the
               objection is gone. */}
-          <SidebarInset className="min-w-0 md:mt-1! md:overflow-hidden md:ring-1 md:ring-foreground/10">
+          {/* The collapsed `ml-2` is cancelled, not overridden with `!`: repeating
+              the primitive's exact variant stack lets twMerge recognise it as the
+              same utility and drop the earlier class. That 8px was the larger
+              half of the right-gutter asymmetry — expanded, the panel sits flush
+              against the rail's column with no extra margin, and there is no
+              reason for collapsing to introduce one. */}
+          <SidebarInset className="min-w-0 md:mt-1! md:overflow-hidden md:ring-1 md:ring-foreground/10 md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ml-0">
             <div ref={scroller} className="flex flex-1 flex-col md:min-h-0 md:overflow-y-auto">
               {children}
             </div>

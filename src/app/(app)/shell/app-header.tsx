@@ -61,8 +61,11 @@ export function AppHeader({ pathname }: { pathname: string }) {
             expanded  — the rail's gap element is --sidebar-width, inset ml-0
                         → --sidebar-width
             collapsed — gap is --sidebar-width-icon + spacing(4) (0.5rem+0.5rem of
-                        the inset variant's own padding), plus the inset's ml-2
-                        → --sidebar-width-icon + 1.5rem
+                        the inset variant's own padding). The inset's collapsed
+                        ml-2 used to add another 0.5rem, but app-shell cancels it
+                        to keep the rail's two gutters equal, so it is no longer
+                        in this sum
+                        → --sidebar-width-icon + 1rem
           Hence the state switch. A single fixed width would sit ~150px off the
           moment anyone collapses the rail.
 
@@ -74,7 +77,7 @@ export function AppHeader({ pathname }: { pathname: string }) {
         className={cn(
           "flex shrink-0 items-center gap-2 md:transition-[width] md:duration-200 md:ease-linear",
           state === "collapsed"
-            ? "md:w-[calc(var(--sidebar-width-icon)+1.5rem)]"
+            ? "md:w-[calc(var(--sidebar-width-icon)+1rem)]"
             : "md:w-(--sidebar-width)",
         )}
       >
@@ -117,7 +120,20 @@ export function AppHeader({ pathname }: { pathname: string }) {
           </span>
         </Link>
 
-        <SidebarTrigger />
+        {/* Pushed to the far end of the brand slot, so it lands just left of the
+            breadcrumb instead of trailing the wordmark with dead space after it.
+
+            `mr-4` is not cosmetic padding. The slot begins at the header's own
+            1rem inset, so its right edge sits 1rem PAST the page panel's edge —
+            with `ml-auto` alone the button would straddle that edge, half over
+            the rail column and half over the page. Pulling back by the same 1rem
+            lands its right edge flush on the panel edge in BOTH rail states
+            (232px expanded, 80px collapsed), and leaves the trail a 1.5rem gap
+            rather than a cramped 0.5rem.
+
+            md: only, matching the slot — below that the slot is content-width, so
+            there is no free space for `ml-auto` to distribute. */}
+        <SidebarTrigger className="md:ml-auto md:mr-4" />
       </div>
 
       <Breadcrumb className="min-w-0 flex-1">

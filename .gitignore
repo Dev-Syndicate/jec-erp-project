@@ -50,3 +50,7 @@ next-env.d.ts
 # One-time passwords written by the seeding scripts. Hand over, then delete.
 /faculty-passwords*.csv
 /production-passwords*.csv
+
+# Firebase CLI's local deploy cache (firebase-auth-redirect/). Rewritten on
+# every deploy and meaningless to anyone else.
+.firebase/

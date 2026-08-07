@@ -97,12 +97,22 @@ export function AppHeader({ pathname }: { pathname: string }) {
             priority
             className="size-8 shrink-0 object-contain"
           />
-          {/* sr-only below sm, not sr-only above: the wordmark is the link's
-              accessible name, so hiding it outright on a phone (which is what
-              `hidden sm:block` did when the crest was a text "JE" mark) would leave
-              the link nameless. This keeps the name in the tree at every width and
-              only changes whether it is painted. */}
-          <span className="sr-only font-heading text-lg font-semibold tracking-tight text-sidebar-foreground sm:not-sr-only">
+          {/* Always sr-only, never `hidden`: the wordmark is this link's
+              accessible name, so removing it from the tree would leave the link
+              nameless. These classes only decide whether it is PAINTED.
+
+              Painted from sm up — EXCEPT when the rail is collapsed. The slot
+              then narrows to the icon rail's width (~80px) while the crest plus
+              this wordmark need ~127px, and the Link is shrink-0, so it spilled
+              out of the slot and printed on top of the breadcrumb. Falling back
+              to the mark alone mirrors what the rail itself does when collapsed:
+              icons, no labels. */}
+          <span
+            className={cn(
+              "font-heading text-lg font-semibold tracking-tight text-sidebar-foreground",
+              state === "collapsed" ? "sr-only" : "sr-only sm:not-sr-only",
+            )}
+          >
             JEC ERP
           </span>
         </Link>

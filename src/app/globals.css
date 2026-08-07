@@ -40,6 +40,12 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  /* The two literal brand swatches (see :root). Exposed so a component can say
+     bg-brand-gold / text-brand-orange instead of re-typing the hex. */
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-foreground: var(--brand-gold-foreground);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-foreground: var(--brand-orange-foreground);
   --color-status-present-foreground: var(--status-present-foreground);
   --color-status-present: var(--status-present);
   --color-status-absent-foreground: var(--status-absent-foreground);
@@ -126,11 +132,36 @@
   /* ─── BRAND: the single source of truth ───────────────────────────────
      Change --brand-hue to re-skin the entire site, light AND dark mode.
      It is declared only here; .dark inherits it through the cascade.
-       teal 185 (current) · indigo 265 · violet 300 · green 145 · rose 15
+       gold 92 (current) · teal 185 · indigo 265 · violet 300 · rose 15
      Everything brand-tinted below derives from it — never hardcode a brand
      color in a component, use the semantic tokens (bg-primary, ring, …).  */
-  --brand-hue: 185;
-  --brand-chroma: 0.13;
+  --brand-hue: 92;
+  --brand-chroma: 0.125;
+
+  /* ─── The brand swatches, literally ───────────────────────────────────
+     Primary Gold #BDA045 = oklch(0.714 0.115 91.5)
+     Secondary Orange #FC9E27 = oklch(0.778 0.163 65.6)
+
+     These are the palette as specified, and they are SEPARATE from --primary
+     on purpose. Both are light: white text on them measures 2.54:1 and 2.09:1,
+     against the 4.5:1 AA needs — and --primary is not only a button fill here,
+     it is also a text colour in 31 places (`text-primary`: page eyebrows,
+     "Forgot password?", inline links). Set --primary to either hex and all 31
+     become unreadable.
+
+     So --primary stays at the lightness the system was built around (L 0.58,
+     which measures 4.29:1 on white — exactly what the outgoing teal measured,
+     so this re-skin regresses nothing) and merely changes hue to gold. These
+     two tokens carry the exact swatches for places the colour is a SURFACE at
+     size rather than type: brand washes, the sign-in panel's accents, chart
+     anchors. Both are paired with dark ink, which is what they actually need.
+
+     Use them via bg-brand-gold / text-brand-orange etc. — never re-type the
+     hex in a component. */
+  --brand-gold: oklch(0.714 0.115 91.5);
+  --brand-gold-foreground: oklch(0.205 0 0); /* 6.86:1 */
+  --brand-orange: oklch(0.778 0.163 65.6);
+  --brand-orange-foreground: oklch(0.205 0 0); /* 8.34:1 */
 
   /* ─── Surfaces: a three-plane system ──────────────────────────────────
      background < card == popover. The canvas is off-white and cards are pure

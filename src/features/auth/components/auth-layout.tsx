@@ -10,9 +10,8 @@
 // and the period grid. Every tile is drawn with brand tokens rather than
 // imagery, so the panel re-skins with --brand-hue and ships no photography the
 // college doesn't own.
-// The one deliberately non-brand note is the gold accent, which answers the
-// gold in the college crest on the form side so the two halves read as one
-// page.
+// The one note not derived from --brand-hue is the accent, which carries the
+// palette's Secondary Orange against the gold field.
 //
 // Nothing here is a real figure. The tiles show the SHAPE of each module — a
 // register with cells marked, eight periods with one running — never a count,
@@ -21,9 +20,9 @@
 import Image from "next/image";
 
 // The crest is a wide horizontal lockup (~4.1:1) in gold. It sits on the light
-// form column and never on the dark panel: the gold has too little contrast
-// against a deep teal field to stay legible, and the lockup carries its own
-// white plate.
+// form column and never on the dark panel: its gold has too little contrast
+// against the panel's dark field to stay legible, and the lockup carries its
+// own white plate.
 const LOGO = { src: "/JEC_logo.png", width: 4324, height: 1055 };
 
 // ─── The curve ─────────────────────────────────────────────────────────────
@@ -63,7 +62,7 @@ const PANEL_INSET = "16%";
  * The clip path and the gradient for its lit edge.
  *
  * Rendered INSIDE the panel, not at the page root: the gradient stops read
- * --panel-gold / --panel-ink, which are declared on the panel element, and a
+ * --panel-accent / --panel-ink, which are declared on the panel element, and a
  * var() resolves against the element it is used on. Hoisted out to the shell
  * these would resolve to nothing and the stroke would vanish. Both are found by
  * id, which is document-global, so nesting costs nothing.
@@ -79,9 +78,9 @@ function CurveDefs() {
           <path d={CURVE_FILL} />
         </clipPath>
         <linearGradient id="auth-curve-edge" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" style={{ stopColor: "var(--panel-gold)", stopOpacity: 0.55 }} />
+          <stop offset="0%" style={{ stopColor: "var(--panel-accent)", stopOpacity: 0.55 }} />
           <stop offset="45%" style={{ stopColor: "var(--panel-ink)", stopOpacity: 0.35 }} />
-          <stop offset="100%" style={{ stopColor: "var(--panel-gold)", stopOpacity: 0.25 }} />
+          <stop offset="100%" style={{ stopColor: "var(--panel-accent)", stopOpacity: 0.25 }} />
         </linearGradient>
       </defs>
     </svg>
@@ -111,7 +110,7 @@ function Tile({
     <div
       className={`auth-tile relative min-h-0 overflow-hidden rounded-2xl p-4 ring-1 ring-inset backdrop-blur-sm ${
         accent
-          ? "bg-primary-foreground/10 ring-[color-mix(in_oklch,var(--panel-gold)_28%,transparent)]"
+          ? "bg-primary-foreground/10 ring-[color-mix(in_oklch,var(--panel-accent)_28%,transparent)]"
           : "bg-primary-foreground/6 ring-primary-foreground/12"
       } ${className}`}
       style={{ animationDelay: `${delay}ms` }}
@@ -210,7 +209,7 @@ function HeroTile() {
     >
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,color-mix(in_oklch,var(--panel-gold)_16%,transparent),transparent_62%)]"
+        className="pointer-events-none absolute inset-0 bg-[linear-gradient(140deg,color-mix(in_oklch,var(--panel-accent)_16%,transparent),transparent_62%)]"
       />
       <TileLabel>The college day</TileLabel>
       <h2 className="relative font-heading text-2xl font-semibold leading-[1.15] tracking-tight xl:text-[1.75rem]">
@@ -218,7 +217,7 @@ function HeroTile() {
         <br />
         every period,
         <br />
-        <span className="text-[var(--panel-gold)]">every term.</span>
+        <span className="text-[var(--panel-accent)]">every term.</span>
       </h2>
     </Tile>
   );
@@ -241,7 +240,7 @@ function Ticker() {
       {DEPARTMENTS.map((d) => (
         <span key={d} className="flex shrink-0 items-center gap-6 pr-6">
           <span className="font-heading text-sm font-medium tracking-wide">{d}</span>
-          <span className="text-[color-mix(in_oklch,var(--panel-gold)_60%,transparent)]">✦</span>
+          <span className="text-[color-mix(in_oklch,var(--panel-accent)_60%,transparent)]">✦</span>
         </span>
       ))}
     </>
@@ -270,13 +269,24 @@ function BrandPanel() {
   // flip the panel bright. This keeps it legible and on-brand whichever theme
   // the app is in, and still re-skins when --brand-hue changes.
   //
-  // --panel-gold is the single hardcoded hue on the page. It exists to answer
-  // the college crest, which is fixed gold and cannot follow --brand-hue.
+  // --panel-accent is the palette's Secondary Orange, and the one colour here
+  // NOT derived from --brand-hue. It was a hardcoded gold, which existed to
+  // answer the college crest against a teal field — now that the brand itself
+  // IS gold, gold-on-gold would leave the accent nothing to separate against,
+  // so it moves to the secondary and the panel reads gold field / orange
+  // highlight. It no longer needs hardcoding either: it comes from the palette.
+  // The field's CHROMA is low on purpose. These lightnesses were tuned against a
+  // teal brand, and a cool hue stays rich when you darken it; a warm one does
+  // not — at 0.05 chroma the gold hue rendered as a muddy brown panel, and the
+  // gold and orange accents on top had nothing to separate against. Dropping to
+  // 0.02 makes the field a warm charcoal instead, which is the classic ground
+  // for a gold palette and lets the two brand colours do the work. Still derived
+  // from --brand-hue, so it re-skins.
   const panelStyle = {
-    "--panel-bg": "oklch(0.24 0.05 var(--brand-hue))",
-    "--panel-bg-2": "oklch(0.40 0.10 var(--brand-hue))",
+    "--panel-bg": "oklch(0.21 0.02 var(--brand-hue))",
+    "--panel-bg-2": "oklch(0.34 0.045 var(--brand-hue))",
     "--panel-ink": "oklch(0.985 0.01 var(--brand-hue))",
-    "--panel-gold": "oklch(0.80 0.12 85)",
+    "--panel-accent": "var(--brand-orange)",
     color: "var(--panel-ink)",
   } as React.CSSProperties;
 
@@ -313,7 +323,7 @@ function BrandPanel() {
           style={{ animationDelay: "-7s", animationDirection: "reverse" }}
         />
         <div
-          className="auth-drift absolute right-[12%] top-[35%] size-64 rounded-full bg-[var(--panel-gold)] opacity-[0.07] blur-[80px]"
+          className="auth-drift absolute right-[12%] top-[35%] size-64 rounded-full bg-[var(--panel-accent)] opacity-[0.07] blur-[80px]"
           style={{ animationDelay: "-13s" }}
         />
       </div>

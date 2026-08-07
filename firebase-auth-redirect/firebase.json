@@ -1,13 +1,6 @@
 {
   "hosting": {
     "public": "public",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
-    "redirects": [
-      {
-        "source": "/__/auth/action",
-        "destination": "https://erp.csejeppiaar.in/reset",
-        "type": 302
-      }
-    ]
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"]
   }
 }

@@ -21,13 +21,20 @@ notification config.
 ## How it works
 
 ```
-email link  →  auth.erp.csejeppiaar.in/__/auth/action   ← this site (redirect only)
-            →  erp.csejeppiaar.in/reset                  ← the Vercel app's branded page
+email link  →  auth.erp.csejeppiaar.in/__/auth/action   ← this site, Firebase's own form
+            →  erp.csejeppiaar.in/…                      ← continueUrl returns them to the app
 ```
 
-`firebase.json` holds a single 302 for `/__/auth/action`. Firebase Hosting carries the query
-string through a redirect, so `oobCode` and `mode` reach the app intact — which is what
-[src/app/reset/page.tsx](../src/app/reset/page.tsx) needs to verify the code and show the form.
+Deploying this site is what makes Firebase serve its auth handler on our domain. There is
+almost nothing in it: Hosting supplies the handler, we supply the domain.
+
+⚠️ **A redirect on `/__/auth/action` does NOT work — don't add one back.** `/__/` is a
+reserved namespace; Hosting serves its own handler there and that beats any `redirects` entry
+in `firebase.json`. Tried and verified: the path returns `200` with `fireauth.oob.OobHandler`,
+never a `302`. Serving that handler is the entire point of this site, so this is the intended
+behaviour — it just means the reset form the user sees is **Firebase's, not our own
+[/reset](../src/app/reset/page.tsx) page**. That page still exists and still works when reached
+directly; it is simply not what the emailed link opens.
 
 `public/index.html` is a placeholder for a bare visit to the domain; it bounces to the app.
 

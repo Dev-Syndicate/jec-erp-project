@@ -21,7 +21,6 @@ import {
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
-  SidebarRail,
 } from "@/components/ui/sidebar";
 import {
   Collapsible,
@@ -129,7 +128,13 @@ export function AppSidebar({
       <SidebarFooter className="border-t border-sidebar-border">
         <UserMenu profile={profile} />
       </SidebarFooter>
-      <SidebarRail />
+      {/* No <SidebarRail />. It is shadcn's 4px strip along the rail's outer
+          edge that toggles the sidebar, and its ::after paints a 2px
+          sidebar-border line on hover — the stray divider that appeared between
+          the rail and the page panel, with a native "Toggle Sidebar" tooltip
+          attached. Nothing is lost by dropping it: it carries tabIndex={-1} so
+          it was never keyboard-reachable, and the header's SidebarTrigger is the
+          real, labelled control for the same action. */}
     </Sidebar>
   );
 }

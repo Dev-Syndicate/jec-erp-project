@@ -116,7 +116,15 @@ function DialogFooter({
         // sticky + -bottom-4 cancels the scroll container's p-4 so the footer
         // pins flush to the dialog's bottom edge while a tall body scrolls
         // beneath it — the actions stay reachable without scrolling to the end.
-        "sticky -bottom-4 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted/50 p-4 sm:flex-row sm:justify-end",
+        //
+        // The fill must be OPAQUE, and z-10 is not optional. This was
+        // `bg-muted/50` with no stacking order, and since the body genuinely
+        // scrolls underneath, form fields showed straight through the footer —
+        // on Add student the Program select and Class label were legible behind
+        // the buttons. DialogHeader already had both (bg-popover + z-10) for
+        // exactly this reason; the footer had neither. Any alpha here reads as a
+        // rendering fault rather than as translucency, so keep it solid.
+        "sticky -bottom-4 z-10 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted p-4 sm:flex-row sm:justify-end",
         className
       )}
       {...props}

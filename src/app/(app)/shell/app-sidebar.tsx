@@ -78,7 +78,18 @@ export function AppSidebar({
     >
       {/* No SidebarHeader: the brand lockup moved into AppHeader so the top band
           is unbroken. The rail now opens straight into its first group. */}
-      <SidebarContent className="gap-1 py-2">
+      {/* The primitive ships `group-data-[collapsible=icon]:overflow-hidden`,
+          which silently disables scrolling in the collapsed rail — with 13 items
+          plus a footer the last icon was simply unreachable on a short viewport.
+          That default exists to stop the hover tooltips being clipped by the
+          scroll container, and it does not apply here: ui/tooltip.tsx renders
+          through a Portal, so the tooltip is not a descendant of this element.
+
+          `overflow-x-hidden` is kept deliberately. The labels are still in the
+          DOM when collapsed (they carry the buttons' accessible names), so an
+          `auto` x-axis in a 52px rail would offer a horizontal scrollbar over
+          text nobody can read. Only the y-axis should move. */}
+      <SidebarContent className="gap-1 py-2 group-data-[collapsible=icon]:overflow-x-hidden group-data-[collapsible=icon]:overflow-y-auto">
         {visibleGroups(flags).map((group) => (
           <SidebarGroup key={group.label} className="py-1">
             {/* Hidden when collapsed: a wide-tracked label in a 3.5rem rail is

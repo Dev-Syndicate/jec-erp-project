@@ -6,11 +6,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, Copy, KeyRound, Pencil, Search } from "lucide-react";
+import { KeyRound, Pencil, UsersRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -19,8 +18,27 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { errorMessage } from "@/lib/errors";
+import { CopyButton } from "@/components/copy-button";
+import { SearchInput } from "@/components/search-input";
+import { DetailPanel } from "@/components/detail-panel";
+import { FormField, FormSection } from "@/components/form-field";
+import { TABLE_FRAME } from "@/app/(app)/page-shell";
+import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/roster/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { Gender, StudentDetail } from "@/features/roster/types";
 import {
   useAdvisedClasses,
@@ -29,9 +47,6 @@ import {
   useUpdateStudent,
 } from "@/features/roster/hooks/use-roster";
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
 const isoToDateInput = (iso: string) => (iso ? iso.slice(0, 10) : "");
 
 const GENDER_OPTIONS = [
@@ -39,17 +54,6 @@ const GENDER_OPTIONS = [
   { value: "FEMALE", label: "Female" },
   { value: "OTHER", label: "Other" },
 ];
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -63,33 +67,15 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 // The one-time temp-password reveal, shown after a reset. Mirrors the admin's
 // Students panel — the password is shown once; the teacher must deliver it now.
 function TempPasswordPanel({ name, password }: { name: string; password: string }) {
-  const [copied, setCopied] = useState(false);
   return (
-    <div className="col-span-2 flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
+    <div className="flex flex-col gap-3 rounded-lg border border-primary/30 bg-primary/5 p-3">
       <p className="text-sm text-muted-foreground">
         New temporary password for <span className="font-medium text-foreground">{name}</span>. It’s
         shown once — deliver it now; they’ll set their own on first login.
       </p>
-      <div className="flex items-center gap-2 rounded-lg border border-border bg-background p-2">
+      <div className="flex items-center gap-2 rounded-lg border border-border bg-card p-2">
         <code className="flex-1 px-1 font-mono text-sm text-foreground">{password}</code>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          data-icon="inline-start"
-          onClick={() => {
-            navigator.clipboard?.writeText(password).then(
-              () => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              },
-              () => {},
-            );
-          }}
-        >
-          {copied ? <Check /> : <Copy />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+        <CopyButton value={password} />
       </div>
     </div>
   );
@@ -106,7 +92,7 @@ export function ClassRoster() {
   const view = useClassRoster(effClassId || null, !!effClassId);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="People · My class"
         title="My class students"
@@ -116,7 +102,7 @@ export function ClassRoster() {
       {!singleClass && (
         <div className="flex flex-wrap items-end gap-4">
           <Field label="Class">
-            <div className="w-56">
+            <div className="w-full sm:w-56">
               <FormSelect
                 value={classId}
                 onChange={setClassId}
@@ -135,21 +121,23 @@ export function ClassRoster() {
       )}
 
       {classes.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your classes…</p>
+        <LoadingState label="Loading your classes…" />
       ) : activeClasses.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          You&apos;re not the class teacher for any class.
-        </p>
+        <EmptyState
+          icon={UsersRound}
+          title="You're not the class teacher for any class"
+          description="This screen belongs to a class advisor. If that should be you, ask your HOD to set you as the class teacher."
+        />
       ) : effClassId === "" ? (
-        <p className="text-sm text-muted-foreground">Pick a class to see its students.</p>
+        <EmptyState size="sm" title="Pick a class to see its students." />
       ) : view.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading students…</p>
+        <TableSkeleton rows={10} cols={6} label="Loading students…" />
       ) : view.isError ? (
         <FormError>{errorMessage(view.error)}</FormError>
       ) : view.data ? (
         <Loaded classId={view.data.classId} classLabel={view.data.classLabel} academicYear={view.data.academicYear} students={view.data.students} />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
@@ -188,45 +176,43 @@ function Loaded({
           {" · "}
           {students.length} students
         </p>
-        <div className="relative w-full max-w-sm">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search name or register no.…"
-            aria-label="Search students"
-            className="h-10! pl-9"
-          />
-        </div>
+        <SearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search name or register no.…"
+          label="Search students"
+        />
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-16 text-center">
-          <p className="text-sm text-muted-foreground">No students match the search.</p>
-        </div>
+        <EmptyState size="sm" title="No students match the search." />
       ) : (
-        <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
-          <table className="w-full min-w-160 border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-foreground/10 bg-muted/30 text-left text-muted-foreground">
-                <th className="w-10 px-3 py-2 font-medium">#</th>
-                <th className="px-3 py-2 font-medium">Register no.</th>
-                <th className="px-3 py-2 font-medium">Roll no.</th>
-                <th className="px-3 py-2 font-medium">Name</th>
-                <th className="px-3 py-2 font-medium">Phone</th>
-                <th className="w-0 px-3 py-2 text-right font-medium">Action</th>
-              </tr>
-            </thead>
-            <tbody>
+        <Table containerClassName={TABLE_FRAME} className="min-w-160">
+            <TableHeader>
+              <TableRow>
+                {/* Position in the filtered list, not a stored number — a roster
+                    is read down the page, so "the 14th row" is what someone
+                    calling out names is actually looking for. */}
+                <TableHead className="w-10">#</TableHead>
+                <TableHead>Register no.</TableHead>
+                <TableHead>Roll no.</TableHead>
+                <TableHead>Name</TableHead>
+                <TableHead>Phone</TableHead>
+                <TableHead className="w-0 text-right">Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {filtered.map((s, i) => (
-                <tr key={s.id} className="border-b border-foreground/10 last:border-b-0">
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{i + 1}</td>
-                  <td className="px-3 py-2 font-mono text-xs">{s.registerNumber}</td>
-                  <td className="px-3 py-2 font-mono text-xs text-muted-foreground">{s.rollNumber ?? "—"}</td>
-                  <td className="px-3 py-2">{s.displayName}</td>
-                  <td className="px-3 py-2 text-muted-foreground">{s.phone}</td>
-                  <td className="px-3 py-2">
+                <TableRow key={s.id}>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{i + 1}</TableCell>
+                  <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{s.rollNumber ?? "—"}</TableCell>
+                  <TableCell>{s.displayName}</TableCell>
+                  <TableCell className="text-muted-foreground">{s.phone}</TableCell>
+                  <TableCell>
                     <div className="flex items-center justify-end">
+                      {/* A labelled button, not a ⋯ menu: this row has exactly
+                          one action and it is the point of the screen. */}
                       <Button
                         variant="ghost"
                         size="sm"
@@ -238,26 +224,16 @@ function Loaded({
                         View / edit
                       </Button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
       )}
 
       {editing && (
         <StudentDialog classId={classId} student={editing} onClose={() => setEditing(null)} />
       )}
-    </div>
-  );
-}
-
-function ReadOnly({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex flex-col gap-1.5">
-      <span className="text-xs font-medium text-muted-foreground">{label}</span>
-      <span className="rounded-md bg-muted/40 px-3 py-2 text-sm">{value}</span>
     </div>
   );
 }
@@ -318,45 +294,54 @@ function StudentDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form id="student-form" onSubmit={submit} className="grid grid-cols-2 gap-4">
-          <ReadOnly label="Register number" value={student.registerNumber} />
-          <ReadOnly label="Email" value={student.email} />
-          <ReadOnly label="Class" value={student.currentEnrollment?.classLabel ?? "—"} />
-          <ReadOnly label="Status" value={student.status} />
+        {/* The detail layout: identity panel beside the editable fields. This is
+            the closest thing the app has to a student detail view, so it reads
+            like one — what is FIXED about this student (their login handles,
+            their class) sits in the panel; what a class teacher may correct sits
+            in the form.
 
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-name">Full name</Label>
-            <Input id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" required />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-roll">Roll number</Label>
-            <Input id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-phone">Phone</Label>
-            <Input id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-dob">Date of birth</Label>
-            <Input id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="s-gender">Gender</Label>
-            <FormSelect id="s-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
-          </div>
+            The split is not cosmetic: /api/roster deliberately refuses register
+            number and email (they are sign-in handles, and only the students
+            screen may change them), so showing them as panel facts rather than
+            greyed-out inputs states that rule instead of implying a permission
+            problem. */}
+        <div className="grid gap-4 lg:grid-cols-[18rem_1fr]">
+          <DetailPanel
+            // Not sticky here: inside a dialog the panel is already in view.
+            className="order-1 lg:top-0"
+            name={student.displayName}
+            subtitle={student.currentEnrollment?.classLabel ?? "Not enrolled"}
+            meta={[
+              { label: "Register no.", value: student.registerNumber },
+              { label: "Email", value: student.email },
+              { label: "Status", value: student.status },
+            ]}
+          />
 
-          {update.isError && (
-            <div className="col-span-2">
-              <FormError>{errorMessage(update.error)}</FormError>
-            </div>
-          )}
-          {regen.isError && (
-            <div className="col-span-2">
-              <FormError>{errorMessage(regen.error)}</FormError>
-            </div>
-          )}
-          {tempPassword && <TempPasswordPanel name={student.displayName} password={tempPassword} />}
-        </form>
+          <form id="student-form" onSubmit={submit} className="order-2 flex flex-col gap-4">
+            <FormSection title="Editable details" columns={2}>
+              <FormField id="s-name" label="Full name" required>
+                <Input size="lg" id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+              </FormField>
+              <FormField id="s-roll" label="Roll number">
+                <Input size="lg" id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
+              </FormField>
+              <FormField id="s-phone" label="Phone" required>
+                <Input size="lg" id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+              </FormField>
+              <FormField id="s-dob" label="Date of birth">
+                <Input size="lg" id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+              </FormField>
+              <FormField id="s-gender" label="Gender">
+                <FormSelect id="s-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
+              </FormField>
+            </FormSection>
+
+            {update.isError && <FormError>{errorMessage(update.error)}</FormError>}
+            {regen.isError && <FormError>{errorMessage(regen.error)}</FormError>}
+            {tempPassword && <TempPasswordPanel name={student.displayName} password={tempPassword} />}
+          </form>
+        </div>
 
         <DialogFooter className="sm:justify-between">
           {canReset ? (

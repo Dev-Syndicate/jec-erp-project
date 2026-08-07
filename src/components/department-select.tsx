@@ -36,9 +36,11 @@ export function DepartmentSelect({
 
   return (
     <Select value={value} onValueChange={(v) => onChange((v as string) ?? "")}>
-      {/* h-10! to match the h-10 text inputs beside it — the trigger's built-in
-          data-[size=default]:h-8 variant otherwise out-specifies a plain h-10. */}
-      <SelectTrigger id={id} className="h-10! w-full">
+      {/* size="lg" matches the 40px text inputs beside it. Use the prop, not a
+          height class: the trigger sets its height as data-[size=…]:h-N, which
+          tailwind-merge does not treat as conflicting with a plain h-10, so a
+          className would be out-specified and silently ignored. */}
+      <SelectTrigger size="lg" id={id} className="w-full">
         <SelectValue placeholder="Select a department">{label}</SelectValue>
       </SelectTrigger>
       <SelectContent>

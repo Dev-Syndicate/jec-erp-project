@@ -19,8 +19,19 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import type { ImportOutcome, ImportRowError } from "@/features/students/types";
-import { FormSelect } from "@/features/students/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import { ClassCascade } from "@/features/students/components/class-cascade";
 import {
   useClassOptions,
@@ -28,22 +39,6 @@ import {
   useImportPreview,
   useProgramOptions,
 } from "@/features/students/hooks/use-students";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 // Escape a CSV cell (wrap + double any quotes) so names/emails can't break it.
 const csvCell = (v: string) => `"${v.replace(/"/g, '""')}"`;
@@ -180,11 +175,12 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
                   </Button>
                 </div>
                 <Input
+                  size="lg"
                   id="import-file"
                   type="file"
                   accept=".csv,.xlsx,.xls"
                   onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  className="h-10! pt-2"
+                  className="pt-2"
                 />
                 {file && (
                   <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -215,9 +211,9 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
           <>
             <div className="flex flex-col gap-3">
               <div className="flex gap-2 text-sm">
-                <span className="rounded-md bg-emerald-500/10 px-2 py-1 font-medium text-emerald-600">
+                <Badge variant="success" className="rounded-md px-2 py-1">
                   {previewData.rows.length} ready to import
-                </span>
+                </Badge>
                 {previewData.errors.length > 0 && (
                   <span className="rounded-md bg-destructive/10 px-2 py-1 font-medium text-destructive">
                     {previewData.errors.length} with errors
@@ -247,9 +243,9 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
           <>
             <div className="flex flex-col gap-3">
               <div className="flex flex-wrap gap-2 text-sm">
-                <span className="rounded-md bg-emerald-500/10 px-2 py-1 font-medium text-emerald-600">
+                <Badge variant="success" className="rounded-md px-2 py-1">
                   {resultData.outcomes.filter((o) => o.status === "created").length} created
-                </span>
+                </Badge>
                 <span className="rounded-md bg-muted px-2 py-1 font-medium text-muted-foreground">
                   {resultData.outcomes.filter((o) => o.status === "skipped").length} skipped
                 </span>
@@ -293,60 +289,67 @@ export function ImportStudentsDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+// A sticky header is correct here, unlike in most dialogs: this list carries its
+// own BOUNDED height, so the header pins against that box rather than fighting
+// DialogContent's own sticky header.
 function RowErrorTable({ errors }: { errors: ImportRowError[] }) {
   return (
-    <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-muted/80 text-left">
-          <tr>
-            <th className="px-2 py-1.5 font-medium">Row</th>
-            <th className="px-2 py-1.5 font-medium">Register no.</th>
-            <th className="px-2 py-1.5 font-medium">Problem</th>
-          </tr>
-        </thead>
-        <tbody>
-          {errors.map((e) => (
-            <tr key={`${e.rowNumber}-${e.registerNumber}`} className="border-t border-border">
-              <td className="px-2 py-1.5 tabular-nums text-muted-foreground">{e.rowNumber}</td>
-              <td className="px-2 py-1.5 font-mono text-xs">{e.registerNumber || "—"}</td>
-              <td className="px-2 py-1.5 text-destructive">{e.reason}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table
+      density="compact"
+      containerClassName="max-h-48 overflow-y-auto rounded-lg border border-border"
+    >
+      <TableHeader sticky>
+        <TableRow>
+          <TableHead>Row</TableHead>
+          <TableHead>Register no.</TableHead>
+          <TableHead>Problem</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {errors.map((e) => (
+          <TableRow key={`${e.rowNumber}-${e.registerNumber}`}>
+            <TableCell className="tabular-nums text-muted-foreground">{e.rowNumber}</TableCell>
+            <TableCell className="font-mono text-xs">{e.registerNumber || "—"}</TableCell>
+            <TableCell className="whitespace-normal text-destructive">{e.reason}</TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }
 
 function OutcomeTable({ outcomes }: { outcomes: ImportOutcome[] }) {
+  // Token-backed rather than raw emerald: `created` is a success outcome, and
+  // --success is the token that means that everywhere else in the app.
   const tone: Record<ImportOutcome["status"], string> = {
-    created: "text-emerald-600",
+    created: "text-success",
     skipped: "text-muted-foreground",
     error: "text-destructive",
   };
   return (
-    <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="sticky top-0 bg-muted/80 text-left">
-          <tr>
-            <th className="px-2 py-1.5 font-medium">Register no.</th>
-            <th className="px-2 py-1.5 font-medium">Name</th>
-            <th className="px-2 py-1.5 font-medium">Result</th>
-          </tr>
-        </thead>
-        <tbody>
-          {outcomes.map((o) => (
-            <tr key={`${o.rowNumber}-${o.registerNumber}`} className="border-t border-border">
-              <td className="px-2 py-1.5 font-mono text-xs">{o.registerNumber}</td>
-              <td className="px-2 py-1.5">{o.name}</td>
-              <td className={`px-2 py-1.5 ${tone[o.status]}`}>
-                {o.status}
-                {o.reason ? ` — ${o.reason}` : ""}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <Table
+      density="compact"
+      containerClassName="max-h-56 overflow-y-auto rounded-lg border border-border"
+    >
+      <TableHeader sticky>
+        <TableRow>
+          <TableHead>Register no.</TableHead>
+          <TableHead>Name</TableHead>
+          <TableHead>Result</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {outcomes.map((o) => (
+          <TableRow key={`${o.rowNumber}-${o.registerNumber}`}>
+            <TableCell className="font-mono text-xs">{o.registerNumber}</TableCell>
+            <TableCell>{o.name}</TableCell>
+            <TableCell className={`whitespace-normal ${tone[o.status]}`}>
+              {o.status}
+              {o.reason ? ` — ${o.reason}` : ""}
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

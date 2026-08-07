@@ -14,16 +14,24 @@ import { CalendarPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableEmpty,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
+import { TABLE_FRAME } from "@/app/(app)/page-shell";
 import { WEEKDAY_OPTIONS, type Weekday, type WorkingDay } from "@/features/academic/types";
 import {
   useDeclareWorkingDay,
   useDeleteWorkingDay,
   useWorkingDays,
 } from "@/features/academic/hooks/use-academic";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
 
 const WEEKDAY_LABEL: Record<Weekday, string> = {
   MON: "Monday",
@@ -96,12 +104,12 @@ export function WorkingDays() {
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-2">
           <Label htmlFor="wd-date">Saturday</Label>
-          <input
+          <Input
+            size="lg"
             id="wd-date"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>
         {/* Five options, all worth seeing at once — a segmented row reads faster
@@ -124,7 +132,7 @@ export function WorkingDays() {
                   onClick={() => setFollowsDay(d.value)}
                   className={`rounded-md px-3 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
                     active
-                      ? "bg-background font-medium text-foreground shadow-sm"
+                      ? "bg-card font-medium text-foreground shadow-sm"
                       : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -137,11 +145,12 @@ export function WorkingDays() {
         <div className="flex flex-col gap-2">
           <Label htmlFor="wd-note">Note (optional)</Label>
           <Input
+            size="lg"
             id="wd-note"
             value={note}
             onChange={(e) => setNote(e.target.value)}
             placeholder="e.g. Pongal compensation"
-            className="h-10! w-64"
+            className="w-full sm:w-64"
           />
         </div>
         <Button type="submit" data-icon="inline-start" disabled={!valid || declare.isPending}>
@@ -156,44 +165,31 @@ export function WorkingDays() {
         </p>
       )}
       {declare.isError && (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-        >
-          {errorMessage(declare.error)}
-        </p>
+        <FormError>{errorMessage(declare.error)}</FormError>
       )}
 
-      <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
-        <table className="w-full min-w-160 border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-foreground/10 bg-muted/30 text-left text-muted-foreground">
-              <th className="px-3 py-2 font-medium">Date</th>
-              <th className="px-3 py-2 font-medium">Runs</th>
-              <th className="px-3 py-2 font-medium">Note</th>
-              <th className="px-3 py-2 font-medium">Declared by</th>
-              <th className="w-20 px-3 py-2 text-right font-medium">Remove</th>
-            </tr>
-          </thead>
-          <tbody>
-            {days.isPending ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-8 text-center text-sm text-muted-foreground">
-                  Loading…
-                </td>
-              </tr>
-            ) : list.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-3 py-8 text-center text-sm text-muted-foreground">
-                  No working Saturdays declared. Every Saturday is a holiday.
-                </td>
-              </tr>
-            ) : (
-              list.map((w) => <Row key={w.id} day={w} onRemove={() => remove.mutate(w.id)} />)
-            )}
-          </tbody>
-        </table>
-      </div>
+      <Table containerClassName={TABLE_FRAME} className="min-w-160">
+        <TableHeader>
+          <TableRow>
+            <TableHead>Date</TableHead>
+            <TableHead>Runs</TableHead>
+            <TableHead>Note</TableHead>
+            <TableHead>Declared by</TableHead>
+            <TableHead className="w-20 text-right">Remove</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {days.isPending ? (
+            <TableEmpty colSpan={5}>Loading…</TableEmpty>
+          ) : list.length === 0 ? (
+            <TableEmpty colSpan={5}>
+              No working Saturdays declared. Every Saturday is a holiday.
+            </TableEmpty>
+          ) : (
+            list.map((w) => <Row key={w.id} day={w} onRemove={() => remove.mutate(w.id)} />)
+          )}
+        </TableBody>
+      </Table>
       {remove.isError && (
         <p role="alert" className="text-sm text-destructive">
           {errorMessage(remove.error)}
@@ -205,12 +201,12 @@ export function WorkingDays() {
 
 function Row({ day, onRemove }: { day: WorkingDay; onRemove: () => void }) {
   return (
-    <tr className="border-b border-foreground/10 last:border-b-0">
-      <td className="px-3 py-2 font-medium">{prettyDate(day.date)}</td>
-      <td className="px-3 py-2">{WEEKDAY_LABEL[day.followsDay]}&apos;s timetable</td>
-      <td className="px-3 py-2 text-muted-foreground">{day.note ?? "—"}</td>
-      <td className="px-3 py-2 text-muted-foreground">{day.declaredBy ?? "—"}</td>
-      <td className="px-3 py-2 text-right">
+    <TableRow>
+      <TableCell className="font-medium">{prettyDate(day.date)}</TableCell>
+      <TableCell>{WEEKDAY_LABEL[day.followsDay]}&apos;s timetable</TableCell>
+      <TableCell className="text-muted-foreground">{day.note ?? "—"}</TableCell>
+      <TableCell className="text-muted-foreground">{day.declaredBy ?? "—"}</TableCell>
+      <TableCell className="text-right">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -219,7 +215,7 @@ function Row({ day, onRemove }: { day: WorkingDay; onRemove: () => void }) {
         >
           <Trash2 />
         </Button>
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }

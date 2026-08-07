@@ -10,8 +10,13 @@ import { Lock, Save, Search } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/marks/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import {
   ASSESSMENTS,
   type Assessment,
@@ -26,21 +31,6 @@ import {
   useMarksSheet,
   useSaveMarks,
 } from "@/features/marks/hooks/use-marks";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -108,7 +98,7 @@ function AssignmentPicker({
           one made the row grow as you selected, shoving Assessment sideways on
           every click; a fixed row just fills in left to right. */}
       <Field label="Year">
-        <div className="w-32">
+        <div className="w-full sm:w-32">
           <FormSelect
             value={effYear}
             onChange={pickYear}
@@ -119,7 +109,7 @@ function AssignmentPicker({
         </div>
       </Field>
       <Field label="Section">
-        <div className="w-36">
+        <div className="w-full sm:w-36">
           <FormSelect
             value={effSection}
             onChange={pickSection}
@@ -162,7 +152,7 @@ export function MarksEntry() {
   const sheet = useMarksSheet(classId, subjectId, assessment, !!classId && !!subjectId);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Academic · Internal marks"
         title="Internal marks"
@@ -170,17 +160,13 @@ export function MarksEntry() {
       />
 
       {assignments.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your subjects…</p>
+        <LoadingState label="Loading your subjects…" />
       ) : assignments.isError ? (
         <FormError>{errorMessage(assignments.error)}</FormError>
       ) : !assignments.data?.semester ? (
-        <p className="text-sm text-muted-foreground">
-          No semester is active. Activate one before entering marks.
-        </p>
+        <EmptyState size="sm" title="No semester is active. Activate one before entering marks." />
       ) : options.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          You&apos;re not assigned to any subject this semester.
-        </p>
+        <EmptyState size="sm" title="You&apos;re not assigned to any subject this semester." />
       ) : (
         <>
           <div className="flex flex-wrap items-end gap-4">
@@ -192,7 +178,7 @@ export function MarksEntry() {
               />
             )}
             <Field label="Assessment">
-              <div className="w-44">
+              <div className="w-full sm:w-44">
                 <FormSelect
                   value={assessment}
                   onChange={(v) => setAssessment(v as Assessment)}
@@ -204,9 +190,9 @@ export function MarksEntry() {
           </div>
 
           {!effKey ? (
-            <p className="text-sm text-muted-foreground">Pick a subject to enter marks.</p>
+            <EmptyState size="sm" title="Pick a subject to enter marks." />
           ) : sheet.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading students…</p>
+            <LoadingState label="Loading students…" />
           ) : sheet.isError ? (
             <FormError>{errorMessage(sheet.error)}</FormError>
           ) : sheet.data ? (
@@ -214,7 +200,7 @@ export function MarksEntry() {
           ) : null}
         </>
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -321,11 +307,12 @@ function MarkGrid({ sheet }: { sheet: MarksSheet }) {
           <div className="relative w-56">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
+              size="lg"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search…"
               aria-label="Search students"
-              className="h-10! pl-9"
+              className="pl-9"
             />
           </div>
         </div>

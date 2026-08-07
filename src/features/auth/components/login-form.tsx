@@ -9,6 +9,8 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { FormError } from "@/components/form-error";
+import { Tabs, TabsIndicator, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   useChangePassword,
   useFirebaseUser,
@@ -137,16 +139,17 @@ export function PasswordInput({
   );
 }
 
-export function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
+/**
+ * Re-exported so reset-password-form.tsx keeps importing its five auth
+ * primitives (`errorMessage`, `StepHeading`, `Field`, `PasswordInput`,
+ * `FormError`) from one place. The implementation is now the shared component —
+ * this is an alias, not a second copy.
+ *
+ * It is imported at the top of the file as well: a bare `export { X } from …`
+ * re-exports without binding the name locally, and this file renders FormError
+ * in five places of its own.
+ */
+export { FormError };
 
 export function LoginForm() {
   const { firebaseUser, loading } = useFirebaseUser();
@@ -216,32 +219,25 @@ function ModeToggle({ mode, onChange }: { mode: SignInMode; onChange: (m: SignIn
     { id: "staff", label: "Staff" },
     { id: "student", label: "Student" },
   ];
+  // Base UI Tabs rather than the hand-rolled row this was: same look, but arrow
+  // keys work and the selected state is announced properly. `value`/`onValueChange`
+  // keep the same controlled contract the caller already relied on — switching
+  // mode still resets the sign-in and reset mutations upstream.
   return (
-    <div
-      role="tablist"
-      aria-label="Sign in as"
-      className="inline-flex gap-1 rounded-lg border border-border bg-muted/40 p-1"
+    <Tabs
+      value={mode}
+      onValueChange={(v) => onChange(v as SignInMode)}
+      className="w-fit"
     >
-      {tabs.map((t) => {
-        const active = mode === t.id;
-        return (
-          <button
-            key={t.id}
-            role="tab"
-            type="button"
-            aria-selected={active}
-            onClick={() => onChange(t.id)}
-            className={`rounded-md px-3 py-1 font-mono text-[0.7rem] uppercase tracking-wider transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 ${
-              active
-                ? "bg-background text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
+      <TabsList aria-label="Sign in as">
+        <TabsIndicator />
+        {tabs.map((t) => (
+          <TabsTrigger key={t.id} value={t.id} className="eyebrow">
             {t.label}
-          </button>
-        );
-      })}
-    </div>
+          </TabsTrigger>
+        ))}
+      </TabsList>
+    </Tabs>
   );
 }
 

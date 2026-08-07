@@ -9,8 +9,23 @@ import { useState } from "react";
 import { Check, GraduationCap } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { TABLE_FRAME } from "@/app/(app)/page-shell";
+import { errorMessage } from "@/lib/errors";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/promotion/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { PromotionContext, PromotionResult } from "@/features/promotion/types";
 import {
   useClassOptions,
@@ -20,21 +35,6 @@ import {
 
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 const roman = (n: number) => ROMAN[n] ?? String(n);
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 function Note({ children }: { children: React.ReactNode }) {
   return (
@@ -58,7 +58,7 @@ export function PromotionManager() {
   const ctx = usePromotionContext(classId || null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Academic · Promotion"
         title="Promote students"
@@ -68,7 +68,7 @@ export function PromotionManager() {
       <div className="flex flex-wrap items-end gap-4">
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Program</span>
-          <div className="w-56">
+          <div className="w-full sm:w-56">
             <FormSelect
               value={programId}
               onChange={(v) => {
@@ -82,7 +82,7 @@ export function PromotionManager() {
         </div>
         <div className="flex flex-col gap-1.5">
           <span className="text-xs font-medium text-muted-foreground">Class</span>
-          <div className="w-40">
+          <div className="w-full sm:w-40">
             <FormSelect
               value={classId}
               onChange={setClassId}
@@ -103,13 +103,13 @@ export function PromotionManager() {
       {classId === "" ? (
         <p className="text-sm text-muted-foreground">Pick a program, then a class, to promote it.</p>
       ) : ctx.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading roster…</p>
+        <TableSkeleton rows={8} cols={3} label="Loading roster…" />
       ) : ctx.isError ? (
         <FormError>{errorMessage(ctx.error)}</FormError>
       ) : ctx.data ? (
         <PromotionPanel key={classId} context={ctx.data} />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
@@ -164,9 +164,9 @@ function PromotionPanel({ context }: { context: PromotionContext }) {
         <span className="font-medium text-foreground">{sourceClass.label}</span>
         <span className="text-muted-foreground">· {activeYear.name}</span>
         {graduate ? (
-          <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600">
-            <GraduationCap className="size-3.5" /> Final year — graduate
-          </span>
+          <Badge variant="warning">
+            <GraduationCap /> Final year — graduate
+          </Badge>
         ) : (
           <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
             Promote to Year {roman(sourceClass.year + 1)}
@@ -179,7 +179,7 @@ function PromotionPanel({ context }: { context: PromotionContext }) {
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Target academic year</span>
-            <div className="w-48">
+            <div className="w-full sm:w-48">
               <FormSelect
                 value={targetYearId}
                 onChange={setTargetYearId}
@@ -191,7 +191,7 @@ function PromotionPanel({ context }: { context: PromotionContext }) {
           </div>
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-medium text-muted-foreground">Target class</span>
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <FormSelect
                 value={targetClassId}
                 onChange={setTargetClassId}
@@ -221,42 +221,43 @@ function PromotionPanel({ context }: { context: PromotionContext }) {
       {roster.length === 0 ? (
         <Note>No active students are enrolled in this class for {activeYear.name}.</Note>
       ) : (
-        <div className="overflow-x-auto rounded-xl ring-1 ring-foreground/10">
-          <table className="w-full min-w-140 border-collapse text-sm">
-            <thead>
-              <tr className="border-b border-foreground/10 bg-muted/30 text-left text-muted-foreground">
-                <th className="w-10 px-3 py-2">
-                  <input
-                    type="checkbox"
+        <Table containerClassName={TABLE_FRAME} className="min-w-140">
+            <TableHeader>
+              <TableRow>
+                <TableHead className="w-10">
+                  {/* Three states, not two: `indeterminate` is what tells the
+                      admin "some of this class is selected" — previously a
+                      partial selection was indistinguishable from none. */}
+                  <Checkbox
                     checked={allSelected}
-                    onChange={toggleAll}
+                    indeterminate={selected.size > 0 && !allSelected}
+                    onCheckedChange={toggleAll}
                     aria-label="Select all"
-                    className="size-4 accent-primary"
                   />
-                </th>
-                <th className="px-3 py-2 font-medium">Register no.</th>
-                <th className="px-3 py-2 font-medium">Name</th>
-              </tr>
-            </thead>
-            <tbody>
+                </TableHead>
+                <TableHead>Register no.</TableHead>
+                <TableHead>Name</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {roster.map((s) => (
-                <tr key={s.studentId} className="border-b border-foreground/10 last:border-b-0">
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
+                <TableRow
+                  key={s.studentId}
+                  data-state={selected.has(s.studentId) ? "selected" : undefined}
+                >
+                  <TableCell>
+                    <Checkbox
                       checked={selected.has(s.studentId)}
-                      onChange={() => toggle(s.studentId)}
+                      onCheckedChange={() => toggle(s.studentId)}
                       aria-label={`Select ${s.displayName}`}
-                      className="size-4 accent-primary"
                     />
-                  </td>
-                  <td className="px-3 py-2 font-mono text-xs">{s.registerNumber}</td>
-                  <td className="px-3 py-2">{s.displayName}</td>
-                </tr>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
+                  <TableCell>{s.displayName}</TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
-        </div>
+            </TableBody>
+          </Table>
       )}
 
       {/* Action */}

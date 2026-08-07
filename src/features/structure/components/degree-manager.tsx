@@ -5,7 +5,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Power, Trash2 } from "lucide-react";
+import { GraduationCap, Plus, Pencil, Power, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +26,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { FormError } from "@/components/form-error";
+// Aliased: each manager keeps a local `RowActions` that owns its mutation hook
+// and decides which items apply; this is the menu those items render into.
+import { RowActions as RowActionsMenu } from "@/components/row-actions";
+import { ActiveBadge } from "@/components/status-badge";
+import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/app/(app)/page-header";
+import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import type { Degree } from "@/features/structure/types";
 import {
   useCreateDegree,
@@ -34,25 +43,6 @@ import {
   useDeleteDegree,
   useUpdateDegree,
 } from "@/features/structure/hooks/use-degrees";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
-
-// Fixed (non-brand) status pill — active vs deactivated.
-function StatusPill({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider ${
-        active ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
-      }`}
-    >
-      <span className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-muted-foreground"}`} />
-      {active ? "Active" : "Inactive"}
-    </span>
-  );
-}
 
 export function DegreeManager() {
   const { data: degrees, isPending, isError, error } = useDegrees();
@@ -62,66 +52,75 @@ export function DegreeManager() {
   const [deleting, setDeleting] = useState<Degree | null>(null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <Button onClick={() => setEditing("new")} data-icon="inline-start">
+            <Plus />
+            New degree
+          </Button>
+        }
+      >
         <PageHeader
           eyebrow="Structure · Degrees"
           title="Degrees"
           description="The programmes offered (B.E, B.Tech, MBA…). A degree's duration bounds every program's year and semester ranges."
         />
-        <Button onClick={() => setEditing("new")} data-icon="inline-start">
-          <Plus />
-          New degree
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading degrees…</p>
+        <TableSkeleton rows={6} cols={6} label="Loading degrees…" />
       ) : isError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
+        <FormError>{errorMessage(error)}</FormError>
       ) : degrees.length === 0 ? (
-        <EmptyState onAdd={() => setEditing("new")} />
+        <EmptyState
+          icon={GraduationCap}
+          title="No degrees yet"
+          description="A degree is the qualification a program awards — B.E, B.Tech, MBA. Everything else in Structure hangs off one."
+          action={
+            <Button variant="outline" onClick={() => setEditing("new")} data-icon="inline-start">
+              <Plus />
+              Add the first degree
+            </Button>
+          }
+        />
       ) : (
-        <div className="rounded-xl ring-1 ring-foreground/10">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Code</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead className="text-right">Duration</TableHead>
-                <TableHead className="text-right">Programs</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-0 text-right">Actions</TableHead>
+        <Table containerClassName={TABLE_FRAME}>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Code</TableHead>
+              <TableHead>Name</TableHead>
+              <TableHead className="text-right">Duration</TableHead>
+              <TableHead className="text-right">Programs</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-0 text-right">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {degrees.map((d) => (
+              <TableRow key={d.id}>
+                <TableCell className="font-mono text-xs">{d.code}</TableCell>
+                <TableCell className="font-medium">{d.name}</TableCell>
+                <TableCell className="text-right tabular-nums">
+                  {d.durationYears} {d.durationYears === 1 ? "year" : "years"}
+                </TableCell>
+                <TableCell className="text-right tabular-nums text-muted-foreground">
+                  {d.programCount}
+                </TableCell>
+                <TableCell>
+                  <ActiveBadge active={d.isActive} />
+                </TableCell>
+                <TableCell>
+                  <RowActions
+                    degree={d}
+                    onEdit={() => setEditing(d)}
+                    onDelete={() => setDeleting(d)}
+                  />
+                </TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {degrees.map((d) => (
-                <TableRow key={d.id}>
-                  <TableCell className="font-mono text-xs">{d.code}</TableCell>
-                  <TableCell className="font-medium">{d.name}</TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {d.durationYears} {d.durationYears === 1 ? "year" : "years"}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums text-muted-foreground">
-                    {d.programCount}
-                  </TableCell>
-                  <TableCell>
-                    <StatusPill active={d.isActive} />
-                  </TableCell>
-                  <TableCell>
-                    <RowActions
-                      degree={d}
-                      onEdit={() => setEditing(d)}
-                      onDelete={() => setDeleting(d)}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
       )}
 
       {editing !== null && (
@@ -133,19 +132,7 @@ export function DegreeManager() {
       {deleting !== null && (
         <DeleteDialog degree={deleting} onClose={() => setDeleting(null)} />
       )}
-    </div>
-  );
-}
-
-function EmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-      <p className="text-sm text-muted-foreground">No degrees yet.</p>
-      <Button variant="outline" onClick={onAdd} data-icon="inline-start">
-        <Plus />
-        Add the first degree
-      </Button>
-    </div>
+    </PageShell>
   );
 }
 
@@ -162,35 +149,26 @@ function RowActions({
   onDelete: () => void;
 }) {
   const update = useUpdateDegree();
+  // Hard delete is offered only when nothing depends on the degree — the API
+  // returns 409 otherwise, and hiding the item says so before the user tries.
   const canDelete = degree.programCount === 0;
 
   return (
-    <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label="Edit degree">
-        <Pencil />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={update.isPending}
-        onClick={() => update.mutate({ id: degree.id, input: { isActive: !degree.isActive } })}
-        aria-label={degree.isActive ? "Deactivate degree" : "Reactivate degree"}
-        title={degree.isActive ? "Deactivate" : "Reactivate"}
-      >
-        <Power className={degree.isActive ? "" : "text-muted-foreground"} />
-      </Button>
-      {canDelete && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onDelete}
-          aria-label="Delete degree"
-          title="Delete"
-        >
-          <Trash2 className="text-destructive" />
-        </Button>
-      )}
-    </div>
+    <RowActionsMenu
+      label={`Actions for ${degree.code}`}
+      actions={[
+        { label: "Edit", icon: Pencil, onSelect: onEdit },
+        {
+          label: degree.isActive ? "Deactivate" : "Reactivate",
+          icon: Power,
+          disabled: update.isPending,
+          onSelect: () =>
+            update.mutate({ id: degree.id, input: { isActive: !degree.isActive } }),
+        },
+        // Still opens the confirm dialog; the menu only replaces the button.
+        canDelete && { label: "Delete", icon: Trash2, destructive: true, onSelect: onDelete },
+      ]}
+    />
   );
 }
 
@@ -237,48 +215,43 @@ function DegreeFormDialog({ degree, onClose }: { degree: Degree | null; onClose:
           <div className="flex flex-col gap-2">
             <Label htmlFor="degree-name">Name</Label>
             <Input
+              size="lg"
               id="degree-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Bachelor of Engineering"
-              className="h-10!"
               autoFocus
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="degree-code">Code</Label>
               <Input
+                size="lg"
                 id="degree-code"
                 value={code}
                 onChange={(e) => setCode(e.target.value)}
                 placeholder="B.E"
-                className="h-10!"
                 required
               />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="degree-duration">Duration (years)</Label>
               <Input
+                size="lg"
                 id="degree-duration"
                 type="number"
                 min={1}
                 max={10}
                 value={durationYears}
                 onChange={(e) => setDurationYears(e.target.value)}
-                className="h-10!"
                 required
               />
             </div>
           </div>
           {mutationError && (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              {errorMessage(mutationError)}
-            </p>
+            <FormError>{errorMessage(mutationError)}</FormError>
           )}
         </form>
 
@@ -308,12 +281,7 @@ function DeleteDialog({ degree, onClose }: { degree: Degree; onClose: () => void
           </DialogDescription>
         </DialogHeader>
         {del.isError && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage(del.error)}
-          </p>
+          <FormError>{errorMessage(del.error)}</FormError>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={del.isPending}>

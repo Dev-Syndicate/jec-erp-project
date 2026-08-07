@@ -1,560 +1,116 @@
-// The authenticated app shell: brand rail + a breadcrumb bar that reflects the
-// current page (Group / Page), derived from the nav config so it's always
-// accurate. Every authenticated page renders inside it. Nav is role-filtered to
-// mirror the API's authorization, so the UI never offers a link that would 403.
+// The authenticated app shell: navigation rail + header bar. Every authenticated
+// page renders inside it.
+//
+// This file used to be 550 lines holding the nav model, the sidebar, the header,
+// the breadcrumb logic and the user menu together. It is now the composition
+// root; the parts live in ./shell/:
+//
+//   nav-config.ts     — WHAT exists and WHO may see it (pure, unit-tested)
+//   app-sidebar.tsx   — the rail
+//   app-header.tsx    — the top bar
+//   user-menu.tsx     — the footer chip + sign-out
+//   command-palette.tsx — ⌘K, reading the same visibleGroups() as the rail
+//
+// The split matters most for nav-config: it is the security-adjacent part, and
+// as a pure module with no client APIs it can be exercised by the unit suite
+// (test/app/nav-config.test.ts) in a way it never could while embedded here.
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
-import {
-  LayoutDashboard,
-  Building2,
-  CalendarDays,
-  CalendarCheck2,
-  ClipboardList,
-  ClipboardPen,
-  CalendarOff,
-  Users,
-  GraduationCap,
-  ArrowLeftRight,
-  BookOpen,
-  CalendarClock,
-  UsersRound,
-  UserRoundCheck,
-  ShieldCheck,
-  ChevronsUp,
-  ChevronRight,
-  LogOut,
-} from "lucide-react";
+import { useEffect, useRef } from "react";
+import { usePathname } from "next/navigation";
 
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarFooter,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarInset,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubButton,
-  SidebarMenuSubItem,
-  SidebarProvider,
-  SidebarRail,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbList,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from "@/components/ui/breadcrumb";
-import { useFirebaseUser, useMe, useSignOut } from "@/features/auth/hooks/use-auth";
-import type { AuthUser } from "@/features/auth/types";
-
-type NavChild = { title: string; href: string };
-
-type NavFlags = { roles: string[]; advisesClass: boolean };
-
-type NavItem = {
-  title: string;
-  href: string;
-  icon: React.ComponentType<{ className?: string }>;
-  // Roles allowed to see this item; undefined = everyone signed in.
-  roles?: string[];
-  // Finer visibility beyond role names, evaluated with live profile flags. When
-  // present it REPLACES the role check for this item (e.g. "Day attendance" needs
-  // a manage role OR advising a class).
-  gate?: (flags: NavFlags) => boolean;
-  // If present, the item is a collapsible parent revealing these sub-links.
-  children?: NavChild[];
-  // Match this path exactly (don't also light up on its sub-routes). Use when a
-  // sibling owns a sub-route, e.g. /attendance vs /attendance/report.
-  exact?: boolean;
-};
-
-type NavGroup = { label: string; items: NavItem[] };
-
-// Management nav is being rebuilt from the new schema (Program / Section /
-// Semester / Attendance / Internal marks). Only the Overview remains for now;
-// groups are re-added as each feature lands.
-const NAV: NavGroup[] = [
-  {
-    label: "Today",
-    items: [{ title: "Overview", href: "/dashboard", icon: LayoutDashboard }],
-  },
-  {
-    label: "Attendance",
-    items: [
-      {
-        title: "My timetable",
-        href: "/attendance/timetable",
-        icon: CalendarClock,
-        // Program staff who actually teach — not the institution admin (Super
-        // Admin never has a personal timetable).
-        roles: ["HOD", "Faculty"],
-      },
-      {
-        title: "Mark attendance",
-        href: "/attendance",
-        icon: CalendarCheck2,
-        // Teaching work, not institution admin — Super Admin has no timetable to
-        // mark against. They keep the permission (the API still authorizes
-        // `manage all`, so a stuck record can be fixed); the nav just stops
-        // offering it.
-        roles: ["HOD", "Faculty"],
-        exact: true, // /attendance/report and /attendance/timetable are siblings
-      },
-      {
-        title: "Day attendance",
-        href: "/attendance/day",
-        icon: CalendarDays,
-        // The class teacher's job: a HOD, or a Faculty who advises a class. A
-        // plain subject teacher who advises none doesn't see it, and neither
-        // does Super Admin (see "Mark attendance").
-        gate: ({ roles, advisesClass }) => roles.includes("HOD") || advisesClass,
-      },
-      {
-        title: "Arrange cover",
-        href: "/attendance/cover",
-        icon: UserRoundCheck,
-        // Assigning a stand-in for an absent teacher's period. A supervised act
-        // (it grants the right to sign another teacher's register), so a HOD's
-        // job — never the teachers themselves.
-        //
-        // Super Admin keeps the permission but not the nav entry, exactly like
-        // "Mark attendance": running a department's day-to-day cover isn't their
-        // work. The API still accepts them, so a department with no HOD (or an
-        // absent one) can still be unstuck by going to the page directly.
-        roles: ["HOD"],
-      },
-      {
-        title: "Report",
-        href: "/attendance/report",
-        icon: ClipboardList,
-        // The one attendance view Super Admin keeps — reading across the
-        // institution is their job; recording attendance isn't.
-        roles: ["Super Admin", "HOD", "Faculty"],
-      },
-    ],
-  },
-  {
-    label: "Assessment",
-    items: [
-      {
-        title: "Internal marks",
-        href: "/marks",
-        icon: ClipboardPen,
-        // Staff who enter marks: a HOD, or a Faculty assigned to a subject this
-        // semester. The picker is empty for a faculty with no assignments, but
-        // the nav still shows it (the API is the real gate). Entering marks is
-        // teaching work, so Super Admin doesn't see it.
-        roles: ["HOD", "Faculty"],
-      },
-      {
-        title: "Leave & OD",
-        href: "/leave",
-        icon: CalendarOff,
-        // A student applies + tracks; a class teacher / HOD approve. The page is
-        // role-aware (the API reports isStudent / canApprove), so one nav entry
-        // serves both. Students have no other nav items, so this is their first
-        // staff-shell link. Approval is a class-teacher → HOD flow, so Super
-        // Admin is not in the queue.
-        roles: ["HOD", "Faculty", "Student"],
-      },
-    ],
-  },
-  {
-    label: "Structure",
-    items: [
-      {
-        title: "Structure setup",
-        href: "/structure/degrees",
-        icon: Building2,
-        roles: ["Super Admin"],
-        // Ordered by the dependency chain, so setting the college up top to bottom
-        // works: a Program pairs a Degree × Branch AND names the Department that
-        // runs it, and a Class sits within a Program while being OWNED by a
-        // department (S&H for first year, the branch's own from year 2).
-        children: [
-          { title: "Degrees", href: "/structure/degrees" },
-          { title: "Branches", href: "/structure/branches" },
-          { title: "Departments", href: "/structure/departments" },
-          { title: "Programs", href: "/structure/programs" },
-          { title: "Classes", href: "/structure/classes" },
-        ],
-      },
-      {
-        title: "Classes",
-        href: "/structure/classes",
-        icon: UsersRound,
-        // A HOD runs their own department's classes — setting the class teacher
-        // above all. Super Admin reaches the same page through "Structure setup"
-        // above, so this entry is HOD-only to avoid listing it twice for them.
-        // The API scopes it: a HOD sees only the classes their department owns.
-        roles: ["HOD"],
-      },
-    ],
-  },
-  {
-    label: "Academic",
-    items: [
-      {
-        title: "Years & semesters",
-        href: "/academic",
-        icon: CalendarDays,
-        roles: ["Super Admin"],
-      },
-      {
-        title: "Promotion",
-        href: "/promotion",
-        icon: ChevronsUp,
-        roles: ["Super Admin"],
-      },
-    ],
-  },
-  {
-    label: "People",
-    items: [
-      {
-        title: "My class",
-        href: "/my-class",
-        icon: UsersRound,
-        // The class teacher's roster tool — surfaced only to a class advisor
-        // (HOD/SA manage the full Students list instead).
-        gate: ({ advisesClass }) => advisesClass,
-      },
-      {
-        title: "Students",
-        href: "/students",
-        icon: Users,
-        roles: ["Super Admin", "HOD"],
-      },
-      {
-        title: "Faculty",
-        href: "/faculty",
-        icon: GraduationCap,
-        roles: ["Super Admin", "HOD"],
-        exact: true, // /faculty/attachments is a sibling entry, not this page
-      },
-      {
-        title: "Attachments",
-        href: "/faculty/attachments",
-        icon: ArrowLeftRight,
-        // Lending staff across departments is an institution-level act, so this is
-        // Super Admin only — a HOD asks the admin. It's a sibling rather than a
-        // child of Faculty because children carry no roles of their own, and an
-        // HOD must not be offered a link that would 403.
-        roles: ["Super Admin"],
-      },
-    ],
-  },
-  {
-    label: "Curriculum",
-    items: [
-      {
-        title: "Subjects",
-        href: "/subjects",
-        icon: BookOpen,
-        roles: ["Super Admin", "HOD"],
-      },
-      {
-        title: "Timetable",
-        href: "/timetable",
-        icon: CalendarClock,
-        roles: ["Super Admin", "HOD"],
-      },
-    ],
-  },
-  {
-    label: "Settings",
-    items: [
-      {
-        title: "Access control",
-        href: "/access",
-        icon: ShieldCheck,
-        roles: ["Super Admin"],
-      },
-    ],
-  },
-];
-
-function visibleGroups(flags: NavFlags): NavGroup[] {
-  return NAV.map((g) => ({
-    ...g,
-    items: g.items.filter((i) =>
-      i.gate ? i.gate(flags) : !i.roles || i.roles.some((r) => flags.roles.includes(r)),
-    ),
-  })).filter((g) => g.items.length > 0);
-}
-
-// Resolve the current path to a breadcrumb trail (Group / Page), derived from
-// the nav config so it always matches the real navigation. Falls back to the
-// last path segment for pages not in the nav (e.g. a future detail route).
-function useBreadcrumbs(pathname: string): Array<{ label: string; href?: string }> {
-  // Pick the most specific match (longest href), so /attendance/report resolves
-  // to "Report", not its parent "Mark attendance".
-  let best: { group: NavGroup; item: NavItem } | null = null;
-  for (const group of NAV) {
-    for (const item of group.items) {
-      const isMatch = pathname === item.href || pathname.startsWith(`${item.href}/`);
-      if (isMatch && (!best || item.href.length > best.item.href.length)) {
-        best = { group, item };
-      }
-    }
-  }
-  if (best) {
-    // The "Today" group is a single overview; don't prefix it with its label.
-    return best.group.label === "Today"
-      ? [{ label: best.item.title }]
-      : [{ label: best.group.label }, { label: best.item.title, href: best.item.href }];
-  }
-  const last = pathname.split("/").filter(Boolean).at(-1) ?? "";
-  return [{ label: last.charAt(0).toUpperCase() + last.slice(1) }];
-}
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { useFirebaseUser, useMe } from "@/features/auth/hooks/use-auth";
+import { AppHeader } from "@/app/(app)/shell/app-header";
+import { AppSidebar } from "@/app/(app)/shell/app-sidebar";
+import { CommandPalette } from "@/app/(app)/shell/command-palette";
+import type { NavFlags } from "@/app/(app)/shell/nav-config";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const { firebaseUser } = useFirebaseUser();
   const me = useMe(!!firebaseUser);
   const profile = me.data;
+  // Both default to the empty/false case while `me` is in flight, so the nav
+  // filters down to the ungated items rather than flashing entries the user may
+  // not be allowed to see.
   const navFlags: NavFlags = {
     roles: profile?.roles ?? [],
     advisesClass: profile?.advisesClass ?? false,
   };
   const pathname = usePathname();
-  const crumbs = useBreadcrumbs(pathname);
+
+  // The page panel scrolls itself rather than the window (see the layout note
+  // below), and this element lives in the LAYOUT — so it survives navigation and
+  // keeps its scrollTop. Next's own scroll restoration only ever resets the
+  // window, so without this you land halfway down Faculty after scrolling
+  // Students. Restores the behaviour the window scroller gave for free.
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scroller.current?.scrollTo({ top: 0 });
+  }, [pathname]);
 
   return (
-    <SidebarProvider>
-      <Sidebar collapsible="icon">
-        <SidebarHeader>
-          <div className="flex items-center gap-3 px-1 py-1.5">
-            {/* The college crest. No brand fill behind it — the mark is gold on
-                transparent and carries its own colour, so a --primary tile would
-                fight it. size-8 is load-bearing: it keeps the lockup aligned with
-                the nav icons when the rail collapses to icon-only. */}
-            <Image
-              src="/erplogo-mark.png"
-              alt=""
-              width={32}
-              height={32}
-              className="size-8 shrink-0 object-contain"
-              priority
-            />
-            <div className="flex flex-col leading-tight group-data-[collapsible=icon]:hidden">
-              <span className="font-heading text-sm font-semibold text-sidebar-foreground">
-                JEC ERP
-              </span>
-              <span className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-muted-foreground">
-                System of record
-              </span>
+    <TooltipProvider>
+      {/* `flex-col` turns the provider's own wrapper into a column so the header
+          can be a full-width band ABOVE the rail + panel row, rather than a strip
+          that starts where the rail ends. That is the one structural change here;
+          the row below it is the same two children in the same order. */}
+      {/* On md+ the shell is a FIXED-HEIGHT frame and the page panel scrolls its
+          own content. That is what keeps the panel's rounded top edge on screen
+          while you scroll — with the window as the scroller the whole panel slid
+          up and the corners disappeared under the header.
+          `min-h-0` on the row is the load-bearing bit: without it the flex child
+          sizes to its content and the inner overflow never engages.
+          Below md the panel is full-bleed with no corners to preserve, so the
+          native window scroll is left alone — an inner scroller there would pin
+          the mobile browser's URL bar open for no benefit. */}
+      {/* Narrower than the 16rem the shadcn primitive ships with. The widest
+          label in the rail is "Years & semesters", which ends ~175px in, so the
+          default left ~80px of dead space against the right edge on every page.
+          14.5rem keeps a comfortable margin — including for "Structure setup",
+          the longest label that also carries a right-aligned chevron.
+          Set here rather than by editing SIDEBAR_WIDTH in components/ui/sidebar.tsx:
+          that file is shadcn-generated and a future `shadcn add sidebar` would
+          overwrite it. SidebarProvider spreads an incoming `style` AFTER its own
+          defaults, so this is the supported override, and it keeps the app's
+          choice visible in the app's own file. --sidebar-width is a variable the
+          rail, the inset and the header lockup all read, so they stay in step. */}
+      <SidebarProvider
+        style={{ "--sidebar-width": "14.5rem" } as React.CSSProperties}
+        className="flex-col md:h-svh md:overflow-hidden"
+      >
+        <AppHeader pathname={pathname} />
+
+        <div className="flex w-full flex-1 md:min-h-0">
+          <AppSidebar flags={navFlags} profile={profile} pathname={pathname} />
+
+          {/* The ring is the house convention for defining a surface (see the
+              elevation note in globals.css) and it is what gives the panel's
+              rounded edge a crisp line — the frame is white and the panel is
+              #fafafa, so the built-in shadow alone barely registers between them.
+              Scoped to `md` because below that the panel is full-bleed with no
+              rounding, where a ring would just draw a stray line down the screen
+              edge. */}
+          {/* `mt-1!` tightens the gap under the header from 8px to 2px. The bang
+              is required, not decorative: the primitive sets the panel's inset
+              with the `m-2` SHORTHAND, and a longhand `mt-1` in a different
+              variant stack does not reliably out-order it — measured, it lost and
+              the margin stayed 8px. */}
+          {/* `overflow-hidden` here is what actually clips the scrolling content
+              to the rounded corners. It was off-limits before only because the
+              header used to live INSIDE this panel and `overflow` would have
+              broken its `sticky`; the header is now a sibling above, so the
+              objection is gone. */}
+          <SidebarInset className="min-w-0 md:mt-1! md:overflow-hidden md:ring-1 md:ring-foreground/10">
+            <div ref={scroller} className="flex flex-1 flex-col md:min-h-0 md:overflow-y-auto">
+              {children}
             </div>
-          </div>
-        </SidebarHeader>
-
-        <SidebarContent>
-          {visibleGroups(navFlags).map((group) => (
-            <SidebarGroup key={group.label}>
-              <SidebarGroupLabel className="font-mono text-[0.65rem] uppercase tracking-[0.18em]">
-                {group.label}
-              </SidebarGroupLabel>
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  // Exact items (Overview, or a parent with a sibling sub-route)
-                  // match only themselves; others also light up on sub-routes.
-                  const active =
-                    item.exact || item.href === "/dashboard"
-                      ? pathname === item.href
-                      : pathname === item.href || pathname.startsWith(`${item.href}/`);
-                  const Icon = item.icon;
-
-                  // Collapsible parent (e.g. Students → List / Add).
-                  if (item.children?.length) {
-                    return (
-                      <CollapsibleNavItem
-                        key={item.title}
-                        item={item}
-                        active={active}
-                        pathname={pathname}
-                      />
-                    );
-                  }
-
-                  return (
-                    <SidebarMenuItem key={item.title}>
-                      <SidebarMenuButton
-                        isActive={active}
-                        tooltip={item.title}
-                        render={<Link href={item.href} />}
-                      >
-                        <Icon className="size-4" />
-                        <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  );
-                })}
-              </SidebarMenu>
-            </SidebarGroup>
-          ))}
-        </SidebarContent>
-
-        <SidebarFooter>
-          <UserMenu profile={profile} />
-        </SidebarFooter>
-        <SidebarRail />
-      </Sidebar>
-
-      <SidebarInset>
-        {/* Breadcrumb bar — reflects the current page (Group / Page), derived
-            from the nav so it's always accurate. Matches the shadcn reference. */}
-        <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border px-4">
-          <SidebarTrigger className="-ml-1" />
-          <Breadcrumb>
-            <BreadcrumbList>
-              {crumbs.map((crumb, i) => {
-                const last = i === crumbs.length - 1;
-                return (
-                  <span key={`${crumb.label}-${i}`} className="contents">
-                    <BreadcrumbItem>
-                      {last || !crumb.href ? (
-                        <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
-                      ) : (
-                        <BreadcrumbLink render={<Link href={crumb.href} />}>
-                          {crumb.label}
-                        </BreadcrumbLink>
-                      )}
-                    </BreadcrumbItem>
-                    {!last && <BreadcrumbSeparator />}
-                  </span>
-                );
-              })}
-            </BreadcrumbList>
-          </Breadcrumb>
-        </header>
-
-        <div className="flex flex-1 flex-col">{children}</div>
-      </SidebarInset>
-    </SidebarProvider>
-  );
-}
-
-// A collapsible nav parent (e.g. Students → List / Add / Import). Controlled so
-// Base UI doesn't warn about a changing default-open: it's open whenever one of
-// its routes is active OR the user has expanded it, and collapses when the user
-// closes it (unless a route keeps it active). (An uncontrolled
-// `defaultOpen={active}` warns because `active` flips false→true after the first
-// render, once the route resolves.)
-function CollapsibleNavItem({
-  item,
-  active,
-  pathname,
-}: {
-  item: NavItem;
-  active: boolean;
-  pathname: string;
-}) {
-  // Track only the user's manual intent; the open state is derived from it +
-  // whether a route is active — no setState-in-effect needed.
-  const [userOpen, setUserOpen] = useState<boolean | null>(null);
-  const open = userOpen ?? active;
-
-  const Icon = item.icon;
-  return (
-    <Collapsible open={open} onOpenChange={setUserOpen} className="group/collapsible">
-      <SidebarMenuItem>
-        <CollapsibleTrigger
-          render={
-            <SidebarMenuButton isActive={active} tooltip={item.title}>
-              <Icon className="size-4" />
-              <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
-              <ChevronRight className="ml-auto size-4 transition-transform group-data-open/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
-            </SidebarMenuButton>
-          }
-        />
-        <CollapsibleContent>
-          <SidebarMenuSub>
-            {item.children!.map((child) => (
-              <SidebarMenuSubItem key={child.href}>
-                <SidebarMenuSubButton
-                  isActive={pathname === child.href}
-                  render={<Link href={child.href} />}
-                >
-                  <span>{child.title}</span>
-                </SidebarMenuSubButton>
-              </SidebarMenuSubItem>
-            ))}
-          </SidebarMenuSub>
-        </CollapsibleContent>
-      </SidebarMenuItem>
-    </Collapsible>
-  );
-}
-
-function UserMenu({ profile }: { profile: AuthUser | undefined }) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const signOut = useSignOut();
-  const initials = (profile?.displayName ?? "· ·")
-    .split(" ")
-    .map((p) => p[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
-
-  const signOutNow = () =>
-    signOut.mutate(undefined, { onSuccess: () => router.replace("/login") });
-
-  return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <div className="flex items-center gap-1">
-          {/* The user chip opens the profile page. Sign-out is the icon button
-              beside it (and, on the profile page, in the shell as well). */}
-          <SidebarMenuButton
-            size="lg"
-            isActive={pathname === "/profile"}
-            tooltip="Your profile"
-            className="flex-1 gap-2.5"
-            render={<Link href="/profile" />}
-          >
-            <span className="grid size-7 shrink-0 place-items-center rounded-md bg-sidebar-accent font-mono text-[0.65rem] font-semibold text-sidebar-accent-foreground">
-              {initials}
-            </span>
-            <span className="flex flex-1 flex-col overflow-hidden text-left leading-tight group-data-[collapsible=icon]:hidden">
-              <span className="truncate text-sm font-medium text-sidebar-foreground">
-                {profile?.displayName ?? "…"}
-              </span>
-              <span className="truncate font-mono text-[0.65rem] text-muted-foreground">
-                {profile?.roles[0] ?? "No role"}
-              </span>
-            </span>
-          </SidebarMenuButton>
-
-          {/* Direct sign-out beside the user chip. Hidden when the rail collapses
-              to icons — expand the rail (or use the profile page) to sign out. */}
-          <button
-            type="button"
-            onClick={signOutNow}
-            disabled={signOut.isPending}
-            aria-label="Sign out"
-            title="Sign out"
-            className="grid size-8 shrink-0 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground disabled:opacity-50 group-data-[collapsible=icon]:hidden"
-          >
-            <LogOut className="size-4" />
-          </button>
+          </SidebarInset>
         </div>
-      </SidebarMenuItem>
-    </SidebarMenu>
+
+        <CommandPalette flags={navFlags} />
+      </SidebarProvider>
+    </TooltipProvider>
   );
 }

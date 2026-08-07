@@ -19,8 +19,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { errorMessage } from "@/lib/errors";
+import { CardSkeleton } from "@/components/ui/skeleton";
+import { FormError } from "@/components/form-error";
+import { PageShell, PageShellHeader } from "@/app/(app)/page-shell";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/access/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { Permission, Role, Scope } from "@/features/access/types";
 import {
   useCreateRole,
@@ -30,27 +34,12 @@ import {
   useUpdateRole,
 } from "@/features/access/hooks/use-access";
 
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
 const SCOPE_OPTIONS = [
   { value: "PROGRAM", label: "Program — own program only" },
   { value: "INSTITUTION", label: "Institution — all programs" },
 ];
 const scopeLabel = (s: Scope) => (s === "INSTITUTION" ? "Institution" : "Program");
 const titleCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 export function AccessManager() {
   const roles = useRoles();
@@ -64,18 +53,23 @@ export function AccessManager() {
   );
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <>
+            <Button onClick={() => setEditing("new")} data-icon="inline-start">
+              <Plus />
+              Add role
+            </Button>
+          </>
+        }
+      >
         <PageHeader
           eyebrow="Access · Roles & permissions"
           title="Access control"
           description="Compose roles from the permission catalogue and assign them to people. Roles are configurable data — new ones appear in the account role pickers automatically."
         />
-        <Button onClick={() => setEditing("new")} data-icon="inline-start">
-          <Plus />
-          Add role
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {/* Enforcement is still the requireRole stopgap; permissions edited here go
           live when the CASL swap lands. Set expectations so this isn't mistaken
@@ -86,7 +80,7 @@ export function AccessManager() {
       </p>
 
       {roles.isPending || permissions.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading roles…</p>
+        <CardSkeleton count={4} lines={2} label="Loading roles…" />
       ) : roles.isError ? (
         <FormError>{errorMessage(roles.error)}</FormError>
       ) : (
@@ -111,7 +105,7 @@ export function AccessManager() {
         />
       )}
       {deleting && <DeleteRoleDialog role={deleting} onClose={() => setDeleting(null)} />}
-    </div>
+    </PageShell>
   );
 }
 
@@ -259,14 +253,14 @@ function RoleEditorDialog({
         </DialogHeader>
 
         <form id="role-form" onSubmit={save} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="r-name">Name</Label>
               <Input
+                size="lg"
                 id="r-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                className="h-10!"
                 disabled={isSystem}
                 autoFocus={!isEdit}
                 required
@@ -286,7 +280,7 @@ function RoleEditorDialog({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="r-desc">Description (optional)</Label>
-            <Input id="r-desc" value={description} onChange={(e) => setDescription(e.target.value)} className="h-10!" />
+            <Input size="lg" id="r-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
 
           <div className="flex flex-col gap-2">

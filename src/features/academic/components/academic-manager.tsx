@@ -19,6 +19,11 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { errorMessage } from "@/lib/errors";
+import { CardSkeleton } from "@/components/ui/skeleton";
+import { FormError } from "@/components/form-error";
+import { PageShell, PageShellHeader } from "@/app/(app)/page-shell";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { AcademicYear, Semester, SemesterKind } from "@/features/academic/types";
 import {
@@ -32,11 +37,6 @@ import {
   useUpdateAcademicYear,
   useUpdateSemester,
 } from "@/features/academic/hooks/use-academic";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 
 const kindLabel = (k: SemesterKind) => (k === "ODD" ? "Odd" : "Even");
 
@@ -53,10 +53,10 @@ const isoToDateInput = (iso: string) => (iso ? iso.slice(0, 10) : "");
 // A prominent, fixed (non-brand) pill marking the active year/semester.
 function ActivePill({ children = "Active" }: { children?: React.ReactNode }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-emerald-600">
-      <CheckCircle2 className="size-3" />
+    <Badge variant="success" size="code">
+      <CheckCircle2 />
       {children}
-    </span>
+    </Badge>
   );
 }
 
@@ -77,25 +77,28 @@ export function AcademicManager() {
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <>
+            <Button onClick={() => setYearDialog("new")} data-icon="inline-start">
+              <Plus />
+              New year
+            </Button>
+          </>
+        }
+      >
         <PageHeader
           eyebrow="Academic · Time"
           title="Years & semesters"
           description="Set up academic years and their Odd/Even semesters. Exactly one year and one semester are active at a time — attendance, marks and timetables are recorded against the active semester."
         />
-        <Button onClick={() => setYearDialog("new")} data-icon="inline-start">
-          <Plus />
-          New year
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading academic years…</p>
+        <CardSkeleton count={2} lines={4} label="Loading academic years…" />
       ) : isError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
+        <FormError>{errorMessage(error)}</FormError>
       ) : (
         <>
           <ActivePeriodBanner years={years} />
@@ -146,7 +149,7 @@ export function AcademicManager() {
       {deleteTarget !== null && (
         <DeleteDialog target={deleteTarget} onClose={() => setDeleteTarget(null)} />
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -353,25 +356,14 @@ function DateField({
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
       <Input
+        size="lg"
         id={id}
         type="date"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="h-10!"
         required
       />
     </div>
-  );
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
   );
 }
 
@@ -410,16 +402,16 @@ function YearFormDialog({ year, onClose }: { year: AcademicYear | null; onClose:
           <div className="flex flex-col gap-2">
             <Label htmlFor="year-name">Name</Label>
             <Input
+              size="lg"
               id="year-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="2025-2026"
-              className="h-10!"
               autoFocus
               required
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <DateField id="year-start" label="Start date" value={startDate} onChange={setStartDate} />
             <DateField id="year-end" label="End date" value={endDate} onChange={setEndDate} />
           </div>
@@ -485,7 +477,7 @@ function SemesterFormDialog({
           </DialogDescription>
         </DialogHeader>
         <form id="semester-form" onSubmit={submit} className="flex flex-col gap-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <DateField id="sem-start" label="Start date" value={startDate} onChange={setStartDate} />
             <DateField id="sem-end" label="End date" value={endDate} onChange={setEndDate} />
           </div>

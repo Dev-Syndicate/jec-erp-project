@@ -16,7 +16,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Power, Trash2 } from "lucide-react";
+import { Building2, Plus, Pencil, Power, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,7 +37,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { FormError } from "@/components/form-error";
+// Aliased: each manager keeps a local `RowActions` that owns its mutation hook
+// and decides which items apply; this is the menu those items render into.
+import { RowActions as RowActionsMenu } from "@/components/row-actions";
+import { ActiveBadge } from "@/components/status-badge";
+import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/app/(app)/page-header";
+import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import type { Department } from "@/features/structure/types";
 import {
   useCreateDepartment,
@@ -45,25 +54,6 @@ import {
   useDepartments,
   useUpdateDepartment,
 } from "@/features/structure/hooks/use-departments";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
-
-// Fixed (non-brand) status pill — active vs deactivated.
-function StatusPill({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider ${
-        active ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
-      }`}
-    >
-      <span className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-muted-foreground"}`} />
-      {active ? "Active" : "Inactive"}
-    </span>
-  );
-}
 
 export function DepartmentManager() {
   const { data: departments, isPending, isError, error } = useDepartments();
@@ -73,30 +63,40 @@ export function DepartmentManager() {
   const [deleting, setDeleting] = useState<Department | null>(null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <Button onClick={() => setEditing("new")} data-icon="inline-start">
+            <Plus />
+            New department
+          </Button>
+        }
+      >
         <PageHeader
           eyebrow="Structure · Departments"
           title="Departments"
           description="The units that run the college — each has a HOD, employs staff and owns classes. A department may run several programs, or none at all (Science & Humanities teaches first year without awarding a degree)."
         />
-        <Button onClick={() => setEditing("new")} data-icon="inline-start">
-          <Plus />
-          New department
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading departments…</p>
+        <TableSkeleton rows={6} cols={7} label="Loading departments…" />
       ) : isError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
+        <FormError>{errorMessage(error)}</FormError>
       ) : departments.length === 0 ? (
-        <EmptyState onAdd={() => setEditing("new")} />
+        <EmptyState
+          icon={Building2}
+          title="No departments yet"
+          description="A department employs staff and owns classes. It is the key everything else is scoped by, so add these before programs."
+          action={
+            <Button variant="outline" onClick={() => setEditing("new")} data-icon="inline-start">
+              <Plus />
+              Add the first department
+            </Button>
+          }
+        />
       ) : (
-        <div className="rounded-xl ring-1 ring-foreground/10">
-          <Table>
+        <Table containerClassName={TABLE_FRAME}>
             <TableHeader>
               <TableRow>
                 <TableHead>Code</TableHead>
@@ -128,7 +128,7 @@ export function DepartmentManager() {
                     {d.facultyCount}
                   </TableCell>
                   <TableCell>
-                    <StatusPill active={d.isActive} />
+                    <ActiveBadge active={d.isActive} />
                   </TableCell>
                   <TableCell>
                     <RowActions
@@ -140,8 +140,7 @@ export function DepartmentManager() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        </div>
+        </Table>
       )}
 
       {editing !== null && (
@@ -153,19 +152,7 @@ export function DepartmentManager() {
       {deleting !== null && (
         <DeleteDialog department={deleting} onClose={() => setDeleting(null)} />
       )}
-    </div>
-  );
-}
-
-function EmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-      <p className="text-sm text-muted-foreground">No departments yet.</p>
-      <Button variant="outline" onClick={onAdd} data-icon="inline-start">
-        <Plus />
-        Add the first department
-      </Button>
-    </div>
+    </PageShell>
   );
 }
 
@@ -182,36 +169,26 @@ function RowActions({
   onDelete: () => void;
 }) {
   const update = useUpdateDepartment();
+  // A department is only deletable when nothing at all hangs off it — no awards,
+  // no classes it owns, nobody it employs.
   const canDelete =
     department.programCount === 0 && department.classCount === 0 && department.facultyCount === 0;
 
   return (
-    <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label="Edit department">
-        <Pencil />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={update.isPending}
-        onClick={() => update.mutate({ id: department.id, input: { isActive: !department.isActive } })}
-        aria-label={department.isActive ? "Deactivate department" : "Reactivate department"}
-        title={department.isActive ? "Deactivate" : "Reactivate"}
-      >
-        <Power className={department.isActive ? "" : "text-muted-foreground"} />
-      </Button>
-      {canDelete && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onDelete}
-          aria-label="Delete department"
-          title="Delete"
-        >
-          <Trash2 className="text-destructive" />
-        </Button>
-      )}
-    </div>
+    <RowActionsMenu
+      label={`Actions for ${department.code}`}
+      actions={[
+        { label: "Edit", icon: Pencil, onSelect: onEdit },
+        {
+          label: department.isActive ? "Deactivate" : "Reactivate",
+          icon: Power,
+          disabled: update.isPending,
+          onSelect: () =>
+            update.mutate({ id: department.id, input: { isActive: !department.isActive } }),
+        },
+        canDelete && { label: "Delete", icon: Trash2, destructive: true, onSelect: onDelete },
+      ]}
+    />
   );
 }
 
@@ -262,11 +239,11 @@ function DepartmentFormDialog({
           <div className="flex flex-col gap-2">
             <Label htmlFor="department-name">Name</Label>
             <Input
+              size="lg"
               id="department-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Computer Science and Engineering Department"
-              className="h-10!"
               autoFocus
               required
             />
@@ -274,11 +251,11 @@ function DepartmentFormDialog({
           <div className="flex flex-col gap-2">
             <Label htmlFor="department-code">Code</Label>
             <Input
+              size="lg"
               id="department-code"
               value={code}
               onChange={(e) => setCode(e.target.value)}
               placeholder="CSE"
-              className="h-10!"
               required
             />
             <p className="text-xs text-muted-foreground">
@@ -286,12 +263,7 @@ function DepartmentFormDialog({
             </p>
           </div>
           {mutationError && (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              {errorMessage(mutationError)}
-            </p>
+            <FormError>{errorMessage(mutationError)}</FormError>
           )}
         </form>
 
@@ -321,12 +293,7 @@ function DeleteDialog({ department, onClose }: { department: Department; onClose
           </DialogDescription>
         </DialogHeader>
         {del.isError && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage(del.error)}
-          </p>
+          <FormError>{errorMessage(del.error)}</FormError>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={del.isPending}>

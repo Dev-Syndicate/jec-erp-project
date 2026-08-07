@@ -18,8 +18,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { EmptyState } from "@/components/ui/empty-state";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/timetable/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import { DAYS, PERIODS, type DayOfWeek, type TimetableSlot } from "@/features/timetable/types";
 import {
   useClassOptions,
@@ -30,11 +35,6 @@ import {
   useUpsertSlot,
 } from "@/features/timetable/hooks/use-timetable";
 
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
-
 const DAY_LABEL: Record<DayOfWeek, string> = {
   MON: "Mon",
   TUE: "Tue",
@@ -42,17 +42,6 @@ const DAY_LABEL: Record<DayOfWeek, string> = {
   THU: "Thu",
   FRI: "Fri",
 };
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 export function TimetableManager() {
   const classes = useClassOptions();
@@ -81,7 +70,7 @@ export function TimetableManager() {
     view.data?.slots.find((s) => s.dayOfWeek === day && s.period === period);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Curriculum · Timetable"
         title="Timetable"
@@ -91,7 +80,7 @@ export function TimetableManager() {
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Program</span>
-          <div className="w-56">
+          <div className="w-full sm:w-56">
             <FormSelect
               value={programId}
               onChange={(v) => {
@@ -105,7 +94,7 @@ export function TimetableManager() {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Class</span>
-          <div className="w-40">
+          <div className="w-full sm:w-40">
             <FormSelect
               value={classId}
               onChange={setClassId}
@@ -124,13 +113,11 @@ export function TimetableManager() {
       </div>
 
       {classId === "" ? (
-        <p className="text-sm text-muted-foreground">
-          {programId === ""
+        <EmptyState size="sm" title={programId === ""
             ? "Pick a program, then a class, to view or edit its timetable."
-            : "Pick a class to view or edit its timetable."}
-        </p>
+            : "Pick a class to view or edit its timetable."} />
       ) : view.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading timetable…</p>
+        <LoadingState label="Loading timetable…" />
       ) : view.isError ? (
         <FormError>{view.error instanceof Error ? view.error.message : "Failed to load timetable."}</FormError>
       ) : view.data ? (
@@ -221,7 +208,7 @@ export function TimetableManager() {
           onClose={() => setEditing(null)}
         />
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -296,7 +283,7 @@ function SlotDialog({
 
         <div className="flex flex-col gap-4">
           {subjects.isPending ? (
-            <p className="text-sm text-muted-foreground">Loading subjects…</p>
+            <LoadingState label="Loading subjects…" />
           ) : subjectOptions.length === 0 ? (
             // No curriculum subjects for this class's semester — nothing to schedule.
             <div className="rounded-lg border border-dashed border-border bg-muted/40 px-3 py-4 text-sm text-muted-foreground">

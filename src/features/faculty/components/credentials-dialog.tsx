@@ -20,13 +20,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
 import type { StaffCredentialResult } from "@/features/faculty/types";
 import { useStaffCredentials } from "@/features/faculty/hooks/use-faculty";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 
 const csvCell = (v: string) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
@@ -67,13 +64,8 @@ export function StaffCredentialsDialog({ onClose }: { onClose: () => void }) {
           </DialogHeader>
 
           {result.failed.length > 0 && (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              {result.failed.length} could not be reset:{" "}
-              {result.failed.map((f) => f.staffId).join(", ")}
-            </p>
+            <FormError>{result.failed.length} could not be reset:{" "}
+              {result.failed.map((f) => f.staffId).join(", ")}</FormError>
           )}
 
           <DialogFooter>
@@ -119,12 +111,7 @@ export function StaffCredentialsDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         {run.isError && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage(run.error)}
-          </p>
+          <FormError>{errorMessage(run.error)}</FormError>
         )}
 
         <DialogFooter>

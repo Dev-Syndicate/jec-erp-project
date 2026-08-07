@@ -5,18 +5,11 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Power, Trash2, ChevronRight } from "lucide-react";
+import { BookOpen, Layers, Plus, Pencil, Power, Trash2, ChevronRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -33,6 +26,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { FormError } from "@/components/form-error";
+// Aliased: each manager keeps a local `RowActions` that owns its mutation hook
+// and decides which items apply; this is the menu those items render into.
+import { RowActions as RowActionsMenu } from "@/components/row-actions";
+import { FormSelect } from "@/components/form-select";
+import { ActiveBadge } from "@/components/status-badge";
+import { PageShell, PageShellHeader, TableToolbar } from "@/app/(app)/page-shell";
+import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { ProgramOption, Subject } from "@/features/subjects/types";
 import {
@@ -42,11 +45,6 @@ import {
   useSubjects,
   useUpdateSubject,
 } from "@/features/subjects/hooks/use-subjects";
-
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 
 const kindLabel = (k: "ODD" | "EVEN") => (k === "ODD" ? "Odd" : "Even");
 
@@ -81,53 +79,6 @@ function semesterOptions(durationYears: number): Array<{ value: string; label: s
     const kind = n % 2 === 1 ? "Odd" : "Even";
     return { value: String(n), label: `Semester ${n} — Year ${year}, ${kind}` };
   });
-}
-
-// Base UI Select that renders the option label (not the raw value) — the
-// department-select.tsx pattern. Local to the feature (no cross-feature imports).
-function FormSelect({
-  id,
-  value,
-  onChange,
-  options,
-  placeholder,
-  disabled,
-}: {
-  id?: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: Array<{ value: string; label: string }>;
-  placeholder: string;
-  disabled?: boolean;
-}) {
-  const label = (v: unknown) => options.find((o) => o.value === v)?.label ?? placeholder;
-  return (
-    <Select value={value} onValueChange={(v) => onChange((v as string) ?? "")} disabled={disabled}>
-      <SelectTrigger id={id} className="h-10! w-full">
-        <SelectValue placeholder={placeholder}>{label}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((o) => (
-          <SelectItem key={o.value} value={o.value}>
-            {o.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function StatusPill({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider ${
-        active ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
-      }`}
-    >
-      <span className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-muted-foreground"}`} />
-      {active ? "Active" : "Inactive"}
-    </span>
-  );
 }
 
 export function SubjectManager() {
@@ -165,38 +116,38 @@ export function SubjectManager() {
   const filtered = (subjects ?? []).filter((s) => s.programId === activeProgram?.id);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <Button onClick={() => setEditing("new")} data-icon="inline-start">
+            <Plus />
+            New subject
+          </Button>
+        }
+      >
         <PageHeader
           eyebrow="Curriculum · Subjects"
           title="Subjects"
           description="The per-program subject catalogue, grouped by curriculum semester. A class studies the subjects whose semester matches its year and the active Odd/Even term."
         />
-        <Button onClick={() => setEditing("new")} data-icon="inline-start">
-          <Plus />
-          New subject
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading subjects…</p>
+        <TableSkeleton rows={6} cols={6} label="Loading subjects…" />
       ) : isError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
+        <FormError>{errorMessage(error)}</FormError>
       ) : allPrograms.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border py-16 text-center">
-          <p className="text-sm text-muted-foreground">No programs yet.</p>
-          <p className="text-xs text-muted-foreground">
-            Create a program under Structure → Programs before adding subjects.
-          </p>
-        </div>
+        <EmptyState
+          icon={Layers}
+          title="No programs yet"
+          description="A subject catalogue belongs to a program. Create one under Structure → Programs first."
+        />
       ) : (
         <>
-          <div className="flex flex-wrap items-center gap-4">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Degree</span>
-              <div className="w-48">
+          <TableToolbar className="justify-start gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">Degree</Label>
+              <div className="w-full sm:w-48">
                 <FormSelect
                   value={activeDegreeId}
                   onChange={(v) => {
@@ -208,9 +159,9 @@ export function SubjectManager() {
                 />
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-muted-foreground">Branch</span>
-              <div className="w-48">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs text-muted-foreground">Branch</Label>
+              <div className="w-full sm:w-48">
                 <FormSelect
                   value={activeBranchId}
                   onChange={setBranchFilter}
@@ -219,16 +170,20 @@ export function SubjectManager() {
                 />
               </div>
             </div>
-          </div>
+          </TableToolbar>
 
           {filtered.length === 0 ? (
-            <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-              <p className="text-sm text-muted-foreground">No subjects in this program yet.</p>
-              <Button variant="outline" onClick={() => setEditing("new")} data-icon="inline-start">
-                <Plus />
-                Add a subject
-              </Button>
-            </div>
+            <EmptyState
+              icon={BookOpen}
+              title="No subjects in this program yet"
+              description="Add the subjects this program teaches; they group themselves by curriculum semester."
+              action={
+                <Button variant="outline" onClick={() => setEditing("new")} data-icon="inline-start">
+                  <Plus />
+                  Add a subject
+                </Button>
+              }
+            />
           ) : (
             <div className="flex flex-col gap-4">
               {groupBySemester(filtered).map((g) => (
@@ -266,7 +221,7 @@ export function SubjectManager() {
                           <TableCell className="font-medium">{s.name}</TableCell>
                           <TableCell className="text-muted-foreground">{s.programLabel}</TableCell>
                           <TableCell>
-                            <StatusPill active={s.isActive} />
+                            <ActiveBadge active={s.isActive} />
                           </TableCell>
                           <TableCell>
                             <RowActions
@@ -294,7 +249,7 @@ export function SubjectManager() {
         />
       )}
       {deleting !== null && <DeleteDialog subject={deleting} onClose={() => setDeleting(null)} />}
-    </div>
+    </PageShell>
   );
 }
 
@@ -308,28 +263,24 @@ function RowActions({
   onDelete: () => void;
 }) {
   const update = useUpdateSubject();
+  // Dependents are timetable slots, marks and attendance rows — a subject with
+  // any of those is history, so it deactivates rather than deletes.
   const canDelete = subject.dependentCount === 0;
+
   return (
-    <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label="Edit subject">
-        <Pencil />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={update.isPending}
-        onClick={() => update.mutate({ id: subject.id, input: { isActive: !subject.isActive } })}
-        aria-label={subject.isActive ? "Deactivate subject" : "Reactivate subject"}
-        title={subject.isActive ? "Deactivate" : "Reactivate"}
-      >
-        <Power className={subject.isActive ? "" : "text-muted-foreground"} />
-      </Button>
-      {canDelete && (
-        <Button variant="ghost" size="icon-sm" onClick={onDelete} aria-label="Delete subject" title="Delete">
-          <Trash2 className="text-destructive" />
-        </Button>
-      )}
-    </div>
+    <RowActionsMenu
+      label={`Actions for ${subject.code}`}
+      actions={[
+        { label: "Edit", icon: Pencil, onSelect: onEdit },
+        {
+          label: subject.isActive ? "Deactivate" : "Reactivate",
+          icon: Power,
+          disabled: update.isPending,
+          onSelect: () => update.mutate({ id: subject.id, input: { isActive: !subject.isActive } }),
+        },
+        canDelete && { label: "Delete", icon: Trash2, destructive: true, onSelect: onDelete },
+      ]}
+    />
   );
 }
 
@@ -396,7 +347,7 @@ function SubjectFormDialog({
           <div className="flex flex-col gap-2">
             <Label htmlFor="subj-program">Program</Label>
             {isEdit ? (
-              <Input value={subject.programLabel} disabled className="h-10!" />
+              <Input size="lg" value={subject.programLabel} disabled />
             ) : (
               <FormSelect
                 id="subj-program"
@@ -424,17 +375,15 @@ function SubjectFormDialog({
           <div className="grid grid-cols-[1fr_2fr] gap-4">
             <div className="flex flex-col gap-2">
               <Label htmlFor="subj-code">Code</Label>
-              <Input id="subj-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="CS3401" className="h-10!" required />
+              <Input size="lg" id="subj-code" value={code} onChange={(e) => setCode(e.target.value)} placeholder="CS3401" required />
             </div>
             <div className="flex flex-col gap-2">
               <Label htmlFor="subj-name">Name</Label>
-              <Input id="subj-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Algorithms" className="h-10!" required />
+              <Input size="lg" id="subj-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Algorithms" required />
             </div>
           </div>
           {mutationError && (
-            <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-              {errorMessage(mutationError)}
-            </p>
+            <FormError>{errorMessage(mutationError)}</FormError>
           )}
         </form>
         <DialogFooter>
@@ -463,9 +412,7 @@ function DeleteDialog({ subject, onClose }: { subject: Subject; onClose: () => v
           </DialogDescription>
         </DialogHeader>
         {del.isError && (
-          <p role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-            {errorMessage(del.error)}
-          </p>
+          <FormError>{errorMessage(del.error)}</FormError>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={del.isPending}>

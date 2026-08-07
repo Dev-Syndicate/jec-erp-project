@@ -41,6 +41,10 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { errorMessage } from "@/lib/errors";
+import { PageShell, PageShellHeader } from "@/app/(app)/page-shell";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { FormError } from "@/components/form-error";
 import { PageHeader } from "@/app/(app)/page-header";
 import type { Attachment } from "@/features/faculty/types";
 import {
@@ -51,36 +55,34 @@ import {
   useFaculty,
 } from "@/features/faculty/hooks/use-faculty";
 
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
-
 export function AttachmentManager() {
   const { data: attachments, isPending, isError, error } = useAttachments();
   const [adding, setAdding] = useState(false);
   const [removing, setRemoving] = useState<Attachment | null>(null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <>
+            <Button onClick={() => setAdding(true)} data-icon="inline-start">
+              <Plus />
+              Attach a lecturer
+            </Button>
+          </>
+        }
+      >
         <PageHeader
           eyebrow="Faculty · Attachments"
           title="Cross-department teaching"
           description="Lend a lecturer to another department for this semester so they can be put on its timetable. Their home department doesn't change. Attachments lapse at the end of the semester and need renewing."
         />
-        <Button onClick={() => setAdding(true)} data-icon="inline-start">
-          <Plus />
-          Attach a lecturer
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading attachments…</p>
+        <TableSkeleton rows={5} cols={6} label="Loading attachments…" />
       ) : isError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
+        <FormError>{errorMessage(error)}</FormError>
       ) : attachments.length === 0 ? (
         <EmptyState onAdd={() => setAdding(true)} />
       ) : (
@@ -150,7 +152,7 @@ export function AttachmentManager() {
       {removing !== null && (
         <RemoveDialog attachment={removing} onClose={() => setRemoving(null)} />
       )}
-    </div>
+    </PageShell>
   );
 }
 
@@ -231,7 +233,7 @@ function AttachDialog({ onClose }: { onClose: () => void }) {
               onValueChange={(v) => setFacultyProfileId((v as string) ?? "")}
               disabled={staff.length === 0}
             >
-              <SelectTrigger id="attachment-faculty" className="h-10! w-full">
+              <SelectTrigger size="lg" id="attachment-faculty" className="w-full">
                 <SelectValue placeholder={faculty.isPending ? "Loading…" : "Select a lecturer"}>
                   {(v) =>
                     facultyOptions.find((o) => o.value === v)?.label ?? "Select a lecturer"
@@ -255,7 +257,7 @@ function AttachDialog({ onClose }: { onClose: () => void }) {
               onValueChange={(v) => setDepartmentId((v as string) ?? "")}
               disabled={facultyProfileId === ""}
             >
-              <SelectTrigger id="attachment-department" className="h-10! w-full">
+              <SelectTrigger size="lg" id="attachment-department" className="w-full">
                 <SelectValue
                   placeholder={
                     facultyProfileId === "" ? "Choose a lecturer first" : "Select a department"
@@ -282,21 +284,16 @@ function AttachDialog({ onClose }: { onClose: () => void }) {
           <div className="flex flex-col gap-2">
             <Label htmlFor="attachment-reason">Reason (optional)</Label>
             <Input
+              size="lg"
               id="attachment-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Teaching first-year Maths"
-              className="h-10!"
             />
           </div>
 
           {create.isError && (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              {errorMessage(create.error)}
-            </p>
+            <FormError>{errorMessage(create.error)}</FormError>
           )}
         </form>
 
@@ -353,12 +350,7 @@ function RemoveDialog({ attachment, onClose }: { attachment: Attachment; onClose
           </DialogDescription>
         </DialogHeader>
         {del.isError && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage(del.error)}
-          </p>
+          <FormError>{errorMessage(del.error)}</FormError>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={del.isPending}>

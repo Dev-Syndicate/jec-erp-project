@@ -5,7 +5,7 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, Pencil, Power, Trash2 } from "lucide-react";
+import { Plus, Pencil, Power, Trash2, UsersRound } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -33,7 +33,16 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { FormError } from "@/components/form-error";
+// Aliased: each manager keeps a local `RowActions` that owns its mutation hook
+// and decides which items apply; this is the menu those items render into.
+import { RowActions as RowActionsMenu } from "@/components/row-actions";
+import { ActiveBadge } from "@/components/status-badge";
+import { errorMessage } from "@/lib/errors";
 import { PageHeader } from "@/app/(app)/page-header";
+import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import type { Class, Program } from "@/features/structure/types";
 import { usePrograms } from "@/features/structure/hooks/use-programs";
 import { useStaffOptions } from "@/features/structure/hooks/use-staff";
@@ -53,26 +62,7 @@ const NO_ADVISOR = "none";
 // Section is free text (upper-cased); Year options are derived from the program's
 // degree duration.
 
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
-
 const programLabel = (p: Program) => `${p.degreeCode} · ${p.branchCode}`;
-
-// Fixed (non-brand) status pill — active vs deactivated.
-function StatusPill({ active }: { active: boolean }) {
-  return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider ${
-        active ? "bg-emerald-500/10 text-emerald-600" : "bg-muted text-muted-foreground"
-      }`}
-    >
-      <span className={`size-1.5 rounded-full ${active ? "bg-emerald-500" : "bg-muted-foreground"}`} />
-      {active ? "Active" : "Inactive"}
-    </span>
-  );
-}
 
 export function ClassManager() {
   const { data: classes, isPending, isError, error } = useClasses();
@@ -82,30 +72,40 @@ export function ClassManager() {
   const [deleting, setDeleting] = useState<Class | null>(null);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <Button onClick={() => setEditing("new")} data-icon="inline-start">
+            <Plus />
+            New class
+          </Button>
+        }
+      >
         <PageHeader
           eyebrow="Structure · Classes"
           title="Classes"
           description="Class groups within a program — a year and section (e.g. II-A). Attendance and marks are recorded against these."
         />
-        <Button onClick={() => setEditing("new")} data-icon="inline-start">
-          <Plus />
-          New class
-        </Button>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading classes…</p>
+        <TableSkeleton rows={8} cols={8} label="Loading classes…" />
       ) : isError ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
+        <FormError>{errorMessage(error)}</FormError>
       ) : classes.length === 0 ? (
-        <EmptyState onAdd={() => setEditing("new")} />
+        <EmptyState
+          icon={UsersRound}
+          title="No classes yet"
+          description="A class is a year and section within a program. Attendance and marks are recorded against these, so they come before either."
+          action={
+            <Button variant="outline" onClick={() => setEditing("new")} data-icon="inline-start">
+              <Plus />
+              Add the first class
+            </Button>
+          }
+        />
       ) : (
-        <div className="rounded-xl ring-1 ring-foreground/10">
-          <Table>
+        <Table containerClassName={TABLE_FRAME}>
             <TableHeader>
               <TableRow>
                 <TableHead>Program</TableHead>
@@ -134,7 +134,7 @@ export function ClassManager() {
                     {c.studentCount}
                   </TableCell>
                   <TableCell>
-                    <StatusPill active={c.isActive} />
+                    <ActiveBadge active={c.isActive} />
                   </TableCell>
                   <TableCell>
                     <RowActions
@@ -146,8 +146,7 @@ export function ClassManager() {
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
-        </div>
+        </Table>
       )}
 
       {editing !== null && (
@@ -157,19 +156,7 @@ export function ClassManager() {
         />
       )}
       {deleting !== null && <DeleteDialog cls={deleting} onClose={() => setDeleting(null)} />}
-    </div>
-  );
-}
-
-function EmptyState({ onAdd }: { onAdd: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-      <p className="text-sm text-muted-foreground">No classes yet.</p>
-      <Button variant="outline" onClick={onAdd} data-icon="inline-start">
-        <Plus />
-        Add the first class
-      </Button>
-    </div>
+    </PageShell>
   );
 }
 
@@ -186,35 +173,24 @@ function RowActions({
   onDelete: () => void;
 }) {
   const update = useUpdateClass();
+  // Only an empty class can be deleted — students enrolled in it would lose
+  // their placement for the year.
   const canDelete = cls.studentCount === 0;
 
   return (
-    <div className="flex items-center justify-end gap-1">
-      <Button variant="ghost" size="icon-sm" onClick={onEdit} aria-label="Edit class">
-        <Pencil />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        disabled={update.isPending}
-        onClick={() => update.mutate({ id: cls.id, input: { isActive: !cls.isActive } })}
-        aria-label={cls.isActive ? "Deactivate class" : "Reactivate class"}
-        title={cls.isActive ? "Deactivate" : "Reactivate"}
-      >
-        <Power className={cls.isActive ? "" : "text-muted-foreground"} />
-      </Button>
-      {canDelete && (
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          onClick={onDelete}
-          aria-label="Delete class"
-          title="Delete"
-        >
-          <Trash2 className="text-destructive" />
-        </Button>
-      )}
-    </div>
+    <RowActionsMenu
+      label={`Actions for ${cls.programLabel} ${cls.year}-${cls.section}`}
+      actions={[
+        { label: "Edit", icon: Pencil, onSelect: onEdit },
+        {
+          label: cls.isActive ? "Deactivate" : "Reactivate",
+          icon: Power,
+          disabled: update.isPending,
+          onSelect: () => update.mutate({ id: cls.id, input: { isActive: !cls.isActive } }),
+        },
+        canDelete && { label: "Delete", icon: Trash2, destructive: true, onSelect: onDelete },
+      ]}
+    />
   );
 }
 
@@ -345,7 +321,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
                   setDepartmentId(activePrograms.find((p) => p.id === next)?.departmentId ?? "");
                 }}
               >
-                <SelectTrigger id="class-program" className="h-10! w-full">
+                <SelectTrigger size="lg" id="class-program" className="w-full">
                   <SelectValue placeholder="Select a program">
                     {(id) => {
                       const p = activePrograms.find((x) => x.id === id);
@@ -395,7 +371,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-2">
               <Label htmlFor="class-year">Year</Label>
               <Select
@@ -403,7 +379,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
                 onValueChange={(v) => setYear((v as string) ?? "")}
                 disabled={yearOptions.length === 0}
               >
-                <SelectTrigger id="class-year" className="h-10! w-full">
+                <SelectTrigger size="lg" id="class-year" className="w-full">
                   <SelectValue placeholder="Year">{(v) => (v ? String(v) : "Year")}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
@@ -424,6 +400,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
                   "A" must never be able to become two different sections. The
                   server upper-cases too, since the form isn't the only caller. */}
               <Input
+                size="lg"
                 id="class-section"
                 value={section}
                 onChange={(e) => setSection(e.target.value.toUpperCase())}
@@ -432,7 +409,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
                 autoCapitalize="characters"
                 autoCorrect="off"
                 spellCheck={false}
-                className="h-10! uppercase"
+                className="uppercase"
                 required
               />
             </div>
@@ -445,7 +422,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
               onValueChange={(v) => setAdvisorId((v as string) ?? NO_ADVISOR)}
               disabled={ownerDepartmentId === ""}
             >
-              <SelectTrigger id="class-advisor" className="h-10! w-full">
+              <SelectTrigger size="lg" id="class-advisor" className="w-full">
                 <SelectValue placeholder="Optional">
                   {(v) => {
                     if (v === NO_ADVISOR || !v) return "None";
@@ -475,12 +452,7 @@ function ClassFormDialog({ cls, onClose }: { cls: Class | null; onClose: () => v
           </div>
 
           {mutationError && (
-            <p
-              role="alert"
-              className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-            >
-              {errorMessage(mutationError)}
-            </p>
+            <FormError>{errorMessage(mutationError)}</FormError>
           )}
         </form>
 
@@ -512,12 +484,7 @@ function DeleteDialog({ cls, onClose }: { cls: Class; onClose: () => void }) {
           </DialogDescription>
         </DialogHeader>
         {del.isError && (
-          <p
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          >
-            {errorMessage(del.error)}
-          </p>
+          <FormError>{errorMessage(del.error)}</FormError>
         )}
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={del.isPending}>

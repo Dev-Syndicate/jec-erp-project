@@ -15,8 +15,13 @@ import { CalendarCheck2, Check, Lock, Search, UserRoundCheck } from "lucide-reac
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { EmptyState } from "@/components/ui/empty-state";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/attendance/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import { STATUS_META } from "@/features/attendance/components/status-meta";
 import {
   STATUSES,
@@ -31,10 +36,6 @@ import {
   useRoster,
   useSaveAttendance,
 } from "@/features/attendance/hooks/use-attendance";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
 
 const WEEKDAY_LABEL: Record<Weekday, string> = {
   MON: "Monday",
@@ -56,17 +57,6 @@ function todayStr(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
 }
 
 export function AttendanceManager() {
@@ -118,7 +108,7 @@ export function AttendanceManager() {
   }
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Attendance"
         title="Mark attendance"
@@ -130,7 +120,7 @@ export function AttendanceManager() {
       <div className="flex flex-wrap items-end gap-4">
         {!singleProgram && (
           <Field label="Program">
-            <div className="w-56">
+            <div className="w-full sm:w-56">
               <FormSelect
                 value={programId}
                 onChange={(v) => {
@@ -147,7 +137,7 @@ export function AttendanceManager() {
 
         {!singleClass && (
           <Field label="Class">
-            <div className="w-40">
+            <div className="w-full sm:w-40">
               <FormSelect
                 value={classId}
                 onChange={(v) => {
@@ -169,14 +159,14 @@ export function AttendanceManager() {
         )}
 
         <Field label="Date">
-          <input
+          <Input
+            size="lg"
             type="date"
             value={date}
             onChange={(e) => {
               setDate(e.target.value);
               resetPeriod();
             }}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </Field>
 
@@ -196,19 +186,17 @@ export function AttendanceManager() {
 
       {/* Body */}
       {isSun ? (
-        <p className="text-sm text-muted-foreground">Sunday isn&apos;t a working day — nothing to mark.</p>
+        <EmptyState size="sm" title="Sunday isn&apos;t a working day — nothing to mark." />
       ) : classes.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your classes…</p>
+        <LoadingState label="Loading your classes…" />
       ) : effClassId === "" ? (
-        <p className="text-sm text-muted-foreground">
-          {activeClasses.length === 0
+        <EmptyState size="sm" title={activeClasses.length === 0
             ? "You don't teach or advise any class this semester."
             : singleProgram
               ? "Pick a class to mark attendance."
-              : "Pick a program, then a class, to mark attendance."}
-        </p>
+              : "Pick a program, then a class, to mark attendance."} />
       ) : view.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading roster…</p>
+        <LoadingState label="Loading roster…" />
       ) : view.isError ? (
         <FormError>{errorMessage(view.error)}</FormError>
       ) : view.data ? (
@@ -221,7 +209,7 @@ export function AttendanceManager() {
           onSelectPeriod={setSelectedPeriod}
         />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 

@@ -3,6 +3,11 @@
 // Read-only reference; a working Saturday borrows one of these weekday grids.
 "use client";
 
+import { EmptyState } from "@/components/ui/empty-state";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
 import {
   WEEKDAYS,
@@ -10,21 +15,6 @@ import {
   type Weekday,
 } from "@/features/attendance/types";
 import { useMyTimetable } from "@/features/attendance/hooks/use-attendance";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
-}
 
 const WEEKDAY_LABEL: Record<Weekday, string> = {
   MON: "Monday",
@@ -43,7 +33,7 @@ export function MyTimetable() {
   const byCell = new Map(slots.map((s) => [`${s.dayOfWeek}-${s.period}`, s]));
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Attendance · Schedule"
         title="My timetable"
@@ -51,13 +41,11 @@ export function MyTimetable() {
       />
 
       {tt.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading your timetable…</p>
+        <LoadingState label="Loading your timetable…" />
       ) : tt.isError ? (
         <FormError>{errorMessage(tt.error)}</FormError>
       ) : slots.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          You have no scheduled periods this semester.
-        </p>
+        <EmptyState size="sm" title="You have no scheduled periods this semester." />
       ) : (
         <div className="flex flex-col gap-3">
           {tt.data?.semesterLabel && (
@@ -100,7 +88,7 @@ export function MyTimetable() {
           </div>
         </div>
       )}
-    </div>
+    </PageShell>
   );
 }
 

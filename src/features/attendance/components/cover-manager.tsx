@@ -17,8 +17,14 @@ import { RotateCcw, UserRoundCheck, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { EmptyState } from "@/components/ui/empty-state";
+import { errorMessage } from "@/lib/errors";
+import { FormError } from "@/components/form-error";
+import { PageShell } from "@/app/(app)/page-shell";
+import { LoadingState } from "@/components/loading-state";
 import { PageHeader } from "@/app/(app)/page-header";
-import { FormSelect } from "@/features/attendance/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import type { CoverPeriod, CoverView, Weekday } from "@/features/attendance/types";
 import {
   useAssignCover,
@@ -27,10 +33,6 @@ import {
   useRemoveCover,
 } from "@/features/attendance/hooks/use-attendance";
 import { useFacultyOptions } from "@/features/attendance/hooks/use-faculty-options";
-
-function errorMessage(e: unknown): string {
-  return e instanceof Error ? e.message : "Something went wrong. Try again.";
-}
 
 const WEEKDAY_LABEL: Record<Weekday, string> = {
   MON: "Monday",
@@ -45,17 +47,6 @@ function todayStr(): string {
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${d.getFullYear()}-${m}-${day}`;
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
-  );
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -87,7 +78,7 @@ export function CoverManager() {
   const view = useCover(classId || null, date, enabled);
 
   return (
-    <div className="flex flex-col gap-6 p-6">
+    <PageShell>
       <PageHeader
         eyebrow="Attendance · Cover"
         title="Arrange cover"
@@ -97,7 +88,7 @@ export function CoverManager() {
       <div className="flex flex-wrap items-end gap-4">
         {!singleProgram && (
           <Field label="Program">
-            <div className="w-56">
+            <div className="w-full sm:w-56">
               <FormSelect
                 value={programId}
                 onChange={(v) => {
@@ -111,7 +102,7 @@ export function CoverManager() {
           </Field>
         )}
         <Field label="Class">
-          <div className="w-40">
+          <div className="w-full sm:w-40">
             <FormSelect
               value={classId}
               onChange={setClassId}
@@ -128,29 +119,27 @@ export function CoverManager() {
           </div>
         </Field>
         <Field label="Date">
-          <input
+          <Input
+            size="lg"
             type="date"
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </Field>
       </div>
 
       {classes.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading classes…</p>
+        <LoadingState label="Loading classes…" />
       ) : classId === "" ? (
-        <p className="text-sm text-muted-foreground">
-          Pick a class and a date to see that day&rsquo;s periods.
-        </p>
+        <EmptyState size="sm" title="Pick a class and a date to see that day&rsquo;s periods." />
       ) : view.isPending ? (
-        <p className="text-sm text-muted-foreground">Loading the day&rsquo;s periods…</p>
+        <LoadingState label="Loading the day&rsquo;s periods…" />
       ) : view.isError ? (
         <FormError>{errorMessage(view.error)}</FormError>
       ) : view.data ? (
         <Loaded view={view.data} />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 
@@ -168,9 +157,9 @@ function Loaded({ view }: { view: CoverView }) {
       <p className="text-sm text-muted-foreground">
         {view.date} · <span className="font-medium text-foreground">{WEEKDAY_LABEL[view.weekday]}</span>
         {view.followsDay && (
-          <span className="ml-2 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-700">
+          <Badge variant="warning" className="ml-2">
             Working Saturday — runs {WEEKDAY_LABEL[view.followsDay]}&rsquo;s timetable
-          </span>
+          </Badge>
         )}
       </p>
 
@@ -292,7 +281,7 @@ function AssignForm({
     <div className="flex flex-col gap-3 border-t border-border bg-muted/20 px-4 py-3">
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Covering teacher">
-          <div className="w-64">
+          <div className="w-full sm:w-64">
             <FormSelect
               value={substituteId}
               onChange={setSubstituteId}
@@ -309,12 +298,12 @@ function AssignForm({
           </div>
         </Field>
         <Field label="Reason (optional)">
-          <div className="w-64">
+          <div className="w-full sm:w-64">
             <Input
+              size="lg"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="e.g. on leave"
-              className="h-10!"
             />
           </div>
         </Field>

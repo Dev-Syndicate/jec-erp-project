@@ -40,6 +40,12 @@
   --color-secondary: var(--secondary);
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
+  /* The two literal brand swatches (see :root). Exposed so a component can say
+     bg-brand-gold / text-brand-orange instead of re-typing the hex. */
+  --color-brand-gold: var(--brand-gold);
+  --color-brand-gold-foreground: var(--brand-gold-foreground);
+  --color-brand-orange: var(--brand-orange);
+  --color-brand-orange-foreground: var(--brand-orange-foreground);
   --color-status-present-foreground: var(--status-present-foreground);
   --color-status-present: var(--status-present);
   --color-status-absent-foreground: var(--status-absent-foreground);
@@ -48,6 +54,32 @@
   --color-status-od: var(--status-od);
   --color-status-excused-foreground: var(--status-excused-foreground);
   --color-status-excused: var(--status-excused);
+  /* Soft (tinted) forms of the four statuses — a surface + a readable ink, for
+     badges and chips. The solid pairs above stay for the marking grid's filled
+     buttons; these are for anywhere the status is *reported* rather than *set*. */
+  --color-status-present-surface: var(--status-present-surface);
+  --color-status-present-ink: var(--status-present-ink);
+  --color-status-absent-surface: var(--status-absent-surface);
+  --color-status-absent-ink: var(--status-absent-ink);
+  --color-status-od-surface: var(--status-od-surface);
+  --color-status-od-ink: var(--status-od-ink);
+  --color-status-excused-surface: var(--status-excused-surface);
+  --color-status-excused-ink: var(--status-excused-ink);
+  /* Semantic intent — like the statuses, deliberately NOT brand-derived. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-success-surface: var(--success-surface);
+  --color-success-border: var(--success-border);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-warning-surface: var(--warning-surface);
+  --color-warning-border: var(--warning-border);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-surface: var(--info-surface);
+  --color-info-border: var(--info-border);
+  --color-destructive-surface: var(--destructive-surface);
+  --color-destructive-border: var(--destructive-border);
   --color-popover-foreground: var(--popover-foreground);
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
@@ -61,17 +93,86 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* ─── Elevation ───────────────────────────────────────────────────────────
+   Overrides Tailwind's default shadow scale with softer, ink-derived values
+   (not pure black) so shadows sit on the off-white canvas without going
+   grey-blue. Safe to remap globally: only ~13 shadow-* usages exist app-wide.
+
+   HOUSE RULE — where each tier belongs:
+     · resting surfaces (cards, panels, table frames) → `ring-1 ring-foreground/10`,
+       NO shadow. This is the app's signature treatment; card.tsx already does it.
+     · shadow-sm  → raised *interactive* bits: a segmented control's active pill,
+                    a sticky table header.
+     · shadow-md  → overlays that float above the page: Select popup, Popover,
+                    Dialog, a chart tooltip.
+     · shadow-lg and up → nothing. If something seems to need it, it wants a
+                    ring or a surface change instead.                          */
+@theme {
+  --shadow-2xs: 0 1px 1px 0 oklch(0.145 0 0 / 0.03);
+  --shadow-xs: 0 1px 2px 0 oklch(0.145 0 0 / 0.04);
+  --shadow-sm: 0 1px 2px 0 oklch(0.145 0 0 / 0.04), 0 1px 3px 0 oklch(0.145 0 0 / 0.04);
+  --shadow-md: 0 2px 4px -1px oklch(0.145 0 0 / 0.05), 0 4px 8px -2px oklch(0.145 0 0 / 0.05);
+  --shadow-lg: 0 4px 8px -2px oklch(0.145 0 0 / 0.05), 0 12px 20px -4px oklch(0.145 0 0 / 0.07);
+  --shadow-xl: 0 8px 16px -4px oklch(0.145 0 0 / 0.06), 0 20px 32px -8px oklch(0.145 0 0 / 0.09);
+  --shadow-2xl: 0 16px 32px -8px oklch(0.145 0 0 / 0.08), 0 32px 56px -16px oklch(0.145 0 0 / 0.12);
+}
+
+/* The "system voice" eyebrow — mono, uppercase, wide-tracked. Spelled out by
+   hand 25+ times as `font-mono text-[0.7rem] uppercase tracking-[0.18em]`;
+   this is that recipe, named once. */
+@utility eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1.2;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
 :root {
   /* ─── BRAND: the single source of truth ───────────────────────────────
      Change --brand-hue to re-skin the entire site, light AND dark mode.
      It is declared only here; .dark inherits it through the cascade.
-       teal 185 (current) · indigo 265 · violet 300 · green 145 · rose 15
+       gold 92 (current) · teal 185 · indigo 265 · violet 300 · rose 15
      Everything brand-tinted below derives from it — never hardcode a brand
      color in a component, use the semantic tokens (bg-primary, ring, …).  */
-  --brand-hue: 185;
-  --brand-chroma: 0.13;
+  --brand-hue: 92;
+  --brand-chroma: 0.125;
 
-  --background: oklch(1 0 0);
+  /* ─── The brand swatches, literally ───────────────────────────────────
+     Primary Gold #BDA045 = oklch(0.714 0.115 91.5)
+     Secondary Orange #FC9E27 = oklch(0.778 0.163 65.6)
+
+     These are the palette as specified, and they are SEPARATE from --primary
+     on purpose. Both are light: white text on them measures 2.54:1 and 2.09:1,
+     against the 4.5:1 AA needs — and --primary is not only a button fill here,
+     it is also a text colour in 31 places (`text-primary`: page eyebrows,
+     "Forgot password?", inline links). Set --primary to either hex and all 31
+     become unreadable.
+
+     So --primary stays at the lightness the system was built around (L 0.58,
+     which measures 4.29:1 on white — exactly what the outgoing teal measured,
+     so this re-skin regresses nothing) and merely changes hue to gold. These
+     two tokens carry the exact swatches for places the colour is a SURFACE at
+     size rather than type: brand washes, the sign-in panel's accents, chart
+     anchors. Both are paired with dark ink, which is what they actually need.
+
+     Use them via bg-brand-gold / text-brand-orange etc. — never re-type the
+     hex in a component. */
+  --brand-gold: oklch(0.714 0.115 91.5);
+  --brand-gold-foreground: oklch(0.205 0 0); /* 6.86:1 */
+  --brand-orange: oklch(0.778 0.163 65.6);
+  --brand-orange-foreground: oklch(0.205 0 0); /* 8.34:1 */
+
+  /* ─── Surfaces: a three-plane system ──────────────────────────────────
+     background < card == popover. The canvas is off-white and cards are pure
+     white, so a card reads as ELEVATED without needing a shadow — that one
+     relationship is what makes the whole app look like a product rather than
+     a document. (Before, all three were oklch(1 0 0) and cards were invisible.)
+
+     --muted has to sit low enough to stay visible on BOTH planes: it is the
+     table-row hover (`hover:bg-muted/50`) on white cards and the footer fill
+     on the off-white canvas. 0.955 clears the canvas by 0.03 either way.      */
+  --background: oklch(0.985 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
@@ -79,16 +180,18 @@
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.58 var(--brand-chroma) var(--brand-hue));
   --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
+  --secondary: oklch(0.962 0 0);
   --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
+  --muted: oklch(0.955 0 0);
   --muted-foreground: oklch(0.556 0 0);
   /* Tinted toward the brand so hovers/selected rows feel part of the theme. */
   --accent: oklch(0.96 0.02 var(--brand-hue));
   --accent-foreground: oklch(0.28 0.06 var(--brand-hue));
   --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
+  /* --input is deliberately DARKER than --border: a field's edge is an
+     affordance and must read above a mere divider. */
+  --border: oklch(0.912 0 0);
+  --input: oklch(0.895 0 0);
   --ring: oklch(0.58 var(--brand-chroma) var(--brand-hue));
 
   /* Charts: brand hue anchors chart-1, the rest fan out around the wheel so
@@ -100,13 +203,27 @@
   --chart-5: oklch(0.64 0.13 calc(var(--brand-hue) + 240));
 
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
+  /* The shell FRAME — the plane the rail and the top bar share, and what the
+     page panel floats on. A soft wash of the brand hue rather than white, so
+     the neutral #fafafa panel reads as the foreground the moment it lands on it.
+     Derived from --brand-hue like everything else, so re-skinning the site still
+     carries the shell with it.
+
+     ⚠️ --sidebar and --sidebar-accent have to move TOGETHER. The accent is the
+     active/hover pill in the rail; it used to be 0.96/0.02, which is the wash
+     this frame now wears, so tinting the frame alone would have made the current
+     page's highlight vanish into it. The accent is deepened to keep a clear step
+     (ΔL 0.04) above the frame. The active item's primary-coloured left rule is a
+     second, independent cue — but it is a 2px bar, not a substitute for the
+     pill. */
+  --sidebar: oklch(0.975 0.012 var(--brand-hue));
   --sidebar-foreground: oklch(0.145 0 0);
   --sidebar-primary: oklch(0.58 var(--brand-chroma) var(--brand-hue));
   --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.96 0.02 var(--brand-hue));
+  --sidebar-accent: oklch(0.935 0.035 var(--brand-hue));
   --sidebar-accent-foreground: oklch(0.28 0.06 var(--brand-hue));
-  --sidebar-border: oklch(0.922 0 0);
+  /* Tinted to match: a neutral grey divider reads as a smudge on a tinted plane. */
+  --sidebar-border: oklch(0.9 0.014 var(--brand-hue));
   --sidebar-ring: oklch(0.58 var(--brand-chroma) var(--brand-hue));
 
   /* ─── Attendance status ───────────────────────────────────────────────
@@ -122,6 +239,47 @@
   --status-od-foreground: oklch(0.205 0 0);
   --status-excused: oklch(0.62 0.11 275);
   --status-excused-foreground: oklch(0.985 0 0);
+
+  /* The same four statuses in TINTED form, for badges and chips. `-surface` is
+     a near-white wash of the hue; `-ink` is the same hue dark enough to read on
+     it (AA). Note the inks sit near L 0.50 while the solid values above are
+     L 0.58–0.70 — those are backgrounds carrying near-white text, these are
+     foregrounds carrying near-white behind them. Different job, different L.  */
+  --status-present-surface: oklch(0.958 0.032 145);
+  --status-present-ink: oklch(0.48 0.13 145);
+  --status-absent-surface: oklch(0.966 0.02 27.325);
+  --status-absent-ink: oklch(0.5 0.19 27.325);
+  --status-od-surface: oklch(0.962 0.038 75);
+  --status-od-ink: oklch(0.5 0.12 75);
+  --status-excused-surface: oklch(0.958 0.026 275);
+  --status-excused-ink: oklch(0.48 0.13 275);
+
+  /* ─── Semantic intent ─────────────────────────────────────────────────
+     Green/amber/blue for "this record is live / needs attention / is just
+     information". Non-brand for the same reason the statuses are: they encode
+     meaning, so they must stay green and amber even if --brand-hue becomes
+     green or amber. Each is a saturated ink (AA on its own surface) plus a
+     low-chroma surface and a slightly stronger border for tinted pills.
+
+     These replace the raw `emerald-500/10 text-emerald-600` and
+     `amber-500/10 text-amber-600` that were hand-written across ~10 pills.   */
+  --success: oklch(0.5 0.13 152);
+  --success-foreground: oklch(0.985 0 0);
+  --success-surface: oklch(0.958 0.032 152);
+  --success-border: oklch(0.875 0.055 152);
+
+  --warning: oklch(0.52 0.12 75);
+  --warning-foreground: oklch(0.985 0 0);
+  --warning-surface: oklch(0.962 0.038 85);
+  --warning-border: oklch(0.885 0.062 82);
+
+  --info: oklch(0.52 0.13 258);
+  --info-foreground: oklch(0.985 0 0);
+  --info-surface: oklch(0.96 0.028 258);
+  --info-border: oklch(0.88 0.05 258);
+
+  --destructive-surface: oklch(0.966 0.02 27.325);
+  --destructive-border: oklch(0.888 0.055 27.325);
 }
 
 .dark {
@@ -170,6 +328,16 @@
   --status-od-foreground: oklch(0.205 0 0);
   --status-excused: oklch(0.72 0.11 275);
   --status-excused-foreground: oklch(0.205 0 0);
+
+  /* ⚠️ DEBT, stated rather than hidden: the tokens added for the 2026 redesign
+     — --success/--warning/--info, the *-surface / *-border / *-ink families —
+     are declared at :root ONLY, so this block inherits their LIGHT values. A
+     success pill in dark mode would be dark-green ink on a near-white wash.
+
+     That is acceptable today because nothing ever applies `.dark`: the only
+     toggle in the codebase is the /theme preview page. Before dark mode ships
+     for real, every token added below :root's "Semantic intent" heading needs
+     a matching value here. Half-supporting it is worse than either choice.   */
 }
 
 @layer base {
@@ -211,9 +379,75 @@
 .login-cell {
   animation: login-cell 0.6s ease-out both;
 }
+
+/* ─── Auth cover panel ─────────────────────────────────────────────────────
+   The bento mosaic beside the form. Three decorative motions, all ambient:
+   the ticker ribbon, the slow aurora drift behind the tiles, and the pulse on
+   the "live" dot. `auth-tile` is the staggered reveal, driven by an inline
+   animation-delay per tile so the mosaic assembles rather than appearing at
+   once. All four stop under prefers-reduced-motion — nothing here carries
+   meaning, so there is no state to preserve when they do.
+
+   The ribbon translates by exactly -50% and its content is rendered TWICE, so
+   the second copy is under the cursor at the moment the first scrolls out and
+   the loop has no visible seam.                                              */
+@keyframes auth-ticker {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+@keyframes auth-drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(2%, -3%, 0) scale(1.08);
+  }
+}
+@keyframes auth-tile {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes auth-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 currentColor;
+  }
+  70% {
+    opacity: 0.75;
+    box-shadow: 0 0 0 5px transparent;
+  }
+}
+.auth-ticker {
+  animation: auth-ticker 38s linear infinite;
+}
+.auth-drift {
+  animation: auth-drift 20s ease-in-out infinite;
+}
+.auth-tile {
+  animation: auth-tile 0.65s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.auth-pulse {
+  animation: auth-pulse 2.4s ease-out infinite;
+}
 @media (prefers-reduced-motion: reduce) {
   .login-rise,
-  .login-cell {
+  .login-cell,
+  .auth-ticker,
+  .auth-drift,
+  .auth-tile,
+  .auth-pulse {
     animation: none;
   }
 }

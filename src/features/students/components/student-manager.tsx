@@ -6,11 +6,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Plus, Upload, Pencil, KeyRound, Copy, Check, Search } from "lucide-react";
+import { Plus, Upload, Pencil, KeyRound, Users } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -27,9 +26,21 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { EmptyState } from "@/components/ui/empty-state";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { errorMessage } from "@/lib/errors";
+import { TableSkeleton } from "@/components/ui/skeleton";
+import { CopyButton } from "@/components/copy-button";
+import { FormError } from "@/components/form-error";
+import { FormField, FormSection, FormSectionDivider } from "@/components/form-field";
+import { RowActions } from "@/components/row-actions";
+import { SearchInput } from "@/components/search-input";
+import { AccountBadge } from "@/components/status-badge";
+import { TablePagination } from "@/components/table-pagination";
 import { PageHeader } from "@/app/(app)/page-header";
+import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import type { Gender, Student, StudentFilters, StudentStatus } from "@/features/students/types";
-import { FormSelect } from "@/features/students/components/form-select";
+import { FormSelect } from "@/components/form-select";
 import { ClassCascade } from "@/features/students/components/class-cascade";
 import { ImportStudentsDialog } from "@/features/students/components/import-students-dialog";
 import { CredentialsDialog } from "@/features/students/components/credentials-dialog";
@@ -43,10 +54,6 @@ import {
   useUpdateStudent,
 } from "@/features/students/hooks/use-students";
 
-function errorMessage(e: unknown): string {
-  if (e instanceof Error) return e.message;
-  return "Something went wrong. Try again.";
-}
 const isoToDateInput = (iso: string) => (iso ? iso.slice(0, 10) : "");
 const PAGE_SIZE = 50;
 
@@ -74,43 +81,21 @@ const STATUS_OPTIONS = [
 ];
 
 function StatusPill({ student }: { student: Student }) {
-  // Login disabled (non-ACTIVE lifecycle) reads as muted; active students that
-  // are still on their temp password get a distinct "invited" hint.
-  if (student.status !== "ACTIVE" || student.userStatus !== "ACTIVE") {
-    return (
-      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-muted-foreground">
-        {student.status === "ACTIVE" ? "Inactive" : student.status.toLowerCase()}
-      </span>
-    );
-  }
-  if (student.mustChangePassword) {
-    return (
-      <span className="inline-flex items-center rounded-full bg-amber-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-amber-600">
-        Invited
-      </span>
-    );
-  }
   return (
-    <span className="inline-flex items-center rounded-full bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.65rem] uppercase tracking-wider text-emerald-600">
-      Active
-    </span>
-  );
-}
-
-function FormError({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      role="alert"
-      className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-    >
-      {children}
-    </p>
+    <AccountBadge
+      recordActive={student.status === "ACTIVE"}
+      loginActive={student.userStatus === "ACTIVE"}
+      mustChangePassword={student.mustChangePassword}
+      // When the STUDENT record is the reason (graduated, dropped, transferred),
+      // name it — "Inactive" would hide which of those happened. When only the
+      // login is off, the generic word is the honest one.
+      inactiveLabel={student.status === "ACTIVE" ? undefined : student.status.toLowerCase()}
+    />
   );
 }
 
 // The one-time temp-password reveal, shared by create + regenerate.
 function TempPasswordPanel({ name, password }: { name: string; password: string }) {
-  const [copied, setCopied] = useState(false);
   return (
     <div className="flex flex-col gap-3">
       <p className="text-sm text-muted-foreground">
@@ -119,23 +104,7 @@ function TempPasswordPanel({ name, password }: { name: string; password: string 
       </p>
       <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 p-2">
         <code className="flex-1 px-1 font-mono text-sm text-foreground">{password}</code>
-        <Button
-          variant="outline"
-          size="sm"
-          data-icon="inline-start"
-          onClick={() => {
-            navigator.clipboard?.writeText(password).then(
-              () => {
-                setCopied(true);
-                setTimeout(() => setCopied(false), 1500);
-              },
-              () => {},
-            );
-          }}
-        >
-          {copied ? <Check /> : <Copy />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
+        <CopyButton value={password} />
       </div>
     </div>
   );
@@ -192,56 +161,59 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
   const startIdx = (currentPage - 1) * PAGE_SIZE;
 
   return (
-    <div className="flex flex-col gap-6 p-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageShell>
+      <PageShellHeader
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setCredentials(true)} data-icon="inline-start">
+              <KeyRound />
+              Credentials
+            </Button>
+            <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
+              <Upload />
+              Import
+            </Button>
+            <Button onClick={() => setCreating(true)} data-icon="inline-start">
+              <Plus />
+              Add student
+            </Button>
+          </>
+        }
+      >
         <PageHeader
           eyebrow="People · Students"
           title="Students"
           description="Provision student accounts and enroll them into a class for the active academic year. Students sign in with their register number."
         />
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setCredentials(true)} data-icon="inline-start">
-            <KeyRound />
-            Credentials
-          </Button>
-          <Button variant="outline" onClick={() => setImporting(true)} data-icon="inline-start">
-            <Upload />
-            Import
-          </Button>
-          <Button onClick={() => setCreating(true)} data-icon="inline-start">
-            <Plus />
-            Add student
-          </Button>
-        </div>
-      </div>
+      </PageShellHeader>
 
       {isPending ? (
-        <p className="text-sm text-muted-foreground">Loading students…</p>
+        <TableSkeleton rows={10} cols={6} label="Loading students…" />
       ) : isError ? (
         <FormError>{errorMessage(error)}</FormError>
       ) : total === 0 && !searching && !filtering ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border py-16 text-center">
-          <p className="text-sm text-muted-foreground">No students yet.</p>
-          <Button variant="outline" onClick={() => setCreating(true)} data-icon="inline-start">
-            <Plus />
-            Add the first student
-          </Button>
-        </div>
+        <EmptyState
+          icon={Users}
+          title="No students yet"
+          description="Provision accounts one at a time, or import a spreadsheet to onboard a whole class."
+          action={
+            <Button variant="outline" onClick={() => setCreating(true)} data-icon="inline-start">
+              <Plus />
+              Add the first student
+            </Button>
+          }
+        />
       ) : (
         <div className="flex flex-col gap-4">
-          <div className="relative max-w-sm">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                setPage(1);
-              }}
-              placeholder="Search by name, register no. or email…"
-              aria-label="Search students"
-              className="h-10! pl-9"
-            />
-          </div>
+          <SearchInput
+            value={query}
+            onChange={(v) => {
+              setQuery(v);
+              setPage(1);
+            }}
+            placeholder="Search by name, register no. or email…"
+            label="Search students"
+          />
 
           <StudentFilterBar
             filters={filters}
@@ -255,112 +227,95 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
           />
 
           {students.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border py-16 text-center">
-              <p className="text-sm text-muted-foreground">
-                {searching
+            <EmptyState
+              size="sm"
+              title={
+                searching
                   ? `No students match “${debouncedQuery}”${filtering ? " with these filters" : ""}.`
                   : filtering
                     ? "No students match these filters."
-                    : "No students on this page."}
-              </p>
-            </div>
+                    : "No students on this page."
+              }
+            />
           ) : (
-            <div
-              className={`rounded-xl ring-1 ring-foreground/10 ${isPlaceholderData ? "opacity-60" : ""}`}
+            <Table
+              // `opacity-60` while TanStack serves placeholder data: the previous
+              // page stays on screen during the fetch, and dimming it is what
+              // tells the user the rows are stale rather than simply slow.
+              containerClassName={`${TABLE_FRAME} ${isPlaceholderData ? "opacity-60" : ""}`}
             >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Register no.</TableHead>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Program</TableHead>
-                    <TableHead>Class (this year)</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-0 text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {students.map((s) => (
-                <TableRow key={s.id}>
-                  <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{s.displayName}</span>
-                      <span className="text-xs text-muted-foreground">{s.email}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">{s.programLabel ?? "—"}</TableCell>
-                  <TableCell>
-                    {s.currentEnrollment ? (
-                      <span className="font-mono text-xs">
-                        {s.currentEnrollment.year}-{s.currentEnrollment.section}
-                      </span>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Not enrolled</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <StatusPill student={s} />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-end gap-1">
-                      {s.mustChangePassword && s.userStatus === "ACTIVE" && (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setResetting(s)}
-                          aria-label="Reissue temp password"
-                          title="Reissue temp password"
-                        >
-                          <KeyRound />
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setEditing(s)}
-                        aria-label="Edit student"
-                      >
-                        <Pencil />
-                      </Button>
-                    </div>
-                  </TableCell>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Register no.</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Program</TableHead>
+                  <TableHead>Class (this year)</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-0 text-right">Actions</TableHead>
                 </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
+              </TableHeader>
+              <TableBody>
+                {students.map((s) => (
+                  <TableRow key={s.id}>
+                    <TableCell className="font-mono text-xs">{s.registerNumber}</TableCell>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium">{s.displayName}</span>
+                        <span className="text-xs text-muted-foreground">{s.email}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{s.programLabel ?? "—"}</TableCell>
+                    <TableCell>
+                      {s.currentEnrollment ? (
+                        <span className="font-mono text-xs">
+                          {s.currentEnrollment.year}-{s.currentEnrollment.section}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Not enrolled</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <StatusPill student={s} />
+                    </TableCell>
+                    <TableCell>
+                      <RowActions
+                        label={`Actions for ${s.registerNumber}`}
+                        actions={[
+                          { label: "Edit student", icon: Pencil, onSelect: () => setEditing(s) },
+                          // Only meaningful while they are still on the temp
+                          // password — regenerating after they have set their own
+                          // would lock them out of an account they were using.
+                          s.mustChangePassword &&
+                            s.userStatus === "ACTIVE" && {
+                              label: "Reissue temp password",
+                              icon: KeyRound,
+                              onSelect: () => setResetting(s),
+                            },
+                        ]}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
 
           {total > PAGE_SIZE && (
-            <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-              <span>
-                Showing {startIdx + 1}–{startIdx + students.length} of {total}
-              </span>
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  // Step back from the EFFECTIVE page, so a request that
-                  // overshot the end still walks back one page at a time.
-                  onClick={() => setPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage <= 1 || isPlaceholderData}
-                >
-                  Previous
-                </Button>
-                <span className="font-mono text-xs">
-                  Page {currentPage} of {pageCount}
-                </span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setPage(Math.min(pageCount, currentPage + 1))}
-                  disabled={currentPage >= pageCount || isPlaceholderData}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
+            <TablePagination
+              // All numbers, no state. `currentPage` is the EFFECTIVE page —
+              // derived at render as Math.min(page, pageCount), because a
+              // server-paginated request past the end returns nothing rather
+              // than clamping. Handing the component the raw `page` would
+              // reintroduce exactly the blank-page bug that derivation fixes.
+              page={currentPage}
+              pageCount={pageCount}
+              total={total}
+              rangeStart={startIdx + 1}
+              rangeEnd={startIdx + students.length}
+              onPageChange={(p) => setPage(Math.min(pageCount, Math.max(1, p)))}
+              disabled={isPlaceholderData}
+              noun="students"
+            />
           )}
         </div>
       )}
@@ -370,7 +325,7 @@ export function StudentManager({ isInstitutionScoped = false }: { isInstitutionS
       {credentials && <CredentialsDialog onClose={() => setCredentials(false)} />}
       {editing && <EditStudentDialog student={editing} onClose={() => setEditing(null)} />}
       {resetting && <RegenerateDialog student={resetting} onClose={() => setResetting(null)} />}
-    </div>
+    </PageShell>
   );
 }
 
@@ -441,68 +396,76 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
           </>
         ) : (
           <>
-            {/* Landscape: 3 columns on desktop, 1 on narrow screens — matches
-                the Edit dialog so the two read as the same form. */}
-            <form id="student-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="s-name">Full name</Label>
-                <Input id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" autoFocus required />
-              </div>
-              <div className="flex flex-col gap-2 sm:col-span-2">
-                <Label htmlFor="s-email">Email</Label>
-                <Input id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" className="h-10!" required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="s-reg">Register number</Label>
-                <Input id="s-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} className="h-10!" required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="s-roll">Roll number (optional)</Label>
-                <Input id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="s-dob">Date of birth</Label>
-                <Input id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="s-phone">Phone</Label>
-                <Input id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="s-gender">Gender (optional)</Label>
-                <FormSelect id="s-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="s-program">Program</Label>
-                <FormSelect
-                  id="s-program"
-                  value={programId}
-                  onChange={(v) => {
-                    setProgramId(v);
-                    setClassId(""); // classes differ per program — reset the choice
-                  }}
-                  options={activePrograms.map((p) => ({ value: p.id, label: p.label }))}
-                  placeholder={programs.isPending ? "Loading…" : "Select a program"}
-                />
-              </div>
-              {/* Class is optional — place them now (Year + Section) or later via
-                  "Change class". Takes the full row as its own Year | Section pair. */}
-              <div className="flex flex-col gap-2 sm:col-span-3">
-                <Label>Class (optional)</Label>
-                <ClassCascade
-                  key={programId || "none"}
-                  classes={classesInProgram}
-                  onChange={setClassId}
-                  loading={classes.isPending}
-                  disabled={programId === ""}
-                  idPrefix="s"
-                />
-              </div>
-              {create.isError && (
-                <div className="sm:col-span-3">
-                  <FormError>{errorMessage(create.error)}</FormError>
-                </div>
-              )}
+            {/* Three sections rather than one 9-field grid: sign-in details are
+                what the student uses to get in, personal details are about them,
+                placement is where they sit. Grouping them turns a wall of inputs
+                into three short questions and makes the "what is a login handle
+                here" distinction visible. */}
+            <form id="student-form" onSubmit={submit} className="flex flex-col gap-5">
+              <FormSection
+                title="Sign-in details"
+                description="The student signs in with their register number; the email is the identity behind it."
+                columns={2}
+              >
+                <FormField id="s-name" label="Full name" required>
+                  <Input size="lg" id="s-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} autoFocus required />
+                </FormField>
+                <FormField id="s-email" label="Email" required>
+                  <Input size="lg" id="s-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@example.com" required />
+                </FormField>
+                <FormField id="s-reg" label="Register number" required hint="Unique — this is the login handle.">
+                  <Input size="lg" id="s-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} required />
+                </FormField>
+                <FormField id="s-roll" label="Roll number" hint="Optional college id. Not used to sign in.">
+                  <Input size="lg" id="s-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
+                </FormField>
+              </FormSection>
+
+              <FormSectionDivider />
+
+              <FormSection title="Personal details" columns={3}>
+                <FormField id="s-dob" label="Date of birth" required>
+                  <Input size="lg" id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required />
+                </FormField>
+                <FormField id="s-phone" label="Phone" required>
+                  <Input size="lg" id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+                </FormField>
+                <FormField id="s-gender" label="Gender">
+                  <FormSelect id="s-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
+                </FormField>
+              </FormSection>
+
+              <FormSectionDivider />
+
+              <FormSection
+                title="Placement"
+                description="Class is optional — place them now, or later from the roster."
+              >
+                <FormField id="s-program" label="Program" required>
+                  <FormSelect
+                    id="s-program"
+                    value={programId}
+                    onChange={(v) => {
+                      setProgramId(v);
+                      setClassId(""); // classes differ per program — reset the choice
+                    }}
+                    options={activePrograms.map((p) => ({ value: p.id, label: p.label }))}
+                    placeholder={programs.isPending ? "Loading…" : "Select a program"}
+                  />
+                </FormField>
+                <FormField label="Class">
+                  <ClassCascade
+                    key={programId || "none"}
+                    classes={classesInProgram}
+                    onChange={setClassId}
+                    loading={classes.isPending}
+                    disabled={programId === ""}
+                    idPrefix="s"
+                  />
+                </FormField>
+              </FormSection>
+
+              {create.isError && <FormError>{errorMessage(create.error)}</FormError>}
             </form>
             <DialogFooter>
               <Button variant="outline" onClick={onClose} disabled={create.isPending}>
@@ -587,78 +550,82 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
             either changes how they log in.
           </DialogDescription>
         </DialogHeader>
-        {/* Landscape: 3 columns on desktop so the whole form fits without
-            scrolling, collapsing to 1 column on narrow screens. Fields are
-            grouped by row — identity, then details, then placement. */}
-        <form id="edit-student-form" onSubmit={submit} className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <div className="flex flex-col gap-2 sm:col-span-3">
-            <Label htmlFor="e-name">Full name</Label>
-            <Input id="e-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} className="h-10!" required />
-          </div>
-          {/* Sign-in details. Grouped together and flagged so an admin editing a
-              phone number doesn't change a login handle without noticing. */}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="e-reg">Register number</Label>
-            <Input id="e-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} className="h-10!" required />
-          </div>
-          <div className="flex flex-col gap-2 sm:col-span-2">
-            <Label htmlFor="e-email">Email</Label>
-            <Input id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="h-10!" required />
-          </div>
-          {identityChanged && (
-            <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-900 sm:col-span-3 dark:text-amber-200">
-              {registerChanged && emailChanged
-                ? "This changes both sign-in details. "
-                : registerChanged
-                  ? "This changes the register number they sign in with. "
-                  : "This changes the email their account authenticates with. "}
-              Tell {student.displayName} before saving — their password is unchanged.
-            </div>
-          )}
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="e-roll">Roll number</Label>
-            <Input id="e-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} className="h-10!" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="e-phone">Phone</Label>
-            <Input id="e-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className="h-10!" required />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="e-dob">Date of birth</Label>
-            <Input id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="h-10!" required />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="e-gender">Gender</Label>
-            <FormSelect id="e-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
-          </div>
-          <div className="flex flex-col gap-2">
-            <Label htmlFor="e-status">Status</Label>
-            <FormSelect
-              id="e-status"
-              value={status}
-              onChange={(v) => setStatus(v as StudentStatus)}
-              options={STATUS_OPTIONS}
-              placeholder="Select"
-            />
-          </div>
-          {/* Class (enrollment) for the active year — edited alongside details.
-              ClassCascade renders its own Year + Section pair, so it takes the
-              full row rather than sitting in a single column. */}
-          <div className="flex flex-col gap-2 sm:col-span-3">
-            <Label>Class</Label>
-            <ClassCascade
-              classes={classesInProgram}
-              initialClassId={currentClassId}
-              onChange={setClassId}
-              loading={classes.isPending}
-              idPrefix="e"
-            />
-          </div>
-          {update.isError && (
-            <div className="sm:col-span-3">
-              <FormError>{errorMessage(update.error)}</FormError>
-            </div>
-          )}
+        {/* Same three sections as the create dialog, deliberately — the two are
+            the same form and should read identically. The sign-in group is
+            first and named so an admin editing a phone number cannot change a
+            login handle without noticing which box they are in. */}
+        <form id="edit-student-form" onSubmit={submit} className="flex flex-col gap-5">
+          <FormSection title="Sign-in details" columns={2}>
+            <FormField id="e-name" label="Full name" required className="sm:col-span-2">
+              <Input size="lg" id="e-name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
+            </FormField>
+            <FormField id="e-reg" label="Register number" required>
+              <Input size="lg" id="e-reg" value={registerNumber} onChange={(e) => setRegisterNumber(e.target.value)} required />
+            </FormField>
+            <FormField id="e-email" label="Email" required>
+              <Input size="lg" id="e-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </FormField>
+            {identityChanged && (
+              <Alert variant="warning" className="text-xs sm:col-span-2">
+                <AlertDescription>
+                  {registerChanged && emailChanged
+                    ? "This changes both sign-in details. "
+                    : registerChanged
+                      ? "This changes the register number they sign in with. "
+                      : "This changes the email their account authenticates with. "}
+                  Tell {student.displayName} before saving — their password is unchanged.
+                </AlertDescription>
+              </Alert>
+            )}
+          </FormSection>
+
+          <FormSectionDivider />
+
+          <FormSection title="Personal details" columns={3}>
+            <FormField id="e-roll" label="Roll number">
+              <Input size="lg" id="e-roll" value={rollNumber} onChange={(e) => setRollNumber(e.target.value)} />
+            </FormField>
+            <FormField id="e-phone" label="Phone" required>
+              <Input size="lg" id="e-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+            </FormField>
+            <FormField id="e-dob" label="Date of birth" required>
+              <Input size="lg" id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required />
+            </FormField>
+            <FormField id="e-gender" label="Gender">
+              <FormSelect id="e-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
+            </FormField>
+          </FormSection>
+
+          <FormSectionDivider />
+
+          <FormSection
+            title="Placement & status"
+            description="A non-active status disables sign-in until it is set back to Active."
+            columns={2}
+          >
+            <FormField id="e-status" label="Status" required>
+              <FormSelect
+                id="e-status"
+                value={status}
+                onChange={(v) => setStatus(v as StudentStatus)}
+                options={STATUS_OPTIONS}
+                placeholder="Select"
+              />
+            </FormField>
+            {/* ClassCascade renders its own Year + Section pair, so it takes the
+                full row rather than sitting in one column. */}
+            <FormField label="Class" className="sm:col-span-2">
+              <ClassCascade
+                classes={classesInProgram}
+                initialClassId={currentClassId}
+                onChange={setClassId}
+                loading={classes.isPending}
+                idPrefix="e"
+              />
+            </FormField>
+          </FormSection>
+
+          {update.isError && <FormError>{errorMessage(update.error)}</FormError>}
         </form>
         <DialogFooter>
           <Button variant="outline" onClick={onClose} disabled={update.isPending}>

@@ -6,7 +6,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CalendarPlus, Check, X } from "lucide-react";
+import { CalendarCheck, CalendarPlus, Check, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -127,7 +127,27 @@ export function LeaveManager() {
       ) : list.isError ? (
         <FormError>{errorMessage(list.error)}</FormError>
       ) : requests.length === 0 ? (
-        <EmptyState size="sm" title={isStudent ? "You haven't applied for anything yet." : "No requests to review."} />
+        // `default`, not `sm`: this is the page's ONLY content when it renders,
+        // which is the "nothing exists yet" case the icon + description size is
+        // for. The `sm` variant is for a filtered-to-empty list sitting beside
+        // other content — as at "Nothing waiting on you." below, which keeps it.
+        <EmptyState
+          icon={CalendarCheck}
+          title={isStudent ? "You haven't applied for anything yet." : "No requests to review."}
+          description={
+            isStudent
+              ? "Apply for on-duty or leave and it will appear here with its approval status."
+              : "Your students' OD and leave requests arrive here. The class teacher approves first, then the HOD."
+          }
+          action={
+            isStudent ? (
+              <Button data-icon="inline-start" onClick={() => setApplying(true)}>
+                <CalendarPlus />
+                Apply
+              </Button>
+            ) : undefined
+          }
+        />
       ) : isStudent ? (
         <LeaveTable rows={requests} showStudent={false} />
       ) : (

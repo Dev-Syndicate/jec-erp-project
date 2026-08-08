@@ -18,6 +18,7 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
+  SidebarMenuAction,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -206,22 +207,61 @@ function CollapsibleNavItem({
 }) {
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const open = userOpen ?? active;
+  const { state, setOpen } = useSidebar();
+  const railCollapsed = state === "collapsed";
 
   const Icon = item.icon;
   return (
-    <Collapsible open={open} onOpenChange={setUserOpen} className="group/collapsible">
+    <Collapsible
+      open={open}
+      // In the ICON rail this item looked dead: SidebarMenuSub carries
+      // `group-data-[collapsible=icon]:hidden`, so the trigger happily toggled a
+      // sub-list that is not painted — a click with no visible result. Expanding
+      // the rail first is what the user is actually asking for, and the children
+      // then appear because `open` is forced true alongside it.
+      onOpenChange={(next) => {
+        if (railCollapsed) {
+          setOpen(true);
+          setUserOpen(true);
+          return;
+        }
+        setUserOpen(next);
+      }}
+      className="group/collapsible"
+    >
       <SidebarMenuItem>
+        {/* The ROW navigates; only the chevron toggles.
+            It used to be one CollapsibleTrigger over the whole row, so clicking
+            "Structure setup" opened the group and went nowhere — even though the
+            item carries `href: /structure/degrees`. The page stayed on Overview
+            while the rail showed an expanded group, which reads as a dead click.
+            Splitting the two means the label behaves like every other nav link
+            and the chevron keeps the open/close job its arrow already advertises. */}
+        <SidebarMenuButton
+          isActive={active}
+          tooltip={item.title}
+          onClick={() => {
+            // Opening alongside navigation, so the children are visible on the
+            // page you just landed on rather than needing a second click.
+            if (railCollapsed) setOpen(true);
+            setUserOpen(true);
+          }}
+          className="relative pr-8 data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-1/2 data-[active=true]:before:h-4.5 data-[active=true]:before:w-0.5 data-[active=true]:before:-translate-y-1/2 data-[active=true]:before:rounded-r-full data-[active=true]:before:bg-primary data-[active=true]:font-medium"
+          render={<Link href={item.href} />}
+        >
+          <Icon className="size-4" />
+          <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
+        </SidebarMenuButton>
         <CollapsibleTrigger
           render={
-            <SidebarMenuButton
-              isActive={active}
-              tooltip={item.title}
-              className="relative data-[active=true]:before:absolute data-[active=true]:before:left-0 data-[active=true]:before:top-1/2 data-[active=true]:before:h-4.5 data-[active=true]:before:w-0.5 data-[active=true]:before:-translate-y-1/2 data-[active=true]:before:rounded-r-full data-[active=true]:before:bg-primary data-[active=true]:font-medium"
+            <SidebarMenuAction
+              // Its own control, so it needs its own name — the row's label
+              // belongs to the link now.
+              aria-label={`${open ? "Collapse" : "Expand"} ${item.title}`}
+              className="group-data-[collapsible=icon]:hidden"
             >
-              <Icon className="size-4" />
-              <span className="group-data-[collapsible=icon]:hidden">{item.title}</span>
-              <ChevronRight className="ml-auto size-4 transition-transform group-data-open/collapsible:rotate-90 group-data-[collapsible=icon]:hidden" />
-            </SidebarMenuButton>
+              <ChevronRight className="size-4 transition-transform group-data-open/collapsible:rotate-90" />
+            </SidebarMenuAction>
           }
         />
         <CollapsibleContent>

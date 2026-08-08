@@ -144,7 +144,9 @@ function AttendanceHero({
 
   return (
     <section
-      className={`flex flex-col justify-between gap-5 rounded-2xl border border-border bg-card p-6 ${className}`}
+      // min-w-0 for the same reason as TodayStrip beside it: a grid item that
+      // will not shrink drags the page into a horizontal scroll on a phone.
+      className={`flex min-w-0 flex-col justify-between gap-5 rounded-2xl border border-border bg-card p-4 sm:p-6 ${className}`}
     >
       <div className="flex items-baseline justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -267,7 +269,16 @@ function TodayStrip({
   const hasClasses = todays.some(Boolean);
 
   return (
-    <section className={`flex flex-col gap-3 rounded-2xl border border-border bg-card p-6 ${className}`}>
+    // `min-w-0` is load-bearing on phones. This section is a GRID ITEM, and a
+    // grid item's default `min-width: auto` refuses to shrink below its content
+    // — so the eight-period strip below (which is `overflow-x-auto` and meant to
+    // scroll inside this card) instead forced the section to its full 954px
+    // content width, dragging the whole page into a horizontal scroll at 390px.
+    // With min-w-0 the section takes the column's width and the strip scrolls,
+    // which is what the overflow-x-auto was always for.
+    <section
+      className={`flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-card p-4 sm:p-6 ${className}`}
+    >
       <div className="flex items-baseline justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Today

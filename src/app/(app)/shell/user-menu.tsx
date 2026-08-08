@@ -26,7 +26,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import {
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  useSidebar,
+} from "@/components/ui/sidebar";
 import { useSignOut } from "@/features/auth/hooks/use-auth";
 import type { AuthUser } from "@/features/auth/types";
 
@@ -44,6 +49,7 @@ export function UserMenu({ profile }: { profile: AuthUser | undefined }) {
   const router = useRouter();
   const pathname = usePathname();
   const signOut = useSignOut();
+  const { isMobile } = useSidebar();
 
   // The redirect is part of signing out, not a nicety: without it the user sits
   // on an authed page until AuthGate notices and bounces them, which looks fine
@@ -86,13 +92,22 @@ export function UserMenu({ profile }: { profile: AuthUser | undefined }) {
           </DropdownMenuTrigger>
 
           <DropdownMenuContent
-            side="right"
+            // On DESKTOP the rail is a narrow column against the screen edge, so
+            // the menu goes beside it. On MOBILE the rail is an 18rem sheet and
+            // there is nothing to its right: 288px of sheet + a 240px menu needs
+            // 536px, which no phone has, so the menu was pushed off-screen and
+            // the footer chip looked dead. Above the trigger is the only
+            // direction with room there.
+            side={isMobile ? "top" : "right"}
             align="end"
             sideOffset={8}
             // The trigger is full-rail width, and w-(--anchor-width) would make
             // the menu match it — too narrow for an email once the rail is
             // collapsed to an icon. Fixed width instead.
-            className="w-60"
+            //
+            // Capped to the viewport on mobile so a narrow phone can never clip
+            // it the way the old side="right" did.
+            className="w-60 max-w-[calc(100vw-2rem)]"
           >
             {/* Identity header: name over email. The email is what disambiguates
                 a shared machine, and it appears nowhere else in the shell. */}
@@ -112,6 +127,9 @@ export function UserMenu({ profile }: { profile: AuthUser | undefined }) {
 
             <DropdownMenuSeparator />
 
+            {/* No onClick to dismiss the rail: AppSidebar closes the mobile
+                sheet on pathname change, which covers this link and every nav
+                link with one rule. */}
             <DropdownMenuItem className="px-1.5 py-1.5" render={<Link href="/profile" />}>
               <UserRound />
               Your profile

@@ -43,11 +43,34 @@ export type PortalSlot = {
   facultyName: string;
 };
 
+// One stored component of an assessment — a cycle test, an assignment, or the
+// IAT exam. `obtained` is null when the teacher hasn't entered it yet, which is
+// deliberately distinct from a real 0.
+export type MarkComponent = {
+  key: string;
+  label: string;
+  max: number;
+  obtained: number | null;
+};
+
+// One assessment (IA1, IA2 or Model), out of 100. IA1 and IA2 are COMPOSITES of
+// five components; Model is a single mark. The total is summed on read by the
+// server, never stored — see src/app/api/marks/scheme.ts, which owns the scheme.
+export type SubjectAssessment = {
+  key: string;
+  max: number;
+  obtained: number | null;
+  // False while some components are still unmarked, so the UI can say "partial"
+  // instead of showing a total that reads as a low score.
+  complete: boolean;
+  parts: MarkComponent[];
+};
+
 export type SubjectMarks = {
   subjectId: string;
   code: string;
   name: string;
-  items: Array<{ assessment: string; obtained: number; maxMark: number }>;
+  assessments: SubjectAssessment[];
 };
 
 // Which weekday's timetable TODAY runs, resolved server-side — the client can't

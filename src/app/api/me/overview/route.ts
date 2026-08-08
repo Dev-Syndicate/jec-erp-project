@@ -8,6 +8,15 @@
 // quirk). A non-student account gets 403.
 import { authenticate, toAuthResponse } from "@/lib/auth";
 import { db } from "@/lib/db";
+import {
+  ASSESSMENTS,
+  COMPONENT_LABEL,
+  COMPONENT_MAX,
+  assessmentTotal,
+  componentsOf,
+  type Assessment,
+  type Component,
+} from "@/app/api/marks/scheme";
 
 export const dynamic = "force-dynamic";
 
@@ -161,18 +170,56 @@ export async function GET(req: Request) {
         })
       : [];
 
-    // Group marks by subject.
-    const marksBySubject = new Map<
-      string,
-      { subjectId: string; code: string; name: string; items: Array<{ assessment: string; obtained: number; maxMark: number }> }
-    >();
+    // Group marks by subject, then by ASSESSMENT — not as a flat list of rows.
+    //
+    // The DB stores one row per COMPONENT (IA1 = five rows: two cycle tests, two
+    // assignments, the IAT exam). Sending those raw made the student portal show
+    // ten undifferentiated chips labelled with enum keys, where "6/10" and
+    // "40/60" carried equal weight and nothing said the parts summed to 100.
+    // The shape below mirrors what the staff entry grid already receives: the
+    // scheme is resolved SERVER-SIDE (scheme.ts is server-only, and it is the
+    // single source of truth for labels and maximums), so the client never
+    // hard-codes the college's marking scheme in a second place.
+    const byComponent = new Map<string, Map<string, number>>();
+    const subjectMeta = new Map<string, { code: string; name: string }>();
     for (const m of marks) {
-      const g =
-        marksBySubject.get(m.subjectId) ??
-        { subjectId: m.subjectId, code: m.subject.code, name: m.subject.name, items: [] };
-      g.items.push({ assessment: m.assessment, obtained: Number(m.obtained), maxMark: Number(m.maxMark) });
-      marksBySubject.set(m.subjectId, g);
+      const row = byComponent.get(m.subjectId) ?? new Map<string, number>();
+      row.set(m.assessment, Number(m.obtained));
+      byComponent.set(m.subjectId, row);
+      subjectMeta.set(m.subjectId, { code: m.subject.code, name: m.subject.name });
     }
+
+    const marksBySubject = [...byComponent.entries()]
+      .map(([subjectId, row]) => {
+        const meta = subjectMeta.get(subjectId)!;
+        const assessments = ASSESSMENTS.map((a: Assessment) => {
+          const parts = componentsOf(a).map((c: Component) => ({
+            key: c,
+            label: COMPONENT_LABEL[c],
+            max: COMPONENT_MAX[c],
+            // null = not entered yet. Distinct from 0, which is a real zero.
+            obtained: row.has(c) ? row.get(c)! : null,
+          }));
+          const entered = parts.filter((p) => p.obtained !== null);
+          return {
+            key: a,
+            // Out of 100 for every assessment, derived rather than assumed.
+            max: assessmentTotal(a),
+            parts,
+            // The total is summed on READ and never stored, so a corrected
+            // component can't leave a stale total behind. Null until at least
+            // one part exists — a half-entered assessment must not read as a
+            // low score.
+            obtained: entered.length ? entered.reduce((s, p) => s + p.obtained!, 0) : null,
+            // Partial marking is normal mid-term; the UI says so rather than
+            // implying the student scored the missing parts as zero.
+            complete: entered.length === parts.length,
+          };
+        }).filter((a) => a.obtained !== null);
+        return { subjectId, code: meta.code, name: meta.name, assessments };
+      })
+      .filter((s) => s.assessments.length > 0)
+      .sort((a, b) => a.code.localeCompare(b.code));
 
     return Response.json({
       profile,
@@ -200,7 +247,7 @@ export async function GET(req: Request) {
         subjectName: s.subject.name,
         facultyName: s.faculty.displayName,
       })),
-      marks: [...marksBySubject.values()],
+      marks: marksBySubject,
       // Which weekday's grid TODAY runs, resolved server-side (the client only
       // knows the calendar date). Mon–Fri run as themselves; a declared working
       // Saturday runs the weekday an admin set; Sunday and an undeclared

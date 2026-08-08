@@ -34,7 +34,7 @@ import {
 
 export type NavChild = { title: string; href: string };
 
-export type NavFlags = { roles: string[]; advisesClass: boolean };
+export type NavFlags = { roles: string[]; advisesClass: boolean; teaches: boolean };
 
 export type NavItem = {
   title: string;
@@ -85,8 +85,11 @@ export const NAV: NavGroup[] = [
         href: "/attendance/timetable",
         icon: CalendarClock,
         // Program staff who actually teach — not the institution admin (Super
-        // Admin never has a personal timetable).
-        roles: ["HOD", "Faculty"],
+        // Admin never has a personal timetable), and not a HOD who takes no
+        // hours: `teaches` is "holds ≥1 timetable slot this semester", so the
+        // page can't be empty for anyone who can see the link.
+        gate: ({ roles, teaches }) =>
+          teaches && (roles.includes("HOD") || roles.includes("Faculty")),
       },
       {
         title: "Mark attendance",
@@ -96,7 +99,13 @@ export const NAV: NavGroup[] = [
         // mark against. They keep the permission (the API still authorizes
         // `manage all`, so a stuck record can be fixed); the nav just stops
         // offering it.
-        roles: ["HOD", "Faculty"],
+        //
+        // `teaches` narrows it further: marking a period belongs strictly to the
+        // period's own teacher (canMarkPeriod — no role overrides it), so a HOD
+        // who takes no hours would find every period locked. Hiding the link is
+        // the honest version of a page they can look at but never use.
+        gate: ({ roles, teaches }) =>
+          teaches && (roles.includes("HOD") || roles.includes("Faculty")),
         exact: true, // /attendance/report and /attendance/timetable are siblings
       },
       {
@@ -139,11 +148,16 @@ export const NAV: NavGroup[] = [
         title: "Internal marks",
         href: "/marks",
         icon: ClipboardPen,
-        // Staff who enter marks: a HOD, or a Faculty assigned to a subject this
-        // semester. The picker is empty for a faculty with no assignments, but
-        // the nav still shows it (the API is the real gate). Entering marks is
-        // teaching work, so Super Admin doesn't see it.
-        roles: ["HOD", "Faculty"],
+        // A HOD, or a Faculty who teaches something.
+        //
+        // NOT gated on `teaches` for a HOD, unlike the marking screens beside it:
+        // marks/access.ts grants a HOD READ on every subject their department
+        // owns ("HODs keep oversight of results") while restricting ENTRY to the
+        // subject's own teacher. So a non-teaching HOD gets a populated page —
+        // the assignments list returns the whole department and the sheet opens
+        // read-only, labelled "(view only)". Hiding it would remove their only
+        // route to results they are entitled to see.
+        gate: ({ roles, teaches }) => roles.includes("HOD") || (teaches && roles.includes("Faculty")),
       },
       {
         title: "Internal marks",

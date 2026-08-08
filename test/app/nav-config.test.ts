@@ -30,12 +30,15 @@ function visible(flags: NavFlags): string[] {
   return visibleGroups(flags).flatMap((g) => g.items.map((i) => `${g.label}/${i.href}`));
 }
 
-const SUPER_ADMIN: NavFlags = { roles: ["Super Admin"], advisesClass: false };
-const HOD: NavFlags = { roles: ["HOD"], advisesClass: false };
-const FACULTY: NavFlags = { roles: ["Faculty"], advisesClass: false };
-const FACULTY_ADVISOR: NavFlags = { roles: ["Faculty"], advisesClass: true };
-const STUDENT: NavFlags = { roles: ["Student"], advisesClass: false };
-const NO_ROLES: NavFlags = { roles: [], advisesClass: false };
+const SUPER_ADMIN: NavFlags = { roles: ["Super Admin"], advisesClass: false, teaches: false };
+// A HOD who also takes hours — the common case, and what the department set below
+// describes. HOD_NON_TEACHING is the same role holding no timetable slot.
+const HOD: NavFlags = { roles: ["HOD"], advisesClass: false, teaches: true };
+const HOD_NON_TEACHING: NavFlags = { roles: ["HOD"], advisesClass: false, teaches: false };
+const FACULTY: NavFlags = { roles: ["Faculty"], advisesClass: false, teaches: true };
+const FACULTY_ADVISOR: NavFlags = { roles: ["Faculty"], advisesClass: true, teaches: true };
+const STUDENT: NavFlags = { roles: ["Student"], advisesClass: false, teaches: false };
+const NO_ROLES: NavFlags = { roles: [], advisesClass: false, teaches: false };
 
 describe("visibleGroups", () => {
   it("gives Super Admin the institution-admin set", () => {
@@ -70,6 +73,36 @@ describe("visibleGroups", () => {
       "Curriculum//subjects",
       "Curriculum//timetable",
     ]);
+  });
+
+  it("hides the teaching screens from a HOD who takes no hours", () => {
+    // Marking a period belongs strictly to the period's own teacher — no role
+    // overrides it (canMarkPeriod) — and both the marks picker and the personal
+    // timetable are built from the caller's own slots. A HOD with no slots would
+    // get three pages that can only ever say "nothing here", so the rail drops
+    // them while every supervisory entry stays.
+    const seen = visible(HOD_NON_TEACHING);
+    expect(seen).not.toContain("Attendance//attendance");
+    expect(seen).not.toContain("Attendance//attendance/timetable");
+    // Still a HOD: cover, day attendance, the report and the department
+    // management set are theirs regardless of whether they teach.
+    expect(seen).toContain("Attendance//attendance/cover");
+    expect(seen).toContain("Attendance//attendance/day");
+    expect(seen).toContain("Attendance//attendance/report");
+    expect(seen).toContain("People//students");
+  });
+
+  it("keeps Internal marks for a HOD who teaches nothing", () => {
+    // The exception to the rule above, and the reason the marks gate reads
+    // differently from the two beside it: marks/access.ts gives a HOD READ on
+    // every subject their department owns while reserving ENTRY for the
+    // subject's teacher, so the page is populated and opens read-only rather
+    // than empty. Hiding it would cut off oversight the API grants.
+    expect(visible(HOD_NON_TEACHING)).toContain("Assessment//marks");
+    // A Faculty with no slots has no such read grant — for them it would be empty.
+    expect(visible({ roles: ["Faculty"], advisesClass: false, teaches: false })).not.toContain(
+      "Assessment//marks",
+    );
   });
 
   it("gives a plain Faculty only what they teach", () => {
@@ -130,7 +163,7 @@ describe("visibleGroups", () => {
   });
 
   it("unions the entries of a user holding two roles", () => {
-    const both = visible({ roles: ["Faculty", "HOD"], advisesClass: true });
+    const both = visible({ roles: ["Faculty", "HOD"], advisesClass: true, teaches: true });
     expect(both).toContain("Attendance//attendance/cover"); // HOD-only
     expect(both).toContain("People//my-class"); // advisesClass gate
     expect(new Set(both).size).toBe(both.length); // no duplicates
@@ -154,7 +187,7 @@ describe("visibleGroups — the advisesClass gate", () => {
     // The gate is `advisesClass` alone, so this asserts the flag's provenance
     // matters: it comes from the server's AuthUser, not from anything a client
     // can set. Documented here because the gate reads as role-free.
-    expect(visible({ roles: ["Student"], advisesClass: true })).toContain("People//my-class");
+    expect(visible({ roles: ["Student"], advisesClass: true, teaches: false })).toContain("People//my-class");
   });
 });
 

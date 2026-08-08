@@ -50,6 +50,17 @@ export type SubjectMarks = {
   items: Array<{ assessment: string; obtained: number; maxMark: number }>;
 };
 
+// Which weekday's timetable TODAY runs, resolved server-side — the client can't
+// work this out from the date, because a working Saturday borrows a weekday's
+// grid and only an admin's WorkingDay row says which. `weekday` is null when
+// there are no classes at all (Sunday, or a Saturday nobody declared), and
+// `followsDay` is set ONLY on a working Saturday, so the UI can name the day
+// being borrowed.
+export type TodaySchedule = {
+  weekday: Weekday | null;
+  followsDay: Weekday | null;
+};
+
 export type StudentOverview = {
   profile: StudentProfile;
   semesterLabel: string | null;
@@ -57,4 +68,5 @@ export type StudentOverview = {
   attendance: { overall: OverallAttendance | null; subjects: SubjectAttendance[] };
   timetable: PortalSlot[];
   marks: SubjectMarks[];
+  today: TodaySchedule;
 };

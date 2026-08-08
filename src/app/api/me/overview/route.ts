@@ -11,8 +11,21 @@ import { db } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
+// Today's date at UTC midnight — matches Prisma's @db.Date storage, so the
+// WorkingDay lookup below compares like with like.
+function todayUtc(): Date {
+  const now = new Date();
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+}
+
 const ROMAN = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII"];
 const roman = (n: number) => ROMAN[n] ?? String(n);
+
+// getUTCDay(): 0=Sun … 6=Sat. Sun/Sat have no grid of their own — a working
+// Saturday's weekday comes from the WorkingDay row, not from this table.
+const DOW_TO_WEEKDAY = [null, "MON", "TUE", "WED", "THU", "FRI", null] as const;
 
 type Status = "PRESENT" | "ABSENT" | "OD" | "EXCUSED";
 const isAttended = (s: Status) => s === "PRESENT" || s === "OD";
@@ -73,16 +86,20 @@ export async function GET(req: Request) {
         attendance: { overall: null, subjects: [] },
         timetable: [],
         marks: [],
+        // No class means no grid to run, whatever day it is.
+        today: { weekday: null, followsDay: null },
       });
     }
 
     const semesterId = semester.id;
     const studentId = student.id;
+    const today = todayUtc();
+    const isSaturday = today.getUTCDay() === 6;
 
     // The four reads below are independent of each other, so they go out together
     // rather than one after another. Each round-trip to Neon costs ~90ms, so
     // sequential awaits here cost ~4x what the queries themselves need.
-    const [master, period, slots, marks] = await Promise.all([
+    const [master, period, slots, marks, workingSaturday] = await Promise.all([
       // --- Attendance: overall (MasterAttendance) + per-subject (PeriodAttendance).
       db.masterAttendance.groupBy({
         by: ["status"],
@@ -111,6 +128,11 @@ export async function GET(req: Request) {
         include: { subject: { select: { id: true, code: true, name: true } } },
         orderBy: [{ subject: { code: "asc" } }, { assessment: "asc" }],
       }),
+      // --- Is TODAY a declared working Saturday, and whose grid does it run?
+      // The client can't answer this from the date alone, and without it a
+      // student on a working Saturday is told it's the weekend. Only Saturdays
+      // can have a row, so this is skipped the rest of the week.
+      isSaturday ? db.workingDay.findUnique({ where: { date: today }, select: { followsDay: true } }) : null,
     ]);
 
     const overallCounts: Record<Status, number> = { PRESENT: 0, ABSENT: 0, OD: 0, EXCUSED: 0 };
@@ -179,6 +201,17 @@ export async function GET(req: Request) {
         facultyName: s.faculty.displayName,
       })),
       marks: [...marksBySubject.values()],
+      // Which weekday's grid TODAY runs, resolved server-side (the client only
+      // knows the calendar date). Mon–Fri run as themselves; a declared working
+      // Saturday runs the weekday an admin set; Sunday and an undeclared
+      // Saturday are null = no classes. `followsDay` is set only on a working
+      // Saturday, so the UI can say which day is being borrowed.
+      today: {
+        weekday: isSaturday
+          ? (workingSaturday?.followsDay ?? null)
+          : (DOW_TO_WEEKDAY[today.getUTCDay()] ?? null),
+        followsDay: isSaturday ? (workingSaturday?.followsDay ?? null) : null,
+      },
     });
   } catch (err) {
     return toAuthResponse(err);

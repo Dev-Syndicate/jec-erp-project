@@ -56,15 +56,26 @@ export type NavItem = {
 export type NavGroup = { label: string; items: NavItem[] };
 
 /**
- * The group whose single item is the dashboard. Breadcrumbs special-case it by
- * name, so it is a constant rather than a literal in two places.
+ * The group the dashboard leads. Breadcrumbs special-case it by name (its pages
+ * render as one crumb), so it is a constant rather than a literal in two places.
  */
 export const OVERVIEW_GROUP = "Today";
 
 export const NAV: NavGroup[] = [
   {
     label: OVERVIEW_GROUP,
-    items: [{ title: "Overview", href: "/dashboard", icon: LayoutDashboard }],
+    items: [
+      { title: "Overview", href: "/dashboard", icon: LayoutDashboard },
+      {
+        title: "My timetable",
+        href: "/my-timetable",
+        icon: CalendarClock,
+        // The student's own weekly grid. Staff have their own teaching schedule
+        // at /attendance/timetable, so this entry is Student-only — two "My
+        // timetable" links would otherwise show for a Faculty.
+        roles: ["Student"],
+      },
+    ],
   },
   {
     label: "Attendance",
@@ -133,6 +144,15 @@ export const NAV: NavGroup[] = [
         // the nav still shows it (the API is the real gate). Entering marks is
         // teaching work, so Super Admin doesn't see it.
         roles: ["HOD", "Faculty"],
+      },
+      {
+        title: "Internal marks",
+        href: "/my-marks",
+        icon: ClipboardPen,
+        // The student's READ of their own marks. Separate from /marks above,
+        // which is the staff entry screen — different job, different page, so
+        // this entry is Student-only and the two never both show.
+        roles: ["Student"],
       },
       {
         title: "Leave & OD",
@@ -318,7 +338,8 @@ export function buildBreadcrumbs(pathname: string): Array<{ label: string; href?
     }
   }
   if (best) {
-    // The "Today" group is a single overview; don't prefix it with its label.
+    // "Today" is a label for the rail, not a place — its pages read better on
+    // their own ("My timetable", not "Today / My timetable"), so drop the prefix.
     return best.group.label === OVERVIEW_GROUP
       ? [{ label: best.item.title }]
       : [{ label: best.group.label }, { label: best.item.title, href: best.item.href }];

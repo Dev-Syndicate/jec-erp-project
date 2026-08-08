@@ -83,10 +83,35 @@ describe("visibleGroups", () => {
     ]);
   });
 
-  it("gives a Student exactly two entries", () => {
+  it("gives a Student exactly four entries", () => {
     // A Student's whole nav. If this grows, something has been granted to them
     // by accident — they should never see a staff screen in the rail.
-    expect(visible(STUDENT)).toEqual(["Today//dashboard", "Assessment//leave"]);
+    expect(visible(STUDENT)).toEqual([
+      "Today//dashboard",
+      "Today//my-timetable",
+      "Assessment//my-marks",
+      "Assessment//leave",
+    ]);
+  });
+
+  it("gives the student and staff DIFFERENT pages for timetable and marks", () => {
+    // Each pair shares a title but not a route: /my-timetable and /my-marks are
+    // the student's own read-only views, /attendance/timetable and /marks are
+    // the staff screens. Nobody should ever be offered both of a pair — that
+    // would read as a duplicate entry in the rail.
+    // Entries read "Group/href"; the href keeps its own leading slash.
+    const hrefs = (flags: NavFlags) => visible(flags).map((e) => e.slice(e.indexOf("//") + 1));
+    for (const [studentHref, staffHref] of [
+      ["/my-timetable", "/attendance/timetable"],
+      ["/my-marks", "/marks"],
+    ]) {
+      expect(hrefs(STUDENT)).toContain(studentHref);
+      expect(hrefs(STUDENT)).not.toContain(staffHref);
+      for (const staff of [HOD, FACULTY, FACULTY_ADVISOR]) {
+        expect(hrefs(staff)).toContain(staffHref);
+        expect(hrefs(staff)).not.toContain(studentHref);
+      }
+    }
   });
 
   it("shows only the Overview when the profile has not loaded yet", () => {
@@ -146,8 +171,18 @@ describe("visibleGroups — deliberate omissions for Super Admin", () => {
     ["/marks", "entering marks is teaching work"],
     ["/leave", "approval is class teacher → HOD"],
     ["/my-class", "they advise no class"],
+    ["/my-timetable", "the student's own grid; staff use /attendance/timetable"],
+    ["/my-marks", "the student's own marks; staff enter them at /marks"],
   ])("hides %s from Super Admin (%s)", (href) => {
     expect(visible(SUPER_ADMIN).some((e) => e.endsWith(`/${href}`))).toBe(false);
+  });
+
+  it("keeps the student's timetable out of every staff rail", () => {
+    // /my-timetable and /attendance/timetable are different pages for different
+    // people. A staff member seeing both would read as a duplicate entry.
+    for (const staff of [SUPER_ADMIN, HOD, FACULTY, FACULTY_ADVISOR]) {
+      expect(visible(staff)).not.toContain("Today//my-timetable");
+    }
   });
 
   it("hides the HOD-only Classes entry, which they reach via Structure setup", () => {
@@ -203,6 +238,12 @@ describe("isNavItemActive", () => {
 describe("buildBreadcrumbs", () => {
   it("returns a single crumb for the dashboard", () => {
     expect(buildBreadcrumbs("/dashboard")).toEqual([{ label: "Overview" }]);
+  });
+
+  it("returns a single crumb for every page in the Today group", () => {
+    // "Today" labels the rail, it isn't a place — "Today / My timetable" would
+    // read as a section that doesn't exist.
+    expect(buildBreadcrumbs("/my-timetable")).toEqual([{ label: "My timetable" }]);
   });
 
   it("returns Group then Page elsewhere", () => {

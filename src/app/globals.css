@@ -7,14 +7,15 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  /* Geist (loaded in layout.tsx as --font-geist-sans) is the single UI face —
-     used for body AND headings, so the whole app reads in one typeface, the same
-     Geist the shadcn reference uses. Was self-referencing (--font-sans:
-     var(--font-sans)) which resolved to nothing and fell back to the browser's
-     default serif. */
-  --font-sans: var(--font-geist-sans);
+  /* Poppins (loaded in layout.tsx as --font-poppins) is the single UI face —
+     used for body AND headings, so the whole app reads in one typeface. Keep
+     both --font-sans and --font-heading pointed at it; a bare `font-family` rule
+     here would not reach the components, which set type through those two
+     tokens. Mono stays Geist Mono — Poppins has no fixed-width companion and the
+     tabular columns need one. */
+  --font-sans: var(--font-poppins);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-heading: var(--font-poppins);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -349,6 +350,53 @@
   }
   html {
     @apply font-sans;
+  }
+
+  /* ─── Scrollbars ─────────────────────────────────────────────────────────
+     Windows/Chrome paints a ~17px light-grey trough with stepper arrows by
+     default. In a rounded dialog that reads as a rendering fault: the trough
+     is a hard rectangle that squares off the popup's rounded right corners,
+     and it is wide enough to crowd the form fields beside it.
+
+     `scrollbar-width: thin` + a transparent track give an overlay-style bar
+     that sits ON the surface rather than carving a channel out of it, so the
+     radius stays intact and the gutter drops to ~8px. The thumb is
+     --border-derived, so it re-skins with the theme and stays visible on both
+     the off-white canvas and white cards.
+
+     Firefox reads the two standard properties; the ::-webkit rules cover
+     Chrome/Edge/Safari, which support `scrollbar-width` inconsistently.       */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: color-mix(in oklch, var(--foreground) 22%, transparent);
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: color-mix(in oklch, var(--foreground) 38%, transparent);
+  }
+  /* The filled corner where two scrollbars meet, otherwise a grey square. */
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+/* Opt OUT of a scrollbar entirely, for rails that scroll but must not show a
+   bar (the collapsed sidebar). Referenced by SidebarContent, which was using
+   this class before it existed anywhere — so it silently did nothing. */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
   }
 }
 

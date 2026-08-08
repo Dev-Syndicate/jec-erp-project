@@ -58,7 +58,14 @@ function DialogContent({
           // footer with no way to reach them (100dvh, not vh, so mobile browser
           // chrome is accounted for). DialogFooter sticks to the bottom while
           // the body scrolls under it.
-          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          //
+          // overflow-y-auto needs a matching overflow-x-hidden: `auto` on one
+          // axis computes the other to `auto` too, so a field a pixel over the
+          // width offered a second, horizontal scrollbar along the footer.
+          // [scrollbar-gutter:stable] reserves the bar's width even when the
+          // content fits, so opening a dialog that scrolls no longer shifts its
+          // own contents left by ~8px on the first paint.
+          "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 overflow-x-hidden overflow-y-auto rounded-xl scrollbar-gutter-stable bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
@@ -124,7 +131,12 @@ function DialogFooter({
         // the buttons. DialogHeader already had both (bg-popover + z-10) for
         // exactly this reason; the footer had neither. Any alpha here reads as a
         // rendering fault rather than as translucency, so keep it solid.
-        "sticky -bottom-4 z-10 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-muted p-4 sm:flex-row sm:justify-end",
+        //
+        // bg-popover (not bg-muted) so the footer is the same white plane as the
+        // dialog body and its header — the grey band read as a separate surface
+        // grafted on. The top border is what separates the actions now, which is
+        // all the separation a pinned footer needs.
+        "sticky -bottom-4 z-10 -mx-4 -mb-4 flex flex-col-reverse gap-2 rounded-b-xl border-t bg-popover p-4 sm:flex-row sm:justify-end",
         className
       )}
       {...props}

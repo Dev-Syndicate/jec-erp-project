@@ -47,7 +47,14 @@ export function SearchInput({
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         aria-label={label}
-        className="pr-9 pl-9"
+        // type="search" makes the browser draw its OWN clear button, which
+        // rendered as a blue ✕ beside the themed one below — two clear buttons
+        // in one field, and the native one takes no theming (it ignores
+        // --brand-hue and colour-scheme entirely). Hiding the webkit
+        // pseudo-element leaves exactly one, ours. The decoration/results
+        // pseudo-elements are legacy Safari affordances that reserve stray
+        // padding, so they go too.
+        className="pr-9 pl-9 [&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none [&::-webkit-search-results-button]:appearance-none [&::-webkit-search-results-decoration]:appearance-none"
       />
       {value ? (
         <button

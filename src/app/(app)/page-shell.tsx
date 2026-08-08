@@ -35,7 +35,20 @@ export function PageShell({
   return (
     <div
       className={cn(
-        "flex flex-col gap-6 p-4 sm:p-6",
+        // `flex-1` so the shell fills the scroll panel rather than shrinking to
+        // its content. Nothing about a normal page changes — content-height and
+        // full-height look identical once the page has content — but it gives a
+        // lone child something to centre IN. Without it a <LoadingState> sat at
+        // the top of an empty panel with acres of white below it.
+        "flex flex-1 flex-col gap-6 p-4 sm:p-6",
+        // A page whose ONLY content is a placeholder should centre it, not strand
+        // it under the header with a screen of white below — the marks, roster,
+        // report and timetable screens all open in exactly that state ("Pick a
+        // subject to enter marks."). Targeting the LAST child is what keeps this
+        // honest: a placeholder sitting above a table or beside filters is not
+        // the whole page and must not stretch, so only a trailing one grows.
+        // Written here rather than on 30 call sites so the rule cannot drift.
+        "[&>[data-slot=empty-state]:last-child]:flex-1 [&>[data-slot=loading-state]:last-child]:flex-1",
         width === "narrow" && "mx-auto w-full max-w-5xl",
         className,
       )}

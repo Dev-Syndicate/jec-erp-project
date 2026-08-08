@@ -23,16 +23,30 @@ export function LoadingState({
   className?: string;
 }) {
   return (
-    <p
+    // Centred in whatever space it is given, rather than left as a bare line of
+    // text. It used to be a plain <p>, so on a page whose ONLY content is this
+    // (the profile, a report before a class is picked) it stranded itself in the
+    // top-left corner of an otherwise empty panel and read like a stray caption.
+    //
+    // `min-h-32` is the floor so it reads as a region rather than a stray line.
+    // Growing to fill a page is NOT decided here: PageShell stretches a trailing
+    // placeholder via `data-slot`, so one that sits above a table stays its own
+    // size. Callers can still override the layout via className, which twMerge
+    // lets win.
+    <div
       role="status"
       aria-busy="true"
-      className={cn("flex items-center gap-2 text-sm text-muted-foreground", className)}
+      data-slot="loading-state"
+      className={cn(
+        "flex min-h-32 items-center justify-center gap-2 py-8 text-sm text-muted-foreground",
+        className,
+      )}
     >
       <span
         aria-hidden
         className="size-1.5 shrink-0 animate-pulse rounded-full bg-muted-foreground/60"
       />
       {label}
-    </p>
+    </div>
   );
 }

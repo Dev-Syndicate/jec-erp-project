@@ -86,7 +86,13 @@ function TabsIndicator({
     <TabsPrimitive.Indicator
       data-slot="tabs-indicator"
       className={cn(
-        "absolute z-0 w-(--active-tab-width) translate-x-(--active-tab-left) transition-all duration-150",
+        // `left-0` is the fix for a 4px drift, not decoration. Without an explicit
+        // inset the absolutely-positioned indicator is placed at its STATIC
+        // position — after the list's `p-1` padding — and then
+        // `--active-tab-left` (which Base UI measures from the same padding box)
+        // shifts it by that padding a second time. The white pill sat 4px right
+        // of the tab it was highlighting, clipping "Staff" at the segment edge.
+        "absolute left-0 z-0 w-(--active-tab-width) translate-x-(--active-tab-left) transition-all duration-150",
         variant === "segmented" && "top-1 h-7 rounded-md bg-card shadow-xs",
         variant === "underline" && "bottom-0 h-0.5 rounded-none bg-primary",
         className

@@ -239,6 +239,11 @@ function SlotDialog({
   const [subjectId, setSubjectId] = useState(slot?.subjectId ?? "");
   const [facultyId, setFacultyId] = useState(slot?.facultyId ?? "");
   const [isLab, setIsLab] = useState(slot?.isLab ?? false);
+  // Clear used to delete on the first click. Building a grid means opening a lot
+  // of cells, and "Clear" sits where "Cancel" does in most dialogs — so a
+  // misclick silently destroyed a slot that had to be re-entered from the
+  // printed timetable. Arming it first makes the destructive click deliberate.
+  const [confirmingClear, setConfirmingClear] = useState(false);
 
   const subjectOptions = (subjects.data ?? [])
     .filter(
@@ -351,14 +356,42 @@ function SlotDialog({
 
         <DialogFooter className="sm:justify-between">
           {slot ? (
-            <Button
-              variant="ghost"
-              disabled={pending}
-              className="text-destructive hover:text-destructive"
-              onClick={() => del.mutate({ id: slot.id, classId }, { onSuccess: onClose })}
-            >
-              Clear
-            </Button>
+            confirmingClear ? (
+              // The armed state replaces the button rather than opening a second
+              // dialog: this one is already a dialog, and stacking two makes the
+              // Escape key ambiguous. The subject is named so it is obvious which
+              // hour is about to go.
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">
+                  Clear {slot.subjectCode}?
+                </span>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => del.mutate({ id: slot.id, classId }, { onSuccess: onClose })}
+                >
+                  {del.isPending ? "Clearing…" : "Yes, clear"}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={pending}
+                  onClick={() => setConfirmingClear(false)}
+                >
+                  Keep
+                </Button>
+              </div>
+            ) : (
+              <Button
+                variant="ghost"
+                disabled={pending}
+                className="text-destructive hover:text-destructive"
+                onClick={() => setConfirmingClear(true)}
+              >
+                Clear
+              </Button>
+            )
           ) : (
             <span />
           )}

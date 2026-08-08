@@ -352,17 +352,11 @@ function BrandPanel() {
         className="relative flex min-h-0 flex-1 flex-col gap-6 py-10 pr-10 xl:gap-8 xl:py-14 xl:pr-14"
         style={{ paddingLeft: PANEL_INSET }}
       >
-        <header className="flex shrink-0 items-center gap-3">
-          <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-primary-foreground/12 font-heading text-sm font-semibold ring-1 ring-inset ring-primary-foreground/25">
-            JE
-          </span>
-          <div className="leading-tight">
-            <p className="font-heading text-sm font-semibold">Jeppiaar Engineering College</p>
-            <p className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-primary-foreground/60">
-              ERP · System of record
-            </p>
-          </div>
-        </header>
+        {/* No brand header here. The form column beside it already carries the
+            college crest at full size, and the footer under it already reads
+            "Jeppiaar Engineering College · Chennai" — a JE monogram plus the
+            same name in text made it the third time on one screen. The tiles
+            below are what this panel is for. */}
 
         {/* Three rows, and the three tiles tile it exactly: hero 2×2 + register
             2×3 + timetable 2×1 = 12 of 12 cells. Adding or removing a tile means

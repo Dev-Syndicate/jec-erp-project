@@ -1,24 +1,34 @@
 // Student portal — the signed-in student's own internal marks.
 //
-// THE SHAPE OF THIS PAGE IS THE COLLEGE'S MARKING SCHEME, not a list of rows.
-// IA1 and IA2 are each a composite out of 100 — two cycle tests (10 each), two
-// assignments (10 each) and the IAT exam (60). The previous version rendered the
-// stored rows flat: ten chips per subject labelled with raw enum keys, where
-// "6/10" and "40/60" sat at identical weight and nothing revealed that the parts
-// summed to 100. A student could not answer "how did I do in IA1?" without
-// reading and adding ten chips.
+// THIS PAGE IS A MARK SHEET, because that is the artifact a student already
+// knows: subjects down the side, assessments across the top, one score per cell.
+// The whole term fits on one screen, and the comparison a student actually makes
+// — "which subject am I behind in?" — is reading down a column, not scrolling
+// through six cards.
 //
-// So each assessment is one row scored out of 100, and its components are drawn
-// as a single track segmented in TRUE PROPORTION: the IAT exam is 60% of the bar
-// because it is 60% of the mark. Where you lost marks is then a matter of
-// looking, not arithmetic — a short segment in the wide block costs far more
-// than a short segment in a narrow one, and the bar shows that directly.
+// The scheme underneath it: IA1 and IA2 are each a COMPOSITE out of 100 (two
+// cycle tests at 10, two assignments at 10, the IAT paper at 60), stored as five
+// rows so a component can be corrected on its own. The server groups them and
+// sums the total on read; scheme.ts owns the labels and maximums and is the only
+// place the college's marking scheme is written down.
+//
+// Earlier attempts are recorded so they aren't repeated. Rendering the stored
+// rows flat gave ten chips per subject labelled with enum keys, where "6/10" and
+// "40/60" read as equals. Replacing those with a proportionally segmented bar
+// per assessment fixed the weighting but failed twice over: at real marks every
+// part sits around 60% full, so five near-identical segments carried no
+// information while looking like they should, and twelve stacked copies needed
+// 3000px to say what this grid says in one screen. A "dropped" column was tried
+// after that and cut as noise. What's left is the plainest thing that answers
+// the question: the part, and what you got on it.
 //
 // Data comes from the same self-scoped GET /api/me/overview the Overview uses
 // (no client id), so the shared query cache serves this page without a second
-// round-trip. The scheme itself (labels, maximums, grouping) is resolved
-// server-side from scheme.ts — never re-declared here.
+// round-trip.
 "use client";
+
+import { useState } from "react";
+import { ChevronRight } from "lucide-react";
 
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
@@ -29,26 +39,44 @@ import type {
   SubjectMarks,
 } from "@/features/student-portal/types";
 
-// The assessment keys the server sends, in the order a student sits them.
-const ASSESSMENT_LABEL: Record<string, string> = {
-  IA1: "Internal 1",
-  IA2: "Internal 2",
-  MODEL: "Model exam",
-};
+// The assessments a student sits, in order. A column is kept as soon as ANY
+// subject has that mark — so a dash means "not marked for this subject yet",
+// which is real information, while a column nobody has been marked in at all
+// (typically Model, until the very end of term) is dropped rather than printed
+// as a stripe of dashes down the page.
+const ASSESSMENT_COLUMNS = [
+  { key: "IA1", label: "Internal 1", short: "IA 1" },
+  { key: "IA2", label: "Internal 2", short: "IA 2" },
+  { key: "MODEL", label: "Model exam", short: "Model" },
+] as const;
 
-// Bands for a mark out of 100, used ONLY on the total. 50 is the pass line every
-// assessment here is marked against. These use the FIXED --status-* tokens
-// rather than the brand ramp, matching how attendance already encodes meaning:
-// the colour is the message, so it must not move when --brand-hue does.
-//
-// The segments themselves are deliberately NOT banded. Colouring all five by
-// their own percentage turned every card into a block of amber — real marks
-// cluster in one band, so a per-part band is noise that looks like signal. One
-// coloured number per assessment is the whole colour budget of this page.
-function toneOf(pct: number): string {
-  if (pct >= 75) return "text-emerald-600";
-  if (pct >= 50) return "text-amber-600";
-  return "text-destructive";
+type Column = (typeof ASSESSMENT_COLUMNS)[number];
+
+function columnsFor(marks: SubjectMarks[]): Column[] {
+  const seen = new Set(
+    marks.flatMap((m) => m.assessments.filter((a) => a.obtained !== null).map((a) => a.key)),
+  );
+  return ASSESSMENT_COLUMNS.filter((c) => seen.has(c.key));
+}
+
+// 50 is the pass line every assessment here is marked against. Colour is spent
+// only on a mark BELOW it — a page where every number is coloured is a page
+// where colour means nothing, and at real marks almost everything lands in one
+// band. The one thing worth interrupting the reader for is a fail.
+const PASS = 50;
+
+function isShort(a: SubjectAssessment): boolean {
+  if (a.obtained === null) return false;
+  const scale = scaleOf(a);
+  return scale > 0 && (a.obtained / scale) * 100 < PASS;
+}
+
+// What a score is out of RIGHT NOW. While parts are still outstanding this is
+// the marked-so-far total, not 100: scoring 25 of an entered 40 is a pass, and
+// showing it as "25/100" would tell a student they are failing an assessment
+// that simply is not finished being marked.
+function scaleOf(a: SubjectAssessment): number {
+  return a.complete ? a.max : a.parts.reduce((s, p) => (p.obtained === null ? s : s + p.max), 0);
 }
 
 export function StudentMarks() {
@@ -58,7 +86,7 @@ export function StudentMarks() {
     return (
       <PageShell width="narrow">
         <div className="h-10 w-48 animate-pulse rounded-lg bg-muted/60" />
-        <div className="h-64 animate-pulse rounded-2xl bg-muted/40" />
+        <div className="h-72 animate-pulse rounded-2xl bg-muted/40" />
       </PageShell>
     );
   }
@@ -83,8 +111,8 @@ export function StudentMarks() {
           Internal marks
         </h1>
         <p className="text-sm text-muted-foreground">
-          Each internal is scored out of 100: two cycle tests and two assignments worth 10 each,
-          and the IAT paper worth 60.
+          Every internal is out of 100: two cycle tests and two assignments worth 10 each, and the
+          IAT paper worth 60. Open a subject to see where its marks came from.
         </p>
       </header>
 
@@ -98,11 +126,7 @@ export function StudentMarks() {
           No marks published yet. They appear here as your teachers enter them.
         </EmptyState>
       ) : (
-        <div className="flex flex-col gap-3">
-          {o.marks.map((m) => (
-            <SubjectCard key={m.subjectId} subject={m} />
-          ))}
-        </div>
+        <MarkSheet marks={o.marks} />
       )}
     </PageShell>
   );
@@ -116,112 +140,197 @@ function EmptyState({ children }: { children: React.ReactNode }) {
   );
 }
 
-function SubjectCard({ subject }: { subject: SubjectMarks }) {
-  return (
-    <section className="flex flex-col gap-4 rounded-2xl border border-border bg-card px-5 py-4">
-      <div className="flex flex-col">
-        <span className="font-mono text-xs text-primary">{subject.code}</span>
-        <h2 className="font-heading text-sm font-semibold text-foreground">{subject.name}</h2>
-      </div>
+function MarkSheet({ marks }: { marks: SubjectMarks[] }) {
+  // One row open at a time. A mark sheet is for scanning; letting every row
+  // expand at once rebuilds the wall of detail this layout exists to avoid.
+  const [openId, setOpenId] = useState<string | null>(null);
+  const columns = columnsFor(marks);
 
-      <div className="flex flex-col gap-4">
-        {subject.assessments.map((a) => (
-          <AssessmentRow key={a.key} assessment={a} />
+  return (
+    <div className="overflow-hidden rounded-xl border border-border bg-card">
+      {/* Column heads. Hidden on a narrow screen, where each row prints its own
+          labels instead — a numeric grid at 390px would either truncate the
+          subject name to nothing or force a sideways scroll. */}
+      <div className="hidden items-end gap-3 border-b border-border px-4 py-2.5 sm:flex">
+        <span className="flex-1 text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground">
+          Subject
+        </span>
+        {columns.map((c) => (
+          <span
+            key={c.key}
+            className="w-16 text-right text-[0.7rem] font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            {c.short}
+          </span>
         ))}
-      </div>
-    </section>
-  );
-}
-
-function AssessmentRow({ assessment }: { assessment: SubjectAssessment }) {
-  const obtained = assessment.obtained ?? 0;
-  // Marked-so-far, not the full 100, while parts are outstanding. Scoring 25 of
-  // an entered 40 is a pass; showing it as "25/100" in red would tell a student
-  // they are failing an assessment that isn't finished being marked. The total
-  // only becomes /100 once every part is in.
-  const scale = assessment.complete
-    ? assessment.max
-    : assessment.parts.reduce((s, p) => (p.obtained === null ? s : s + p.max), 0);
-  const tone = toneOf(scale > 0 ? (obtained / scale) * 100 : 0);
-
-  return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="text-xs font-medium text-foreground">
-          {ASSESSMENT_LABEL[assessment.key] ?? assessment.key}
-          {!assessment.complete && (
-            <span className="ml-2 font-normal text-muted-foreground">still being marked</span>
-          )}
-        </span>
-        <span className="font-mono text-sm">
-          <span className={`font-semibold ${tone}`}>{obtained}</span>
-          <span className="text-muted-foreground">/{scale}</span>
-        </span>
+        <span className="w-4" aria-hidden />
       </div>
 
-      <ComponentBar assessment={assessment} />
+      <ul>
+        {marks.map((subject) => (
+          <SubjectRow
+            key={subject.subjectId}
+            subject={subject}
+            columns={columns}
+            open={openId === subject.subjectId}
+            onToggle={() =>
+              setOpenId((cur) => (cur === subject.subjectId ? null : subject.subjectId))
+            }
+          />
+        ))}
+      </ul>
     </div>
   );
 }
 
-// The signature element. One track per assessment, its segments sized by each
-// component's share of the 100 — so the IAT block is six times the width of a
-// cycle test, exactly as it is six times the marks.
-//
-// Read it as ink and gap: solid is what you scored, hollow is what you dropped.
-// Because the widths are true to the weighting, the GAP is drawn to scale as
-// well — dropping 20 on the IAT leaves a hole six times wider than dropping the
-// whole of a cycle test. That is the thing a flat list of chips could never
-// show, and it is why the bar is worth its space.
-function ComponentBar({ assessment }: { assessment: SubjectAssessment }) {
-  return (
-    <>
-      {/* Decorative: the definition list below is the same data as text, so
-          announcing every segment would just read the marks out twice. */}
-      <div className="flex h-6 gap-0.5" aria-hidden>
-        {assessment.parts.map((p) => {
-          const share = (p.max / assessment.max) * 100;
-          const unmarked = p.obtained === null;
-          const filled = unmarked ? 0 : (p.obtained! / p.max) * 100;
+function SubjectRow({
+  subject,
+  columns,
+  open,
+  onToggle,
+}: {
+  subject: SubjectMarks;
+  columns: Column[];
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const byKey = new Map(subject.assessments.map((a) => [a.key, a]));
 
-          return (
-            <div
-              key={p.key}
-              className={`relative min-w-0 overflow-hidden rounded-[3px] ${
-                // A part with no mark yet is a dashed outline, not an empty
-                // trough — "not marked" must not look like "scored nothing".
-                unmarked ? "border border-dashed border-border" : "bg-muted"
-              }`}
-              style={{ flexBasis: `${share}%` }}
-            >
-              <div
-                className="absolute inset-y-0 left-0 bg-primary transition-[width] duration-500 ease-out motion-reduce:transition-none"
-                style={{ width: `${filled}%` }}
-              />
-            </div>
-          );
-        })}
+  return (
+    <li className="border-b border-border last:border-b-0">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:-outline-offset-2"
+      >
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="font-mono text-[0.7rem] text-muted-foreground">{subject.code}</span>
+          <span className="truncate text-sm font-medium text-foreground">{subject.name}</span>
+        </span>
+
+        {/* Wide: aligned numeric columns, so a term reads down the page. */}
+        <span className="hidden sm:contents">
+          {columns.map((c) => (
+            <span key={c.key} className="w-16 text-right">
+              <Score assessment={byKey.get(c.key)} />
+            </span>
+          ))}
+        </span>
+
+        {/* Narrow: the same scores, labelled, beside the name. */}
+        <span className="flex shrink-0 gap-3 sm:hidden">
+          {columns.filter((c) => byKey.has(c.key)).map((c) => (
+            <span key={c.key} className="flex flex-col items-end">
+              <span className="text-[0.6rem] uppercase tracking-wide text-muted-foreground">
+                {c.short}
+              </span>
+              <Score assessment={byKey.get(c.key)} />
+            </span>
+          ))}
+        </span>
+
+        <ChevronRight
+          className={`size-4 shrink-0 text-muted-foreground transition-transform ${
+            open ? "rotate-90" : ""
+          }`}
+          aria-hidden
+        />
+      </button>
+
+      {open && (
+        // Side by side once there's room: the two internals are the same five
+        // parts, so setting them in a pair makes "did I improve?" a matter of
+        // reading across. Stacked below sm, where columns would crush.
+        <div className="grid gap-x-8 gap-y-5 border-t border-border bg-muted/20 px-4 py-4 sm:grid-cols-2">
+          {subject.assessments.map((a) => (
+            <Breakdown key={a.key} assessment={a} />
+          ))}
+        </div>
+      )}
+    </li>
+  );
+}
+
+// One cell. A dash is not "zero" — it is an assessment that hasn't been marked,
+// and it must read as absence rather than as a bad score.
+function Score({ assessment }: { assessment: SubjectAssessment | undefined }) {
+  if (!assessment || assessment.obtained === null) {
+    return <span className="font-mono text-sm text-muted-foreground/40">—</span>;
+  }
+  const scale = scaleOf(assessment);
+  const short = isShort(assessment);
+
+  return (
+    <span className="font-mono text-sm tabular-nums">
+      <span className={short ? "font-semibold text-destructive" : "font-medium text-foreground"}>
+        {assessment.obtained}
+      </span>
+      {/* The denominator only earns its space when it ISN'T 100 — that is
+          precisely the case where the number means something other than it
+          appears (an assessment still being marked). */}
+      {scale !== assessment.max && (
+        <span className="text-muted-foreground">/{scale}</span>
+      )}
+    </span>
+  );
+}
+
+// The expanded view: where one score came from. Two columns — the part, and what
+// was scored on it out of what it was worth.
+//
+// No bars here, deliberately. A component bar was tried twice and failed the
+// same way both times: at real marks every part sits around 60% full, so five
+// segments of near-identical fill carry no information while looking like they
+// should, and the figures underneath then say the whole thing again in words.
+// Small aligned numbers beat pictures of small numbers — the same lesson as the
+// outer layout.
+function Breakdown({ assessment }: { assessment: SubjectAssessment }) {
+  const label = ASSESSMENT_COLUMNS.find((c) => c.key === assessment.key)?.label ?? assessment.key;
+  const scale = scaleOf(assessment);
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-3 border-b border-border pb-1.5">
+        <span className="text-xs font-medium text-foreground">
+          {label}
+          {!assessment.complete && (
+            <span className="ml-2 font-normal text-muted-foreground">still being marked</span>
+          )}
+        </span>
+        <span className="font-mono text-xs tabular-nums">
+          <span
+            className={
+              isShort(assessment) ? "font-semibold text-destructive" : "font-medium text-foreground"
+            }
+          >
+            {assessment.obtained}
+          </span>
+          <span className="text-muted-foreground">/{scale}</span>
+        </span>
       </div>
 
-      {/* Exact figures, in the college's own words. The answer to "which part
-          cost me marks", and the accessible reading of the bar above. */}
-      <dl className="flex flex-wrap gap-x-4 gap-y-1">
-        {assessment.parts.map((p) => (
-          <div key={p.key} className="flex items-baseline gap-1.5">
-            <dt className="text-[0.7rem] text-muted-foreground">{p.label}</dt>
-            <dd className="font-mono text-[0.7rem]">
-              {p.obtained === null ? (
-                <span className="text-muted-foreground/60">not marked</span>
-              ) : (
-                <>
-                  <span className="font-medium">{p.obtained}</span>
-                  <span className="text-muted-foreground">/{p.max}</span>
-                </>
-              )}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </>
+      <table className="w-full text-[0.7rem]">
+        <tbody>
+          {assessment.parts.map((p) => (
+            <tr key={p.key}>
+              <td className="py-0.5 text-muted-foreground">{p.label}</td>
+              <td className="whitespace-nowrap py-0.5 pl-4 text-right font-mono tabular-nums">
+                {p.obtained === null ? (
+                  // The scale alone, greyed, plus the reason. "—/60" reads as a
+                  // mark of minus something; this reads as a paper still to come.
+                  <span className="text-muted-foreground/60">not marked</span>
+                ) : (
+                  <>
+                    <span className="font-medium text-foreground">{p.obtained}</span>
+                    <span className="text-muted-foreground">/{p.max}</span>
+                  </>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

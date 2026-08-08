@@ -275,6 +275,16 @@ export async function GET(req: Request) {
       .sort((a, b) => a.date.localeCompare(b.date));
     const trend = allDays.slice(-TREND_DAYS);
 
+    // Today's own day-attendance, read out of the same per-day fold rather than
+    // queried again — so the "today" tile and the trend chart's last point can
+    // never disagree. `null` means no register has been taken yet (a holiday, or
+    // simply early in the morning), which reads differently from 0%: nobody
+    // absent, just nothing recorded.
+    const todayRow = today ? (perDay.get(dateKey(today)) ?? null) : null;
+    const todayAttendance = todayRow
+      ? { pct: pct(todayRow.attended, todayRow.total), attended: todayRow.attended, total: todayRow.total }
+      : null;
+
     // Two adjacent windows of recorded days. Reported only when BOTH are full —
     // a 7-day figure compared against a 2-day one is not a trend.
     const sum = (rows: typeof allDays) =>
@@ -382,6 +392,9 @@ export async function GET(req: Request) {
           pendingHod: pending.hod,
           scheduledToday,
           markedToday: markedTodayRows.length,
+          todayPct: todayAttendance?.pct ?? null,
+          todayAttended: todayAttendance?.attended ?? 0,
+          todayTotal: todayAttendance?.total ?? 0,
           // Sunday / an undeclared Saturday has no grid, so "0 of 0 marked" would
           // read as a failure to mark rather than as a day off.
           isWorkingDay: todayWeekday !== null,

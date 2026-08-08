@@ -71,6 +71,10 @@ export type DashboardHeadline = {
   scheduledToday: number;
   markedToday: number;
   isWorkingDay: boolean;
+  /** Today's day-attendance. `null` when no register has been taken yet. */
+  todayPct: number | null;
+  todayAttended: number;
+  todayTotal: number;
 };
 
 export type AdminAnalytics = {

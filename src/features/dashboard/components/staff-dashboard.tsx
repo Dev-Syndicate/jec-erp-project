@@ -253,7 +253,10 @@ function AdminAnalyticsView({ admin }: { admin: AdminAnalytics }) {
 
   return (
     <div className="flex flex-col gap-4">
-      <StatCardGrid className={showPending ? undefined : "lg:grid-cols-3"}>
+      {/* Four tiles without the approvals one, five with it. The grid's own
+          lg:grid-cols-4 covers the first case; the second needs its own count so
+          the fifth card doesn't drop to a half-empty row of its own. */}
+      <StatCardGrid className={showPending ? "lg:grid-cols-5" : undefined}>
         <StatCard
           label="Students on roll"
           value={num(h.students)}
@@ -267,8 +270,30 @@ function AdminAnalyticsView({ admin }: { admin: AdminAnalytics }) {
             )
           }
         />
+        {/* Today first, then the semester figure beside it. The two were easy to
+            confuse while only the aggregate was on the page, so both now name
+            their period in the label rather than leaving it implied. */}
         <StatCard
-          label="Attendance rate"
+          label="Attendance today"
+          value={h.todayPct === null ? "—" : `${h.todayPct}%`}
+          icon={CalendarCheck2}
+          tone={
+            h.todayPct === null ? "default" : h.todayPct >= threshold ? "success" : "warning"
+          }
+          // The report, not /attendance/day — day correction is the class
+          // teacher's page and Super Admin can't open it, and this tile renders
+          // for Super Admin and HOD alike.
+          href="/attendance/report"
+          hint={
+            h.todayPct === null
+              ? h.isWorkingDay
+                ? "No register taken yet"
+                : "Not a working day"
+              : `${num(h.todayAttended)} of ${num(h.todayTotal)} students present`
+          }
+        />
+        <StatCard
+          label="Attendance this semester"
           value={h.attendancePct === null ? "—" : `${h.attendancePct}%`}
           icon={TrendingUp}
           tone={

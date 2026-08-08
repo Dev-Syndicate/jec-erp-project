@@ -21,7 +21,14 @@ function Checkbox({
     <CheckboxPrimitive.Root
       data-slot="checkbox"
       className={cn(
-        "peer size-4 shrink-0 rounded-[4px] border border-input bg-transparent shadow-2xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground data-indeterminate:border-primary data-indeterminate:bg-primary data-indeterminate:text-primary-foreground",
+        // `inline-flex` is load-bearing, not alignment sugar. Base UI renders
+        // this Root as a <span>, which is display:inline by default — and an
+        // inline box IGNORES width and height, so `size-4` did nothing and the
+        // control stretched to whatever the line box was. In a table row that
+        // meant a 28x54 sliver instead of a 16px square, which read as a stray
+        // vertical bar beside every name. It also centres the tick, which the
+        // Indicator's own flex could not do from inside an inline parent.
+        "peer inline-flex size-4 shrink-0 items-center justify-center rounded-[4px] border border-input bg-transparent align-middle shadow-2xs transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-50 data-checked:border-primary data-checked:bg-primary data-checked:text-primary-foreground data-indeterminate:border-primary data-indeterminate:bg-primary data-indeterminate:text-primary-foreground",
         className
       )}
       {...props}

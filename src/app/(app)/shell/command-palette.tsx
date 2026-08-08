@@ -134,7 +134,16 @@ export function CommandPalette({ flags }: { flags: NavFlags }) {
     >
       <DialogContent
         showCloseButton={false}
-        className="top-[15%] max-w-lg translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-lg"
+        // `max-w-[calc(100%-2rem)]` restores the base dialog's 1rem gutter. The
+        // palette's own `max-w-lg` lands in the SAME tailwind-merge group and
+        // came later, so it silently replaced that cap — on a 390px phone the
+        // panel then ran edge to edge with no margin. Capping by both keeps the
+        // 32rem width on a laptop and a gutter on a phone.
+        //
+        // `top-[8%]` on mobile: at 15% the panel started a fifth of the way down
+        // a short screen, and the on-screen keyboard then pushed the list out of
+        // view entirely.
+        className="top-[8%] max-w-[calc(100%-2rem)] translate-y-0 gap-0 overflow-hidden p-0 sm:top-[15%] sm:max-w-lg"
       >
         <DialogTitle className="sr-only">Go to</DialogTitle>
         <DialogDescription className="sr-only">
@@ -152,7 +161,11 @@ export function CommandPalette({ flags }: { flags: NavFlags }) {
             aria-label="Go to"
             className="h-11 w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
           />
-          <Kbd className="shrink-0">Esc</Kbd>
+          {/* Keyboard hint, so it is painted only where there is a keyboard to
+              press. On a touch device Esc is not reachable and the chip was just
+              taking width off the input — the backdrop and the back gesture are
+              how the palette closes there. */}
+          <Kbd className="hidden shrink-0 sm:inline-flex">Esc</Kbd>
         </div>
 
         <div ref={listRef} className="max-h-80 overflow-y-auto p-1.5">
@@ -171,13 +184,26 @@ export function CommandPalette({ flags }: { flags: NavFlags }) {
                   onClick={() => go(entry.href)}
                   onMouseMove={() => setCursor(i)}
                   aria-current={i === cursor}
-                  className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground"
+                  // `min-h-11` (44px) on touch, back to the compact row from sm
+                  // up: a 36px row is under the touch-target minimum, and this is
+                  // a list people jab at while walking.
+                  className="flex min-h-11 w-full items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm transition-colors sm:min-h-0 aria-[current=true]:bg-accent aria-[current=true]:text-accent-foreground"
                 >
                   <Icon className="size-4 shrink-0 text-muted-foreground" />
                   <span className="flex-1 truncate">{entry.title}</span>
-                  <span className="shrink-0 text-xs text-muted-foreground">{entry.group}</span>
+                  {/* The group is context, not the answer — it truncates before
+                      the title does rather than holding its full width and
+                      squeezing the name someone is actually reading. */}
+                  <span className="max-w-[40%] truncate text-xs text-muted-foreground">
+                    {entry.group}
+                  </span>
+                  {/* Same reasoning as the Esc chip: the return arrow describes a
+                      keypress, so it is painted only where keys exist. */}
                   {i === cursor ? (
-                    <CornerDownLeft aria-hidden className="size-3.5 shrink-0 text-muted-foreground" />
+                    <CornerDownLeft
+                      aria-hidden
+                      className="hidden size-3.5 shrink-0 text-muted-foreground sm:block"
+                    />
                   ) : null}
                 </button>
               );

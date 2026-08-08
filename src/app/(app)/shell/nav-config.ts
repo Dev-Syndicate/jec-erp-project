@@ -34,7 +34,7 @@ import {
 
 export type NavChild = { title: string; href: string };
 
-export type NavFlags = { roles: string[]; advisesClass: boolean };
+export type NavFlags = { roles: string[]; advisesClass: boolean; teaches: boolean };
 
 export type NavItem = {
   title: string;
@@ -56,15 +56,26 @@ export type NavItem = {
 export type NavGroup = { label: string; items: NavItem[] };
 
 /**
- * The group whose single item is the dashboard. Breadcrumbs special-case it by
- * name, so it is a constant rather than a literal in two places.
+ * The group the dashboard leads. Breadcrumbs special-case it by name (its pages
+ * render as one crumb), so it is a constant rather than a literal in two places.
  */
 export const OVERVIEW_GROUP = "Today";
 
 export const NAV: NavGroup[] = [
   {
     label: OVERVIEW_GROUP,
-    items: [{ title: "Overview", href: "/dashboard", icon: LayoutDashboard }],
+    items: [
+      { title: "Overview", href: "/dashboard", icon: LayoutDashboard },
+      {
+        title: "My timetable",
+        href: "/my-timetable",
+        icon: CalendarClock,
+        // The student's own weekly grid. Staff have their own teaching schedule
+        // at /attendance/timetable, so this entry is Student-only — two "My
+        // timetable" links would otherwise show for a Faculty.
+        roles: ["Student"],
+      },
+    ],
   },
   {
     label: "Attendance",
@@ -74,8 +85,11 @@ export const NAV: NavGroup[] = [
         href: "/attendance/timetable",
         icon: CalendarClock,
         // Program staff who actually teach — not the institution admin (Super
-        // Admin never has a personal timetable).
-        roles: ["HOD", "Faculty"],
+        // Admin never has a personal timetable), and not a HOD who takes no
+        // hours: `teaches` is "holds ≥1 timetable slot this semester", so the
+        // page can't be empty for anyone who can see the link.
+        gate: ({ roles, teaches }) =>
+          teaches && (roles.includes("HOD") || roles.includes("Faculty")),
       },
       {
         title: "Mark attendance",
@@ -85,7 +99,13 @@ export const NAV: NavGroup[] = [
         // mark against. They keep the permission (the API still authorizes
         // `manage all`, so a stuck record can be fixed); the nav just stops
         // offering it.
-        roles: ["HOD", "Faculty"],
+        //
+        // `teaches` narrows it further: marking a period belongs strictly to the
+        // period's own teacher (canMarkPeriod — no role overrides it), so a HOD
+        // who takes no hours would find every period locked. Hiding the link is
+        // the honest version of a page they can look at but never use.
+        gate: ({ roles, teaches }) =>
+          teaches && (roles.includes("HOD") || roles.includes("Faculty")),
         exact: true, // /attendance/report and /attendance/timetable are siblings
       },
       {
@@ -128,11 +148,25 @@ export const NAV: NavGroup[] = [
         title: "Internal marks",
         href: "/marks",
         icon: ClipboardPen,
-        // Staff who enter marks: a HOD, or a Faculty assigned to a subject this
-        // semester. The picker is empty for a faculty with no assignments, but
-        // the nav still shows it (the API is the real gate). Entering marks is
-        // teaching work, so Super Admin doesn't see it.
-        roles: ["HOD", "Faculty"],
+        // A HOD, or a Faculty who teaches something.
+        //
+        // NOT gated on `teaches` for a HOD, unlike the marking screens beside it:
+        // marks/access.ts grants a HOD READ on every subject their department
+        // owns ("HODs keep oversight of results") while restricting ENTRY to the
+        // subject's own teacher. So a non-teaching HOD gets a populated page —
+        // the assignments list returns the whole department and the sheet opens
+        // read-only, labelled "(view only)". Hiding it would remove their only
+        // route to results they are entitled to see.
+        gate: ({ roles, teaches }) => roles.includes("HOD") || (teaches && roles.includes("Faculty")),
+      },
+      {
+        title: "Internal marks",
+        href: "/my-marks",
+        icon: ClipboardPen,
+        // The student's READ of their own marks. Separate from /marks above,
+        // which is the staff entry screen — different job, different page, so
+        // this entry is Student-only and the two never both show.
+        roles: ["Student"],
       },
       {
         title: "Leave & OD",
@@ -318,7 +352,8 @@ export function buildBreadcrumbs(pathname: string): Array<{ label: string; href?
     }
   }
   if (best) {
-    // The "Today" group is a single overview; don't prefix it with its label.
+    // "Today" is a label for the rail, not a place — its pages read better on
+    // their own ("My timetable", not "Today / My timetable"), so drop the prefix.
     return best.group.label === OVERVIEW_GROUP
       ? [{ label: best.item.title }]
       : [{ label: best.group.label }, { label: best.item.title, href: best.item.href }];

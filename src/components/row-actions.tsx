@@ -67,7 +67,12 @@ export function RowActions({
           </Button>
         }
       />
-      <DropdownMenuContent align="end" className="min-w-40">
+      {/* DropdownMenuContent defaults to `w-(--anchor-width)`, which sizes the
+          popup to its trigger. That suits a select, whose trigger is as wide as
+          the field, but here the anchor is a 28px icon button — so a label like
+          "Reissue temp password" wrapped onto two lines. `w-auto` lets the menu
+          size to its content instead; the items stay on one line. */}
+      <DropdownMenuContent align="end" className="w-auto min-w-40 whitespace-nowrap">
         {normal.map((a) => (
           <DropdownMenuItem key={a.label} onClick={a.onSelect} disabled={a.disabled}>
             {a.icon ? <a.icon /> : null}

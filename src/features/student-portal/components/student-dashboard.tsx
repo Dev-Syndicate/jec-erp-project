@@ -1,17 +1,19 @@
-// Student portal — the signed-in student's own overview, redesigned around the
-// four questions a student actually opens this to answer, in priority order:
+// Student portal — the signed-in student's own overview, built around the
+// questions a student opens this to answer, in priority order:
 //   1. Am I safe on attendance? (the 75% line decides exam eligibility)
 //   2. What's on today / what's my next class?
-//   3. How are my internal marks?
-//   4. Anything I need to do (apply for OD/leave)?
+//   3. Anything I need to do (apply for OD/leave)?
+// The full week and internal marks are their own nav pages (/my-timetable,
+// /my-marks) — both are look-ups rather than things to scan daily, and each was
+// costing the dashboard a section that read "nothing here yet" most of the term.
 // All data is self-scoped server-side (GET /api/me/overview) — no client id.
 "use client";
 
 import Link from "next/link";
 import { CalendarPlus, ChevronRight } from "lucide-react";
-import { Bar, BarChart, Cell, Pie, PieChart, ReferenceLine, XAxis, YAxis } from "recharts";
+import { Cell, Pie, PieChart } from "recharts";
 
-import { AXIS_PROPS, ChartContainer, ChartTooltip } from "@/components/ui/chart";
+import { ChartContainer, ChartTooltip } from "@/components/ui/chart";
 import { FormError } from "@/components/form-error";
 import { PageShell } from "@/app/(app)/page-shell";
 import { useStudentOverview } from "@/features/student-portal/hooks/use-portal";
@@ -20,21 +22,18 @@ import type {
   PortalSlot,
   StudentOverview,
   SubjectAttendance,
-  SubjectMarks,
+  TodaySchedule,
   Weekday,
 } from "@/features/student-portal/types";
 
-const WEEKDAYS: Weekday[] = ["MON", "TUE", "WED", "THU", "FRI"];
 const WEEKDAY_LABEL: Record<Weekday, string> = {
-  MON: "Mon",
-  TUE: "Tue",
-  WED: "Wed",
-  THU: "Thu",
-  FRI: "Fri",
+  MON: "Monday",
+  TUE: "Tuesday",
+  WED: "Wednesday",
+  THU: "Thursday",
+  FRI: "Friday",
 };
 const PERIODS = [1, 2, 3, 4, 5, 6, 7, 8];
-// Sun=0..Sat=6 → our weekday key (null on the weekend).
-const TODAY_KEY: (Weekday | null)[] = [null, "MON", "TUE", "WED", "THU", "FRI", null];
 
 // The eligibility line every Indian college enforces.
 const THRESHOLD = 75;
@@ -50,25 +49,6 @@ function barTone(pct: number | null): string {
   if (pct >= THRESHOLD) return "bg-emerald-500";
   if (pct >= 65) return "bg-amber-500";
   return "bg-destructive";
-}
-
-/**
- * The same three bands as barTone, as a CSS colour rather than a class — SVG
- * fills cannot take a Tailwind class, and Recharts needs a value it can put on
- * a `fill` attribute.
- *
- * ⚠️ The 75 / 65 boundaries here MUST track pctTone and barTone above. They are
- * a college eligibility rule, not a palette choice: a student reading 74% must
- * see the same "short" signal in the number, the meter and the chart. Deliberately
- * NOT unified with attendance-report.tsx's pctTone, which bands against a
- * user-CHOSEN threshold — merging them would silently change which students look
- * at risk on a compliance screen.
- */
-function toneVar(pct: number | null): string {
-  if (pct === null) return "var(--muted-foreground)";
-  if (pct >= THRESHOLD) return "var(--status-present)";
-  if (pct >= 65) return "var(--status-od)";
-  return "var(--status-absent)";
 }
 
 export function StudentDashboard() {
@@ -132,12 +112,10 @@ export function StudentDashboard() {
           {/* Hero row: the attendance verdict + today's classes, side by side. */}
           <div className="grid gap-4 lg:grid-cols-5">
             <AttendanceHero overall={o.attendance.overall} className="lg:col-span-2" />
-            <TodayStrip slots={o.timetable} className="lg:col-span-3" />
+            <TodayStrip slots={o.timetable} today={o.today} className="lg:col-span-3" />
           </div>
 
           <SubjectAttendanceList subjects={o.attendance.subjects} />
-          <Marks marks={o.marks} />
-          <WeeklyTimetable slots={o.timetable} />
         </>
       )}
     </PageShell>
@@ -166,7 +144,9 @@ function AttendanceHero({
 
   return (
     <section
-      className={`flex flex-col justify-between gap-5 rounded-2xl border border-border bg-card p-6 ${className}`}
+      // min-w-0 for the same reason as TodayStrip beside it: a grid item that
+      // will not shrink drags the page into a horizontal scroll on a phone.
+      className={`flex min-w-0 flex-col justify-between gap-5 rounded-2xl border border-border bg-card p-4 sm:p-6 ${className}`}
     >
       <div className="flex items-baseline justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
@@ -269,28 +249,65 @@ function AttendanceDonut({ overall }: { overall: NonNullable<OverallAttendance> 
 }
 
 // Today's schedule as a compact timeline — the "what's next" a student scans for,
-// pulled out of the full weekly grid so they don't have to read a table.
-function TodayStrip({ slots, className = "" }: { slots: PortalSlot[]; className?: string }) {
-  const todayKey = TODAY_KEY[new Date().getDay()];
+// pulled out of the full weekly grid so they don't have to read a table. The whole
+// week lives on its own page (/my-timetable), linked from the header here.
+function TodayStrip({
+  slots,
+  today,
+  className = "",
+}: {
+  slots: PortalSlot[];
+  today: TodaySchedule;
+  className?: string;
+}) {
+  // The weekday comes from the server, not from the date: on a declared working
+  // Saturday this is the weekday whose grid the college is running.
+  const todayKey = today.weekday;
   const todays = todayKey
     ? PERIODS.map((p) => slots.find((s) => s.dayOfWeek === todayKey && s.period === p) ?? null)
     : [];
   const hasClasses = todays.some(Boolean);
 
   return (
-    <section className={`flex flex-col gap-3 rounded-2xl border border-border bg-card p-6 ${className}`}>
+    // `min-w-0` is load-bearing on phones. This section is a GRID ITEM, and a
+    // grid item's default `min-width: auto` refuses to shrink below its content
+    // — so the eight-period strip below (which is `overflow-x-auto` and meant to
+    // scroll inside this card) instead forced the section to its full 954px
+    // content width, dragging the whole page into a horizontal scroll at 390px.
+    // With min-w-0 the section takes the column's width and the strip scrolls,
+    // which is what the overflow-x-auto was always for.
+    <section
+      className={`flex min-w-0 flex-col gap-3 rounded-2xl border border-border bg-card p-4 sm:p-6 ${className}`}
+    >
       <div className="flex items-baseline justify-between">
         <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
           Today
         </span>
-        <span className="text-xs text-muted-foreground">
-          {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" })}
-        </span>
+        <div className="flex items-baseline gap-3">
+          <span className="text-xs text-muted-foreground">
+            {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "short" })}
+          </span>
+          <Link
+            href="/my-timetable"
+            className="inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline"
+          >
+            Full week
+            <ChevronRight className="size-3.5" />
+          </Link>
+        </div>
       </div>
+
+      {today.followsDay && (
+        // A working Saturday runs a weekday's grid — say which, or the strip
+        // looks like the wrong day's classes.
+        <p className="text-xs text-primary">
+          Working Saturday — running {WEEKDAY_LABEL[today.followsDay]}&rsquo;s timetable.
+        </p>
+      )}
 
       {!todayKey ? (
         <p className="flex flex-1 items-center text-sm text-muted-foreground">
-          It&apos;s the weekend — no scheduled classes.
+          No classes today — it&apos;s a holiday.
         </p>
       ) : !hasClasses ? (
         <p className="flex flex-1 items-center text-sm text-muted-foreground">
@@ -333,69 +350,11 @@ function SectionHeader({ title, hint }: { title: string; hint?: string }) {
   );
 }
 
-// Subject attendance against the eligibility line. This is the chart that earns
-// its place on the page: the list below gives exact figures, but "which of my
-// subjects is below 75%" is a comparison, and a row of bars against a single
-// dashed rule answers it in one glance where eight percentages do not.
-function SubjectAttendanceChart({ subjects }: { subjects: SubjectAttendance[] }) {
-  const data = subjects
-    .filter((s) => s.pct !== null)
-    .map((s) => ({ code: s.code, pct: s.pct as number, name: s.name }));
-
-  // One or two subjects is a list, not a comparison — the chart would be noise.
-  if (data.length < 3) return null;
-
-  return (
-    <ChartContainer
-      height={Math.max(140, data.length * 28)}
-      label={`Attendance percentage by subject, against the ${THRESHOLD}% eligibility line`}
-      className="rounded-xl bg-card p-4 ring-1 ring-foreground/10"
-    >
-      <BarChart data={data} layout="vertical" margin={{ top: 4, right: 16, bottom: 4, left: 4 }}>
-        <XAxis type="number" domain={[0, 100]} unit="%" {...AXIS_PROPS} />
-        <YAxis
-          type="category"
-          dataKey="code"
-          width={64}
-          {...AXIS_PROPS}
-          tick={{ ...AXIS_PROPS.tick, fontFamily: "var(--font-mono)" }}
-        />
-        <ReferenceLine
-          x={THRESHOLD}
-          stroke="var(--foreground)"
-          strokeOpacity={0.45}
-          strokeDasharray="4 4"
-          label={{
-            value: `${THRESHOLD}%`,
-            position: "top",
-            fill: "var(--muted-foreground)",
-            fontSize: 10,
-          }}
-        />
-        <Bar dataKey="pct" radius={[0, 4, 4, 0]} barSize={12} isAnimationActive={false}>
-          {data.map((d) => (
-            // Per-bar colour, so a subject below the line reads as short at a
-            // glance rather than needing the axis to be read.
-            <Cell key={d.code} fill={toneVar(d.pct)} />
-          ))}
-        </Bar>
-        <ChartTooltip
-          formatter={(v) => [`${v}%`, "Attendance"]}
-          // The axis shows the subject CODE (it has to fit in 64px); the tooltip
-          // is where there is room for the full name.
-          labelFormatter={(code) => data.find((d) => d.code === code)?.name ?? String(code)}
-        />
-      </BarChart>
-    </ChartContainer>
-  );
-}
-
 function SubjectAttendanceList({ subjects }: { subjects: SubjectAttendance[] }) {
   if (subjects.length === 0) return null;
   return (
     <section className="flex flex-col gap-3">
       <SectionHeader title="Attendance by subject" hint="Present / total periods" />
-      <SubjectAttendanceChart subjects={subjects} />
       <div className="grid gap-2 sm:grid-cols-2">
         {subjects.map((s) => (
           <div
@@ -422,120 +381,3 @@ function SubjectAttendanceList({ subjects }: { subjects: SubjectAttendance[] }) 
   );
 }
 
-function Marks({ marks }: { marks: SubjectMarks[] }) {
-  return (
-    <section className="flex flex-col gap-3">
-      <SectionHeader title="Internal marks" />
-      {marks.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-          No marks published yet.
-        </p>
-      ) : (
-        <div className="grid gap-2 sm:grid-cols-2">
-          {marks.map((m) => (
-            <div
-              key={m.subjectId}
-              className="flex flex-col gap-2.5 rounded-xl border border-border px-4 py-3"
-            >
-              <div className="flex flex-col">
-                <span className="font-mono text-xs">{m.code}</span>
-                <span className="truncate text-xs text-muted-foreground">{m.name}</span>
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {m.items.map((it) => (
-                  <span
-                    key={it.assessment}
-                    className="inline-flex items-baseline gap-1 rounded-md bg-muted/60 px-2 py-1 text-xs"
-                  >
-                    <span className="font-mono text-[0.65rem] text-muted-foreground">
-                      {it.assessment}
-                    </span>
-                    <span className="font-medium">
-                      {it.obtained}
-                      <span className="text-muted-foreground">/{it.maxMark}</span>
-                    </span>
-                  </span>
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
-  );
-}
-
-// The full week, collapsed by default — the today strip covers the common case, so
-// the grid is a details drawer the student expands only when they want the whole
-// week.
-function WeeklyTimetable({ slots }: { slots: PortalSlot[] }) {
-  if (slots.length === 0) {
-    return (
-      <section className="flex flex-col gap-3">
-        <SectionHeader title="Weekly timetable" />
-        <p className="rounded-xl border border-dashed border-border px-4 py-6 text-sm text-muted-foreground">
-          No timetable published for your class yet.
-        </p>
-      </section>
-    );
-  }
-  const byCell = new Map(slots.map((s) => [`${s.dayOfWeek}-${s.period}`, s]));
-  const todayKey = TODAY_KEY[new Date().getDay()];
-
-  return (
-    <details className="group flex flex-col gap-3">
-      <summary className="flex cursor-pointer list-none items-center justify-between">
-        <h2 className="font-heading text-sm font-semibold text-foreground">Weekly timetable</h2>
-        <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
-          Full week
-          <ChevronRight className="size-4 transition-transform group-open:rotate-90" />
-        </span>
-      </summary>
-      <div className="mt-3 overflow-x-auto rounded-xl ring-1 ring-foreground/10">
-        <table className="w-full min-w-160 border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-foreground/10 bg-muted/30 text-left text-muted-foreground">
-              <th className="w-14 px-3 py-2 font-medium">Period</th>
-              {WEEKDAYS.map((d) => (
-                <th
-                  key={d}
-                  className={`px-3 py-2 font-medium ${d === todayKey ? "text-primary" : ""}`}
-                >
-                  {WEEKDAY_LABEL[d]}
-                  {d === todayKey && <span className="ml-1 text-[0.6rem]">• today</span>}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {PERIODS.map((p) => (
-              <tr key={p} className="h-16 border-b border-foreground/10 last:border-b-0">
-                <td className="px-3 align-middle font-mono text-xs text-muted-foreground">P{p}</td>
-                {WEEKDAYS.map((d) => {
-                  const slot = byCell.get(`${d}-${p}`);
-                  const isToday = d === todayKey;
-                  return (
-                    <td key={d} className={`p-2 align-middle ${isToday ? "bg-primary/3" : ""}`}>
-                      {slot ? (
-                        <div className="flex flex-col rounded-md bg-primary/5 px-2 py-1.5 ring-1 ring-primary/15">
-                          <span className="text-sm font-medium leading-tight">
-                            {slot.subjectCode}
-                          </span>
-                          <span className="truncate text-xs text-muted-foreground">
-                            {slot.facultyName}
-                          </span>
-                        </div>
-                      ) : (
-                        <span className="flex justify-center text-muted-foreground/40">—</span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
-  );
-}

@@ -30,12 +30,15 @@ function visible(flags: NavFlags): string[] {
   return visibleGroups(flags).flatMap((g) => g.items.map((i) => `${g.label}/${i.href}`));
 }
 
-const SUPER_ADMIN: NavFlags = { roles: ["Super Admin"], advisesClass: false };
-const HOD: NavFlags = { roles: ["HOD"], advisesClass: false };
-const FACULTY: NavFlags = { roles: ["Faculty"], advisesClass: false };
-const FACULTY_ADVISOR: NavFlags = { roles: ["Faculty"], advisesClass: true };
-const STUDENT: NavFlags = { roles: ["Student"], advisesClass: false };
-const NO_ROLES: NavFlags = { roles: [], advisesClass: false };
+const SUPER_ADMIN: NavFlags = { roles: ["Super Admin"], advisesClass: false, teaches: false };
+// A HOD who also takes hours — the common case, and what the department set below
+// describes. HOD_NON_TEACHING is the same role holding no timetable slot.
+const HOD: NavFlags = { roles: ["HOD"], advisesClass: false, teaches: true };
+const HOD_NON_TEACHING: NavFlags = { roles: ["HOD"], advisesClass: false, teaches: false };
+const FACULTY: NavFlags = { roles: ["Faculty"], advisesClass: false, teaches: true };
+const FACULTY_ADVISOR: NavFlags = { roles: ["Faculty"], advisesClass: true, teaches: true };
+const STUDENT: NavFlags = { roles: ["Student"], advisesClass: false, teaches: false };
+const NO_ROLES: NavFlags = { roles: [], advisesClass: false, teaches: false };
 
 describe("visibleGroups", () => {
   it("gives Super Admin the institution-admin set", () => {
@@ -72,6 +75,36 @@ describe("visibleGroups", () => {
     ]);
   });
 
+  it("hides the teaching screens from a HOD who takes no hours", () => {
+    // Marking a period belongs strictly to the period's own teacher — no role
+    // overrides it (canMarkPeriod) — and both the marks picker and the personal
+    // timetable are built from the caller's own slots. A HOD with no slots would
+    // get three pages that can only ever say "nothing here", so the rail drops
+    // them while every supervisory entry stays.
+    const seen = visible(HOD_NON_TEACHING);
+    expect(seen).not.toContain("Attendance//attendance");
+    expect(seen).not.toContain("Attendance//attendance/timetable");
+    // Still a HOD: cover, day attendance, the report and the department
+    // management set are theirs regardless of whether they teach.
+    expect(seen).toContain("Attendance//attendance/cover");
+    expect(seen).toContain("Attendance//attendance/day");
+    expect(seen).toContain("Attendance//attendance/report");
+    expect(seen).toContain("People//students");
+  });
+
+  it("keeps Internal marks for a HOD who teaches nothing", () => {
+    // The exception to the rule above, and the reason the marks gate reads
+    // differently from the two beside it: marks/access.ts gives a HOD READ on
+    // every subject their department owns while reserving ENTRY for the
+    // subject's teacher, so the page is populated and opens read-only rather
+    // than empty. Hiding it would cut off oversight the API grants.
+    expect(visible(HOD_NON_TEACHING)).toContain("Assessment//marks");
+    // A Faculty with no slots has no such read grant — for them it would be empty.
+    expect(visible({ roles: ["Faculty"], advisesClass: false, teaches: false })).not.toContain(
+      "Assessment//marks",
+    );
+  });
+
   it("gives a plain Faculty only what they teach", () => {
     expect(visible(FACULTY)).toEqual([
       "Today//dashboard",
@@ -83,10 +116,35 @@ describe("visibleGroups", () => {
     ]);
   });
 
-  it("gives a Student exactly two entries", () => {
+  it("gives a Student exactly four entries", () => {
     // A Student's whole nav. If this grows, something has been granted to them
     // by accident — they should never see a staff screen in the rail.
-    expect(visible(STUDENT)).toEqual(["Today//dashboard", "Assessment//leave"]);
+    expect(visible(STUDENT)).toEqual([
+      "Today//dashboard",
+      "Today//my-timetable",
+      "Assessment//my-marks",
+      "Assessment//leave",
+    ]);
+  });
+
+  it("gives the student and staff DIFFERENT pages for timetable and marks", () => {
+    // Each pair shares a title but not a route: /my-timetable and /my-marks are
+    // the student's own read-only views, /attendance/timetable and /marks are
+    // the staff screens. Nobody should ever be offered both of a pair — that
+    // would read as a duplicate entry in the rail.
+    // Entries read "Group/href"; the href keeps its own leading slash.
+    const hrefs = (flags: NavFlags) => visible(flags).map((e) => e.slice(e.indexOf("//") + 1));
+    for (const [studentHref, staffHref] of [
+      ["/my-timetable", "/attendance/timetable"],
+      ["/my-marks", "/marks"],
+    ]) {
+      expect(hrefs(STUDENT)).toContain(studentHref);
+      expect(hrefs(STUDENT)).not.toContain(staffHref);
+      for (const staff of [HOD, FACULTY, FACULTY_ADVISOR]) {
+        expect(hrefs(staff)).toContain(staffHref);
+        expect(hrefs(staff)).not.toContain(studentHref);
+      }
+    }
   });
 
   it("shows only the Overview when the profile has not loaded yet", () => {
@@ -105,7 +163,7 @@ describe("visibleGroups", () => {
   });
 
   it("unions the entries of a user holding two roles", () => {
-    const both = visible({ roles: ["Faculty", "HOD"], advisesClass: true });
+    const both = visible({ roles: ["Faculty", "HOD"], advisesClass: true, teaches: true });
     expect(both).toContain("Attendance//attendance/cover"); // HOD-only
     expect(both).toContain("People//my-class"); // advisesClass gate
     expect(new Set(both).size).toBe(both.length); // no duplicates
@@ -129,7 +187,7 @@ describe("visibleGroups — the advisesClass gate", () => {
     // The gate is `advisesClass` alone, so this asserts the flag's provenance
     // matters: it comes from the server's AuthUser, not from anything a client
     // can set. Documented here because the gate reads as role-free.
-    expect(visible({ roles: ["Student"], advisesClass: true })).toContain("People//my-class");
+    expect(visible({ roles: ["Student"], advisesClass: true, teaches: false })).toContain("People//my-class");
   });
 });
 
@@ -146,8 +204,18 @@ describe("visibleGroups — deliberate omissions for Super Admin", () => {
     ["/marks", "entering marks is teaching work"],
     ["/leave", "approval is class teacher → HOD"],
     ["/my-class", "they advise no class"],
+    ["/my-timetable", "the student's own grid; staff use /attendance/timetable"],
+    ["/my-marks", "the student's own marks; staff enter them at /marks"],
   ])("hides %s from Super Admin (%s)", (href) => {
     expect(visible(SUPER_ADMIN).some((e) => e.endsWith(`/${href}`))).toBe(false);
+  });
+
+  it("keeps the student's timetable out of every staff rail", () => {
+    // /my-timetable and /attendance/timetable are different pages for different
+    // people. A staff member seeing both would read as a duplicate entry.
+    for (const staff of [SUPER_ADMIN, HOD, FACULTY, FACULTY_ADVISOR]) {
+      expect(visible(staff)).not.toContain("Today//my-timetable");
+    }
   });
 
   it("hides the HOD-only Classes entry, which they reach via Structure setup", () => {
@@ -203,6 +271,12 @@ describe("isNavItemActive", () => {
 describe("buildBreadcrumbs", () => {
   it("returns a single crumb for the dashboard", () => {
     expect(buildBreadcrumbs("/dashboard")).toEqual([{ label: "Overview" }]);
+  });
+
+  it("returns a single crumb for every page in the Today group", () => {
+    // "Today" labels the rail, it isn't a place — "Today / My timetable" would
+    // read as a section that doesn't exist.
+    expect(buildBreadcrumbs("/my-timetable")).toEqual([{ label: "My timetable" }]);
   });
 
   it("returns Group then Page elsewhere", () => {

@@ -5,7 +5,8 @@
 // heading reads and what "current" looks like, never who may see what.
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ChevronRight } from "lucide-react";
 
@@ -15,12 +16,14 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
   SidebarMenuSubButton,
   SidebarMenuSubItem,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import {
   Collapsible,
@@ -45,6 +48,18 @@ export function AppSidebar({
   profile: AuthUser | undefined;
   pathname: string;
 }) {
+  const { setOpenMobile } = useSidebar();
+
+  // On mobile the rail is a sheet OVER the page, and following a link inside it
+  // only changes the route — nothing dismisses the sheet, so you land on the new
+  // page with the nav still covering it and have to close it by hand. Closing on
+  // pathname change covers every link at once (top-level, sub-item, and the user
+  // menu) rather than hanging an onClick on each. A no-op on desktop, where the
+  // mobile sheet is never open.
+  useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
+
   return (
     // `variant="inset"` is what makes the rail the OUTER frame and floats the
     // page in a rounded panel beside it. It is a structural switch on the
@@ -76,8 +91,31 @@ export function AppSidebar({
       variant="inset"
       className="top-14! h-[calc(100svh-3.5rem)]"
     >
-      {/* No SidebarHeader: the brand lockup moved into AppHeader so the top band
-          is unbroken. The rail now opens straight into its first group. */}
+      {/* MOBILE ONLY brand lockup. On desktop the rail sits below AppHeader,
+          which already carries the crest and wordmark — repeating it here would
+          print it twice in one column. On mobile the drawer covers the header
+          entirely, so without this the panel opened straight into "TODAY" with
+          nothing naming the app. Hidden from the a11y tree on desktop via the
+          same `md:hidden` that hides it visually, so there is no duplicate
+          landmark either. */}
+      <SidebarHeader className="md:hidden">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-2.5 rounded-lg px-1 py-1.5 transition-colors hover:bg-sidebar-accent/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
+        >
+          {/* Decorative: the wordmark beside it is this link's accessible name. */}
+          <Image
+            src="/home_logo.png"
+            alt=""
+            width={949}
+            height={908}
+            className="size-8 shrink-0 object-contain"
+          />
+          <span className="font-heading text-lg font-semibold tracking-tight text-sidebar-foreground">
+            JEC ERP
+          </span>
+        </Link>
+      </SidebarHeader>
       {/* The primitive ships `group-data-[collapsible=icon]:overflow-hidden`,
           which silently disables scrolling in the collapsed rail — with 13 items
           plus a footer the last icon was simply unreachable on a short viewport.

@@ -37,6 +37,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const navFlags: NavFlags = {
     roles: profile?.roles ?? [],
     advisesClass: profile?.advisesClass ?? false,
+    teaches: profile?.teaches ?? false,
   };
   const pathname = usePathname();
 

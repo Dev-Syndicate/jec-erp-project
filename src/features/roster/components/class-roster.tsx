@@ -39,6 +39,7 @@ import { LoadingState } from "@/components/loading-state";
 import { TableSkeleton } from "@/components/ui/skeleton";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
+import { DateField } from "@/components/date-field";
 import type { Gender, StudentDetail } from "@/features/roster/types";
 import {
   useAdvisedClasses,
@@ -330,7 +331,7 @@ function StudentDialog({
                 <Input size="lg" id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
               </FormField>
               <FormField id="s-dob" label="Date of birth">
-                <Input size="lg" id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+                <DateField id="s-dob" value={dateOfBirth} onChange={setDateOfBirth} />
               </FormField>
               <FormField id="s-gender" label="Gender">
                 <FormSelect id="s-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />

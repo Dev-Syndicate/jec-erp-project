@@ -9,7 +9,6 @@ import { useMemo, useState } from "react";
 import { CalendarPlus, Check, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Dialog,
@@ -35,6 +34,7 @@ import { FormError } from "@/components/form-error";
 import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import { PageHeader } from "@/app/(app)/page-header";
 import { FormSelect } from "@/components/form-select";
+import { DateField, sessionFromYear, sessionToYear } from "@/components/date-field";
 import {
   LEAVE_TYPES,
   STATUS_META,
@@ -401,25 +401,25 @@ function ApplyDialog({ onClose }: { onClose: () => void }) {
           <div className={multiDay ? "grid grid-cols-2 gap-4" : "flex flex-col gap-2"}>
             <div className="flex flex-col gap-2">
               <Label htmlFor="from-date">{multiDay ? "From" : "Date"}</Label>
-              <Input
-                size="lg"
+              <DateField
                 id="from-date"
-                type="date"
                 value={fromDate}
-                onChange={(e) => setFromDate(e.target.value)}
+                onChange={setFromDate}
+                fromYear={sessionFromYear()}
+                toYear={sessionToYear()}
                 required
               />
             </div>
             {multiDay && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor="to-date">To</Label>
-                <Input
-                  size="lg"
+                <DateField
                   id="to-date"
-                  type="date"
                   value={toDate}
                   min={fromDate || undefined}
-                  onChange={(e) => setToDate(e.target.value)}
+                  onChange={setToDate}
+                  fromYear={sessionFromYear()}
+                  toYear={sessionToYear()}
                   required
                 />
               </div>

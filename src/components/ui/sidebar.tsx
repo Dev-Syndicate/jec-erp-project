@@ -187,7 +187,29 @@ function Sidebar({
           data-sidebar="sidebar"
           data-slot="sidebar"
           data-mobile="true"
-          className="w-(--sidebar-width) bg-sidebar p-0 text-sidebar-foreground [&>button]:hidden"
+          // The `data-[side=left]:` prefix is load-bearing, not decoration.
+          // SheetContent sets `data-[side=left]:w-3/4`, and tailwind-merge does
+          // NOT see that as conflicting with a plain `w-(--sidebar-width)` —
+          // different groups, so BOTH survive the merge and the variant selector
+          // wins on specificity. The drawer then rendered at 75% of the viewport
+          // (292px on a 390px phone, growing with the screen) instead of the
+          // 18rem it lays its content out for, so the rail was clipped at the
+          // right edge. Matching the prefix puts this in the same group, where
+          // last-one-wins applies.
+          // `max-w-[85vw]` is the floor guard: SheetContent's own cap is
+          // `sm:max-w-sm`, which does nothing below 640px, so on a 320px phone an
+          // 18rem drawer would cover the whole screen with no visible scrim to
+          // tap out of. Leaving a sliver of page visible keeps the dismiss
+          // gesture discoverable.
+          // `h-svh` is the other half of the mobile fix, and the one that made
+          // the user chip unreachable. SheetContent pins itself with `inset-y-0
+          // h-full`, which on a page taller than the window resolves against the
+          // DOCUMENT, not the viewport — the dashboard scrolls, so the drawer
+          // stretched to the full 1940px scroll height and its footer sat ~1200px
+          // below the fold. Measured, not guessed. `h-svh` ties it to the small
+          // viewport height instead, so the footer is always on screen and the
+          // NAV scrolls internally when it is long.
+          className="max-h-svh! h-svh! max-w-[85vw] bg-sidebar p-0 text-sidebar-foreground data-[side=left]:w-(--sidebar-width) data-[side=right]:w-(--sidebar-width) [&>button]:hidden"
           style={
             {
               "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
@@ -199,7 +221,15 @@ function Sidebar({
             <SheetTitle>Sidebar</SheetTitle>
             <SheetDescription>Displays the mobile sidebar.</SheetDescription>
           </SheetHeader>
-          <div className="flex h-full w-full flex-col">{children}</div>
+          {/* `min-h-0 flex-1` rather than `h-full`: this sits in SheetContent's
+              flex column beside the sr-only header, and `h-full` resolves to
+              100% of the PARENT while the header and the parent's `gap-4` have
+              already taken space off the top — so the column overflowed by that
+              much and the footer (the user chip) sat below the fold, reachable
+              only by scrolling. As a flex child it takes the space that is
+              actually left, and `min-h-0` lets SidebarContent's own overflow
+              engage so the NAV scrolls instead of the whole drawer. */}
+          <div className="flex min-h-0 w-full flex-1 flex-col">{children}</div>
         </SheetContent>
       </Sheet>
     )

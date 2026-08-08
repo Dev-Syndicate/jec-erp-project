@@ -158,6 +158,20 @@ distinguishes "unknown" from "inactive" — don't add leakage.
 - **Base UI shadcn, NOT Radix** (`@base-ui/react`). Key differences: use the `render={<Link/>}`
   prop instead of `asChild`; `nativeButton={false}` for link-buttons; `Select.Value` needs a
   `(value) => label` render fn; force height with a trailing bang like `h-10!`.
+- ⚠️ **A class that looks like an override often isn't.** tailwind-merge only drops a base class
+  when the two are in the SAME group, and a variant-prefixed utility is a different group from a
+  bare one — so `w-(--sidebar-width)` does **not** replace `data-[side=left]:w-3/4`; both survive
+  and the more specific selector wins. This produced four separate sizing bugs (the mobile drawer
+  at 292px instead of 288, the command palette edge-to-edge, the select popup clipping long
+  options, the row-actions menu wrapping). **Match the prefix** to override — and when a size
+  "doesn't apply", measure it in the browser rather than re-reading the class list.
+- **Base UI renders some Roots as a `<span>`** (Checkbox is one), and an inline box ignores width
+  and height — `size-4` silently did nothing until `inline-flex` was added. If a control renders
+  at the wrong size, check its computed `display` first.
+- **Placeholders don't need `flex-1`.** [PageShell](src/app/(app)/page-shell.tsx) stretches a
+  trailing `EmptyState`/`LoadingState` via `data-slot`, so a page whose only content is a
+  placeholder centres it. One that sits above a table or beside filters is deliberately left
+  alone — don't add `flex-1` at the call site.
 - Data fetching is always TanStack Query hooks wrapping `apiFetch` — never a bare `fetch` from a
   component.
 - **Theming:** a single `--brand-hue` (185, teal) drives semantic tokens; use the semantic tokens,

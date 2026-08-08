@@ -9,6 +9,9 @@ import { Plus, Pencil, Trash2, CalendarDays, CheckCircle2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+// Aliased: this file already exports a local `DateField` that pairs the control
+// with its label, and the four call sites below use that one.
+import { DateField as DatePicker } from "@/components/date-field";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import {
@@ -49,6 +52,12 @@ function formatDate(iso: string): string {
   });
 }
 const isoToDateInput = (iso: string) => (iso ? iso.slice(0, 10) : "");
+
+// Terms are planned ahead and edited in hindsight: a degree runs up to four
+// years, so an old year's dates stay reachable while next year's can be set up
+// early. Functions, so an open tab doesn't pin a stale year.
+const TERM_FROM_YEAR = () => new Date().getFullYear() - 5;
+const TERM_TO_YEAR = () => new Date().getFullYear() + 5;
 
 // A prominent, fixed (non-brand) pill marking the active year/semester.
 function ActivePill({ children = "Active" }: { children?: React.ReactNode }) {
@@ -355,12 +364,14 @@ function DateField({
   return (
     <div className="flex flex-col gap-2">
       <Label htmlFor={id}>{label}</Label>
-      <Input
-        size="lg"
+      {/* An academic year or semester can be set up well ahead of time, so this
+          reaches further forward than the near-today pickers elsewhere. */}
+      <DatePicker
         id={id}
-        type="date"
         value={value}
-        onChange={(e) => onChange(e.target.value)}
+        onChange={onChange}
+        fromYear={TERM_FROM_YEAR()}
+        toYear={TERM_TO_YEAR()}
         required
       />
     </div>

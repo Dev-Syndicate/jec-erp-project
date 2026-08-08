@@ -15,6 +15,7 @@ import { CalendarCheck2, Check, Lock, Search, UserRoundCheck } from "lucide-reac
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateField, sessionFromYear, sessionToYear } from "@/components/date-field";
 import { EmptyState } from "@/components/ui/empty-state";
 import { errorMessage } from "@/lib/errors";
 import { FormError } from "@/components/form-error";
@@ -159,14 +160,14 @@ export function AttendanceManager() {
         )}
 
         <Field label="Date">
-          <Input
-            size="lg"
-            type="date"
+          <DateField
             value={date}
-            onChange={(e) => {
-              setDate(e.target.value);
+            onChange={(v) => {
+              setDate(v);
               resetPeriod();
             }}
+            fromYear={sessionFromYear()}
+            toYear={sessionToYear()}
           />
         </Field>
 

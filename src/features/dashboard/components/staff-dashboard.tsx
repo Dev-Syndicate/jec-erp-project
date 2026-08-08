@@ -246,9 +246,14 @@ function AdminAnalyticsView({ admin }: { admin: AdminAnalytics }) {
   const pending = h.pendingTeacher + h.pendingHod;
   const atRiskShare = h.atRiskOf > 0 ? Math.round((h.atRisk / h.atRiskOf) * 100) : null;
 
+  // Super Admin is not part of the leave/OD approval chain (class teacher, then
+  // HOD), so a pending count they cannot act on is noise on their dashboard.
+  // HODs, who are the second stage, keep the tile.
+  const showPending = !admin.unscoped;
+
   return (
     <div className="flex flex-col gap-4">
-      <StatCardGrid>
+      <StatCardGrid className={showPending ? undefined : "lg:grid-cols-3"}>
         <StatCard
           label="Students on roll"
           value={num(h.students)}
@@ -296,18 +301,20 @@ function AdminAnalyticsView({ admin }: { admin: AdminAnalytics }) {
               : `${atRiskShare}% of ${num(h.atRiskOf)} students measured`
           }
         />
-        <StatCard
-          label="Pending approvals"
-          value={num(pending)}
-          icon={FileClock}
-          href="/leave"
-          tone={pending > 0 ? "warning" : "default"}
-          hint={
-            pending === 0
-              ? "Nothing waiting"
-              : `${h.pendingTeacher} class teacher · ${h.pendingHod} HOD`
-          }
-        />
+        {showPending && (
+          <StatCard
+            label="Pending approvals"
+            value={num(pending)}
+            icon={FileClock}
+            href="/leave"
+            tone={pending > 0 ? "warning" : "default"}
+            hint={
+              pending === 0
+                ? "Nothing waiting"
+                : `${h.pendingTeacher} class teacher · ${h.pendingHod} HOD`
+            }
+          />
+        )}
       </StatCardGrid>
 
       <div className="grid gap-4 lg:grid-cols-3">

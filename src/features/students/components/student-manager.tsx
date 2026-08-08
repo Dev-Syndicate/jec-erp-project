@@ -41,6 +41,7 @@ import { PageHeader } from "@/app/(app)/page-header";
 import { PageShell, PageShellHeader, TABLE_FRAME } from "@/app/(app)/page-shell";
 import type { Gender, Student, StudentFilters, StudentStatus } from "@/features/students/types";
 import { FormSelect } from "@/components/form-select";
+import { DateField } from "@/components/date-field";
 import { ClassCascade } from "@/features/students/components/class-cascade";
 import { ImportStudentsDialog } from "@/features/students/components/import-students-dialog";
 import { CredentialsDialog } from "@/features/students/components/credentials-dialog";
@@ -425,7 +426,7 @@ function CreateStudentDialog({ onClose }: { onClose: () => void }) {
 
               <FormSection title="Personal details" columns={3}>
                 <FormField id="s-dob" label="Date of birth" required>
-                  <Input size="lg" id="s-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required />
+                  <DateField id="s-dob" value={dateOfBirth} onChange={setDateOfBirth} required />
                 </FormField>
                 <FormField id="s-phone" label="Phone" required>
                   <Input size="lg" id="s-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
@@ -589,7 +590,7 @@ function EditStudentDialog({ student, onClose }: { student: Student; onClose: ()
               <Input size="lg" id="e-phone" value={phone} onChange={(e) => setPhone(e.target.value)} required />
             </FormField>
             <FormField id="e-dob" label="Date of birth" required>
-              <Input size="lg" id="e-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} required />
+              <DateField id="e-dob" value={dateOfBirth} onChange={setDateOfBirth} required />
             </FormField>
             <FormField id="e-gender" label="Gender">
               <FormSelect id="e-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />

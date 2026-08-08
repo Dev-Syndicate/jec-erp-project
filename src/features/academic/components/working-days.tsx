@@ -13,6 +13,7 @@ import { CalendarPlus, Trash2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DateField, sessionFromYear, sessionToYear } from "@/components/date-field";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -46,6 +47,21 @@ function isSaturday(dateStr: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
   const d = new Date(`${dateStr}T00:00:00.000Z`);
   return !Number.isNaN(d.getTime()) && d.getUTCDay() === 6;
+}
+
+/**
+ * The upcoming Saturday as `yyyy-mm-dd` (today, if today is one). Every valid
+ * pick here is a Saturday near now, so the calendar opens on that month rather
+ * than on the far end of the allowed range.
+ *
+ * Built from LOCAL parts to match how DateField reads a date; `isSaturday`
+ * above works in UTC, and the two only agree if this does not drift a day.
+ */
+function nextSaturday(): string {
+  const d = new Date();
+  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7));
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 function prettyDate(iso: string): string {
@@ -104,12 +120,16 @@ export function WorkingDays() {
       <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-2">
           <Label htmlFor="wd-date">Saturday</Label>
-          <Input
-            size="lg"
+          {/* Only a Saturday can be declared, so the calendar greys out every
+              other weekday rather than letting the pick fail on submit. */}
+          <DateField
             id="wd-date"
-            type="date"
             value={date}
-            onChange={(e) => setDate(e.target.value)}
+            onChange={setDate}
+            fromYear={sessionFromYear()}
+            toYear={sessionToYear()}
+            disabledDayOfWeek={[0, 1, 2, 3, 4, 5]}
+            defaultMonth={nextSaturday()}
           />
         </div>
         {/* Five options, all worth seeing at once — a segmented row reads faster

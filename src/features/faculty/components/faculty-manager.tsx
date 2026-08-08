@@ -49,6 +49,7 @@ import type {
   Role,
 } from "@/features/faculty/types";
 import { FormSelect } from "@/components/form-select";
+import { DateField } from "@/components/date-field";
 import { ImportFacultyDialog } from "@/features/faculty/components/import-faculty-dialog";
 import { StaffCredentialsDialog } from "@/features/faculty/components/credentials-dialog";
 import {
@@ -729,7 +730,7 @@ function CreateFacultyDialog({ onClose }: { onClose: () => void }) {
                   <Input size="lg" id="f-emergency" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
                 </FormField>
                 <FormField id="f-dob" label="Date of birth">
-                  <Input size="lg" id="f-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+                  <DateField id="f-dob" value={dateOfBirth} onChange={setDateOfBirth} />
                 </FormField>
                 <FormField id="f-gender" label="Gender">
                   <FormSelect id="f-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />
@@ -946,7 +947,7 @@ function EditFacultyDialog({ faculty, onClose }: { faculty: Faculty; onClose: ()
               <Input size="lg" id="ef-emergency" value={emergencyPhone} onChange={(e) => setEmergencyPhone(e.target.value)} />
             </FormField>
             <FormField id="ef-dob" label="Date of birth">
-              <Input size="lg" id="ef-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+              <DateField id="ef-dob" value={dateOfBirth} onChange={setDateOfBirth} />
             </FormField>
             <FormField id="ef-gender" label="Gender">
               <FormSelect id="ef-gender" value={gender} onChange={setGender} options={GENDER_OPTIONS} placeholder="Select" />

@@ -365,6 +365,7 @@ export async function GET(req: Request) {
       admin: {
         threshold: THRESHOLD,
         window: WINDOW,
+        unscoped,
         headline: {
           students: studentsNow,
           studentsPrior,

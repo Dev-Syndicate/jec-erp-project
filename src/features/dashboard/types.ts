@@ -76,6 +76,12 @@ export type DashboardHeadline = {
 export type AdminAnalytics = {
   threshold: number;
   window: number;
+  /**
+   * True for an institution-scoped viewer (Super Admin). They sit outside the
+   * leave/OD chain — approvals are the class teacher's then the HOD's — so the
+   * pending-approvals tile is hidden for them and shown to HODs.
+   */
+  unscoped: boolean;
   headline: DashboardHeadline;
   composition: {
     present: number;

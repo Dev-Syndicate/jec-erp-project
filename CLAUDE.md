@@ -181,13 +181,19 @@ There are **two Firebase projects and two Neon databases**. They are never mixed
 | | Firebase | Neon | Holds |
 |---|---|---|---|
 | **Test** | `jec-erp-auth` | `ep-calm-grass-aza4b8ea` (ap-southeast-1) | The real CSE data — 473 students, 13 faculty, 18 subjects, 229 timetable slots |
-| **Production** | `jec-erp-auth-464c5` | `ep-muddy-frost-awmjmyvv` (us-east-1) | **Empty — 0 tables.** Not yet bootstrapped. |
+| **Production** | `jec-erp-auth-464c5` | `ep-muddy-frost-awmjmyvv` (us-east-1) | **Bootstrapped and live — holds real production data.** |
+
+🚨 **Production holds real data. Never touch it without asking first.** Before *any*
+production action — `prisma db push` / `db seed` / migrations, any insert/update/delete,
+anything in the `jec-erp-auth-464c5` Firebase project (users, auth settings, keys), edits
+to `.env.production.local`, changes to Vercel env vars, or a deploy/promotion — **stop and
+get explicit approval from the owner for that specific action.** Approval for one
+production action never carries over to the next. Reads are fine; writes are not.
 
 - `.env` is **test**, and carries `ERP_ENV="test"`. It is what `pnpm dev` and every
   script under `scripts/` use by default.
 - `.env.production.local` is **production**. **Nothing loads it automatically** — you
-  must name it explicitly. Its Firebase Admin key and Super Admin bootstrap values are
-  still blank.
+  must name it explicitly. Naming it explicitly is exactly the moment to ask first.
 - **Vercel reads neither file.** It has its own copy of these variables in the project
   dashboard; editing `.env.production.local` does not change the live site.
 
@@ -199,13 +205,24 @@ prod connection string) is caught rather than trusted. There is deliberately no 
 flag: production is maintained through the app's own `/students` importer, not from a
 laptop. `seed-cse.mts --dry-run` is exempt — it parses spreadsheets and writes nothing.
 
-### Bootstrapping production (not yet done)
-Prod has no schema, so the **UI importer cannot be the starting point** — it requires an
-existing `programId`, `classId`, and an active `AcademicYear`, and there is no Super Admin
-to log in as. Order: `prisma db push` → `prisma db seed` (RBAC + Super Admin) →
-`seed-cse.mts` (structure, faculty, students). ⚠️ **Subjects and timetable are NOT in
-`seed-cse.mts`** — the 18 subjects and 229 slots in test were entered another way and will
-not carry over. After bootstrap, all further intake goes through the UI importer.
+⚠️ **The guard only covers the scripts that call it.** The raw `prisma` CLI has no such
+protection — `prisma db push`, `migrate`, `db seed`, and `studio` will run against whatever
+env file they are pointed at, including production. Same for any new script that forgets to
+call `assertTestEnv()`. The guard is a backstop, not permission to stop thinking about which
+database a command is aimed at.
+
+### Maintaining production
+Production is bootstrapped and carries real data, so **all routine intake goes through the
+app's own UI** — the `/students` importer, `/access` for RBAC, the admin screens for
+structure and timetable. Scripts and the Prisma CLI are not the maintenance path.
+
+Schema changes reach production by deploying the app, not by running `db push` from a
+laptop. If a production schema change is genuinely needed, raise it with the owner and
+agree the plan before running anything.
+
+Historical note: prod was originally bootstrapped `prisma db push` → `prisma db seed`
+(RBAC + Super Admin) → `seed-cse.mts` (structure, faculty, students). Subjects and
+timetable are **not** in `seed-cse.mts` and were entered separately.
 
 **Env:** copy [.env.example](.env.example) → `.env` (it documents every variable). Groups:
 `DATABASE_URL` (pooled) + `DIRECT_URL` (unpooled) for Neon; `NEXT_PUBLIC_FIREBASE_*` (public web
